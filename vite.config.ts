@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,7 +11,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      moment: 'moment/moment.js'
+      moment: 'moment/moment.js',
+      '@': path.resolve(__dirname, './src')
     },
   },
 })
