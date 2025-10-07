@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import type { IAuth, IAuthResponse, IAuthUser } from './auth.type';
 
-const URI = '/api/v1.0/Users';
+const URI = '/api/v1/auth';
 
 export const authUri = {
     login: `${URI}/login`,
@@ -16,10 +16,10 @@ export const authApis = {
     login: async (payload: IAuth): Promise<IAuthResponse> => {
         const response = await http.post<IAuthResponse>(authUri.login, payload);
 
-        // ✅ Save tokens after successful login
-        if (response.data?.token) {
-            tokenManager.setAccessToken(response.data.token);
-            tokenManager.setRefreshToken(response.data.refresh);
+        // ✅ Đồng bộ với response structure từ backend
+        if (response.data?.accessToken) {
+            tokenManager.setAccessToken(response.data.accessToken);
+            tokenManager.setRefreshToken(response.data.refreshToken);
         }
 
         return response.data;
@@ -36,8 +36,8 @@ export const authApis = {
     },
 
     refreshToken: async (): Promise<{
-        token: string;
-        refreshToken: string;
+        accessToken: string;      // ✅ Consistent naming
+        refreshToken: string;     // ✅ Consistent naming
     }> => {
         const refreshToken = tokenManager.getRefreshToken();
 
@@ -45,28 +45,52 @@ export const authApis = {
             throw new Error('No refresh token available');
         }
 
-        const response = await http.post<{ token: string; refresh: string }>(
+        const response = await http.post<{
+            accessToken: string;  // ✅ Match response structure
+            refreshToken: string; // ✅ Match response structure
+        }>(
             authUri.refresh,
             { refreshToken }
         );
 
-        return {
-            token: response.data.token,
-            refreshToken: response.data.refresh,
-        };
+        // ✅ Update tokens after refresh
+        tokenManager.setAccessToken(response.data.accessToken);
+        tokenManager.setRefreshToken(response.data.refreshToken);
+
+        return response.data;
     },
 };
 
-// ✅ React Query hooks
+// ✅ React Query hooks (no changes needed)
+// Login mutation
 export const useLogin = () => {
-    return useMutation<IAuthResponse, AxiosError, IAuth>({
-        mutationFn: authApis.login,
+    return useMutation({
+        mutationFn: async (payload: IAuth): Promise<IAuthResponse> => {
+            const response = await http.post<IAuthResponse>(authUri.login, payload);
+            return response.data;
+        },
     });
 };
 
+// Logout mutation
 export const useLogout = () => {
     return useMutation({
-        mutationFn: authApis.logout,
+        mutationFn: async (): Promise<void> => {
+            await http.post(authUri.logout);
+        },
+    });
+};
+
+// Refresh token mutation
+export const useRefreshToken = () => {
+    return useMutation({
+        mutationFn: async (refreshToken: string): Promise<{ accessToken: string }> => {
+            const response = await http.post<{ accessToken: string }>(
+                authUri.refreshToken,
+                { refreshToken }
+            );
+            return response.data;
+        },
     });
 };
 

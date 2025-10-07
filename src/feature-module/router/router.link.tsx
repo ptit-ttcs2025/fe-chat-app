@@ -117,52 +117,6 @@ import TablesBasic from "../uiInterface/table/tables-basic";
 
 const route = all_routes;
 
-export const publicRoutes = [
-  {
-    path: route.index,
-    element: <StartChat />,
-    route: Route,
-    title:'Chat'
-  },
-  {
-    path: route.chat,
-    element: <Chat />,
-    route: Route,
-    title:'Chat'
-  },
-  {
-    path: route.groupChat,
-    element: <GroupChat />,
-    route: Route,
-    title:'Group'
-  },
-  {
-    path: route.status,
-    element: <Status />,
-    route: Route,
-    title:'Status'
-  },
-  {
-    path: route.myStatus,
-    element: <MyStatus />,
-    route: Route,
-    title:'Status'
-  },
-  {
-    path: route.userStatus,
-    element: <UserStatus />,
-    route: Route,
-    title:'Status'
-  },
-  {
-    path: route.allCalls,
-    element: <AllCalls />,
-    route: Route,
-    title:'Calls'
-  },
-  
-];
-
 export const authRoutes = [
   {
     path: '/',
@@ -206,9 +160,55 @@ export const authRoutes = [
     route: Route,
     title:'Success'
   },
-  
 ];
+
 export const adminRoutes = [
+
+]
+
+export const userRoutes = [
+    {
+        path: route.index,
+        element: <StartChat />,
+        route: Route,
+        title:'Chat'
+    },
+    {
+        path: route.chat,
+        element: <Chat />,
+        route: Route,
+        title:'Chat'
+    },
+    {
+        path: route.groupChat,
+        element: <GroupChat />,
+        route: Route,
+        title:'Group'
+    },
+    {
+        path: route.status,
+        element: <Status />,
+        route: Route,
+        title:'Status'
+    },
+    {
+        path: route.myStatus,
+        element: <MyStatus />,
+        route: Route,
+        title:'Status'
+    },
+    {
+        path: route.userStatus,
+        element: <UserStatus />,
+        route: Route,
+        title:'Status'
+    },
+    {
+        path: route.allCalls,
+        element: <AllCalls />,
+        route: Route,
+        title:'Calls'
+    },
   {
     path: route.dashboard,
     element: <AdminDashboard />,

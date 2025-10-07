@@ -3,25 +3,29 @@ export interface IAuth {
     password: string;
 }
 
-export interface IAuthUser {
-    id: string;
-    userName: string;
-    fullName: string;
-    email: string;
-    phoneNumber: string;
-    department: {
-        id: string;
-        name: string;
-    } | null;
-    position: {
-        id: string;
-        name: string;
-    } | null;
-    roles: string[];
+export interface IAuthResponse {
+    accessToken: string;
+    refreshToken: string;
+    user: IAuthUser;
 }
 
-export interface IAuthResponse {
-    user: IAuthUser | null;
-    token: string;
-    refresh: string;
+export interface IAuthUser {
+    id: string;
+    username: string;
+    email: string;
+    fullName: string;
+}
+
+export interface ILoginResponse {
+    id: string;
+    username: string;
+    email: string;
+    fullName: string;
+    accessToken: string;
+    refreshToken: string;
+}
+
+export interface ILoginRequest {
+    username: string;
+    password: string;
 }

@@ -1,65 +1,87 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
-import { Modal } from 'react-bootstrap'
-import { all_routes } from '../../feature-module/router/all_routes'
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Modal } from 'react-bootstrap';
+import { useLogout } from '../..//hooks/useLogout';
+
 type props = {
-  showModal?: boolean
-  setShowModal: CallableFunction
-}
-const LogoutModal: React.FC<props> = ({
-  showModal,
-  setShowModal
-}) => {
-  const handleClose = () => {
-    setShowModal(false)
-  }
-  const routes = all_routes;
-  return (
-    <>
-    {/* Logout */}
-    <Modal centered show={showModal}>
-          <div className="modal-header">
-              <h4 className="modal-title">Logout</h4>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={handleClose}
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <div className="modal-body">
-              <form >
-                <div className="block-wrap text-center mb-3">
-                  <span className="user-icon mb-3 mx-auto bg-transparent-danger">
-                    <i className="ti ti-logout text-danger" />
-                  </span>
-                  <p className="text-grya-9">Are you sure you want to logout? </p>
-                </div>
-                <div className="row g-3">
-                  <div className="col-6">
-                    <Link
-                      to="#"
-                      className="btn btn-outline-primary w-100"
-                      data-bs-dismiss="modal"
-                      aria-label="Close"
-                    >
-                      Cancel
-                    </Link>
-                  </div>
-                  <div className="col-6">
-                    <Link to={routes.signin} className="btn btn-primary w-100">
-                      Logout
-                    </Link>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </Modal>
-    {/* /Logout */}
-    </>
-  )
+    showModal?: boolean;
+    setShowModal: CallableFunction;
 }
 
-export default LogoutModal
+const LogoutModal: React.FC<props> = ({
+                                          showModal,
+                                          setShowModal
+                                      }) => {
+    const { handleLogout, isLoading } = useLogout();
+
+    const handleClose = () => {
+        setShowModal(false);
+    };
+
+    const onLogout = async () => {
+        await handleLogout();
+        setShowModal(false);
+    };
+
+    return (
+        <>
+            {/* Logout */}
+            <Modal centered show={showModal}>
+                <div className="modal-header">
+                    <h4 className="modal-title">Logout</h4>
+                    <button
+                        type="button"
+                        className="btn-close"
+                        onClick={handleClose}
+                        aria-label="Close"
+                        disabled={isLoading}
+                    >
+                        <i className="ti ti-x" />
+                    </button>
+                </div>
+                <div className="modal-body">
+                    <form>
+                        <div className="block-wrap text-center mb-3">
+              <span className="user-icon mb-3 mx-auto bg-transparent-danger">
+                <i className="ti ti-logout text-danger" />
+              </span>
+                            <p className="text-grya-9">Bạn có chắc chắn muốn đăng xuất không?</p>
+                        </div>
+                        <div className="row g-3">
+                            <div className="col-6">
+                                <Link
+                                    to="#"
+                                    className="btn btn-outline-primary w-100"
+                                    onClick={handleClose}
+                                    aria-label="Close"
+                                >
+                                    Cancel
+                                </Link>
+                            </div>
+                            <div className="col-6">
+                                <button
+                                    type="button"
+                                    className="btn btn-primary w-100"
+                                    onClick={onLogout}
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" />
+                                            Đang đăng xuất...
+                                        </>
+                                    ) : (
+                                        'Logout'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </Modal>
+            {/* /Logout */}
+        </>
+    );
+};
+
+export default LogoutModal;

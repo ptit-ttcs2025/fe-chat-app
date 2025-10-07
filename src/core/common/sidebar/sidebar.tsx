@@ -5,6 +5,7 @@ import { useDispatch } from "react-redux";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { Tooltip } from "antd";
 import { setDark } from "../../data/redux/commonSlice";
+import { useLogout } from '../../../hooks/useLogout';
 
 const Sidebar = () => {
   const routes = all_routes;
@@ -12,6 +13,7 @@ const Sidebar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
+  const { handleLogout } = useLogout();
   const LayoutDark = () => {
     if (darkMode === "enabled") {
       localStorage.setItem("darkMode", "enabled");
@@ -206,12 +208,16 @@ const Sidebar = () => {
                       className="rounded-circle"
                     />
                   </Link>
-                  <div className="dropdown-menu dropdown-menu-end p-3">
-                    <Link to={routes.signin} className="dropdown-item">
-                      <i className="ti ti-logout-2 me-2" />
-                      Logout{" "}
-                    </Link>
-                  </div>
+                    <div className="dropdown-menu dropdown-menu-end p-3">
+                        <Link
+                            to="#"
+                            className="dropdown-item"
+                            onClick={handleLogout}
+                        >
+                            <i className="ti ti-logout-2 me-2" />
+                            Logout
+                        </Link>
+                    </div>
                 </div>
               </li>
             </ul>

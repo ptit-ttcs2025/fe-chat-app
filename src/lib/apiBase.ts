@@ -3,8 +3,11 @@ import axios, {
     AxiosInstance,
     AxiosRequestConfig,
     AxiosResponse,
+    InternalAxiosRequestConfig,
 } from 'axios';
 import { environment } from '../environment';
+import { store } from '@/store/store';
+import { logout, setToken } from '@/slices/auth/reducer';
 
 export interface ApiResponse<T> {
     data: T;
@@ -55,18 +58,49 @@ export const tokenManager = {
     },
 };
 
-http.interceptors.request.use(
-    (config) => {
-        const token = tokenManager.getAccessToken();
-        if (token && config.headers) {
-            config.headers.Authorization = `Bearer ${token}`;
+// Response interceptor - Handle token expiration
+http.interceptors.response.use(
+    (response) => response,
+    async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+            _retry?: boolean;
+        };
+
+        // Handle 401 Unauthorized
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
+
+            try {
+                const refreshToken = store.getState().auth.refreshToken;
+
+                if (!refreshToken) {
+                    throw new Error('No refresh token available');
+                }
+
+                // Call refresh token API
+                const response = await axios.post(
+                    `${environment.apiBaseUrl}/auth/refresh`,
+                    { refreshToken }
+                );
+
+                const { accessToken } = response.data;
+
+                // Update token in Redux store
+                store.dispatch(setToken(accessToken));
+
+                // Retry original request với token mới
+                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                return http(originalRequest);
+            } catch (refreshError) {
+                // Refresh token failed → Logout
+                store.dispatch(logout());
+                window.location.href = '/';
+                return Promise.reject(refreshError);
+            }
         }
-        return config;
-    },
-    (error: AxiosError) => {
-        console.error('[Request Error]:', error);
+
         return Promise.reject(error);
-    },
+    }
 );
 
 let isRefreshing = false;
