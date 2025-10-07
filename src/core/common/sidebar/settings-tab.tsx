@@ -7,12 +7,15 @@ import LogoutModal from '../../modals/logout-modal';
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 type PasswordField =  'confirmPassword' | 'newpassword' | 'oldpassword';
+import { useLogout } from '../../../hooks/useLogout';
 const SettingsTab = () => {
   const [passwordVisibility, setPasswordVisibility] = useState({
     confirmPassword: false,
     newpassword:false,
     oldpassword:false
   });
+
+  const { handleLogout } = useLogout();
   
   const togglePasswordVisibility = (field: PasswordField) => {
     setPasswordVisibility((prevState) => ({
@@ -1206,7 +1209,7 @@ const SettingsTab = () => {
                       className="list-group-item"
                       onClick={()=>setShowModal(true)}
                     >
-                      <div className="profile-info">
+                    <div className="profile-info" onClick={handleLogout} style={{ cursor: 'pointer' }}>
                         <h6>
                           <i className="ti ti-logout text-gray me-2" />
                           Logout

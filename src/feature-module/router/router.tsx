@@ -1,19 +1,34 @@
-import React, { useEffect, useState } from "react";
-import { Route, Routes, useLocation } from "react-router";
-import { adminAuth, adminRoutes, authRoutes, publicRoutes } from "./router.link";
-import Feature from "../feature";
-import AuthFeature from "../authFeature";
-import Signin from "../auth/signin";
-import { Helmet } from "react-helmet";
-import AdminFeature from "../adminFeature";
-import AdminAuthFeature from "../adminAuthFeature";
-import AdminLogin from "../admin/authentication/login";
+import { useEffect, useState } from 'react';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
+// Route Protection Components
+import { ProtectedRoute } from './ProtectedRoute';
+import { PublicRoute } from './PublicRoute';
+
+// Layout Components
+import Feature from '../feature';
+import AuthFeature from '../authFeature';
+import AdminFeature from '../adminFeature';
+import AdminAuthFeature from '../adminAuthFeature';
+
+// Auth Pages
+import Signin from '../auth/signin';
+import Signup from '../auth/signup';
+import ForgotPassword from '../auth/forgotPassword';
+import ResetPassword from '../auth/resetPassword';
+import Success from '../auth/success';
+import AdminLogin from '../admin/authentication/login';
+
+// Routes Config
+import { userRoutes, authRoutes, adminRoutes, adminAuth } from './router.link';
+
 
 const Mainapp: React.FC = () => {
   const location = useLocation();
 
   // Find the current route in either public or auth routes
-  const currentRoute = publicRoutes.find(route => route.path === location.pathname) || 
+  const currentRoute = userRoutes.find(route => route.path === location.pathname) ||
                        authRoutes.find(route => route.path === location.pathname);
 
   // Construct the full title
@@ -43,37 +58,111 @@ const Mainapp: React.FC = () => {
   if (!styleLoaded) {
     return null; // You could show a loading spinner here if necessary
   }
-  return (
-    <>
-      <Helmet>
-        <title>{fullTitle}</title>
-      </Helmet>
-      <Routes>
-        <Route path="/" element={<Signin />} />
-        <Route element={<Feature />}>
-          {publicRoutes.map((route, idx) => (
-            <Route path={route.path} element={route.element} key={idx} />
-          ))}
-        </Route>
-        <Route element={<AuthFeature />}>
-          {authRoutes.map((route, idx) => (
-            <Route path={route.path} element={route.element} key={idx} />
-          ))}
-        </Route>
-        <Route element={<AdminFeature />}>
-          {adminRoutes.map((route, idx) => (
-            <Route path={route.path} element={route.element} key={idx} />
-          ))}
-        </Route>
-        <Route  element={<AdminAuthFeature />}>
-          {adminAuth.map((route, idx) => (
-            <Route path={route.path} element={route.element} key={idx} />
-          ))}
-          <Route path="/admin/" element={<AdminLogin />} />
-        </Route>
-      </Routes>
-    </>
-  );
+    return (
+        <>
+            <Helmet>
+                <title>{fullTitle}</title>
+            </Helmet>
+
+            <Routes>
+                {/* Public Auth Routes - Restricted for authenticated users */}
+                <Route path="/" element={
+                    <PublicRoute restricted>
+                        <Signin />
+                    </PublicRoute>
+                } />
+
+                <Route path="/signup" element={
+                    <PublicRoute restricted>
+                        <Signup />
+                    </PublicRoute>
+                } />
+
+                <Route path="/forgot-password" element={
+                    <PublicRoute restricted>
+                        <ForgotPassword />
+                    </PublicRoute>
+                } />
+
+                <Route path="/reset-password" element={
+                    <PublicRoute restricted>
+                        <ResetPassword />
+                    </PublicRoute>
+                } />
+
+                <Route path="/success" element={
+                    <PublicRoute>
+                        <Success />
+                    </PublicRoute>
+                } />
+
+                {/*/!*  Routes - No authentication needed *!/*/}
+                {/*<Route element={<Feature />}>*/}
+                {/*    {publicRoutes.map((route, idx) => (*/}
+                {/*        <Route*/}
+                {/*            key={idx}*/}
+                {/*            path={route.path}*/}
+                {/*            element={*/}
+                {/*                <PublicRoute>*/}
+                {/*                    {route.element}*/}
+                {/*                </PublicRoute>*/}
+                {/*            }*/}
+                {/*        />*/}
+                {/*    ))}*/}
+                {/*</Route>*/}
+
+                {/* Protected Auth Routes - Need authentication */}
+                <Route element={
+                    <ProtectedRoute>
+                        <Feature />
+                    </ProtectedRoute>
+                }>
+                    {userRoutes.map((route, idx) => (
+                        <Route
+                            key={idx}
+                            path={route.path}
+                            element={route.element}
+                        />
+                    ))}
+                </Route>
+
+                {/* Protected Admin Routes - Need admin authentication */}
+                {/*<Route element={*/}
+                {/*    <ProtectedRoute>*/}
+                {/*        <AdminFeature />*/}
+                {/*    </ProtectedRoute>*/}
+                {/*}>*/}
+                {/*    {adminRoutes.map((route, idx) => (*/}
+                {/*        <Route*/}
+                {/*            key={idx}*/}
+                {/*            path={route.path}*/}
+                {/*            element={route.element}*/}
+                {/*        />*/}
+                {/*    ))}*/}
+                {/*</Route>*/}
+
+                {/* Admin Auth Routes */}
+                <Route path="/admin/" element={
+                    <PublicRoute restricted>
+                        <AdminLogin />
+                    </PublicRoute>
+                } />
+
+                <Route element={<AdminAuthFeature />}>
+                    {adminAuth.map((route, idx) => (
+                        <Route
+                            key={idx}
+                            path={route.path}
+                            element={route.element}
+                        />
+                    ))}
+                </Route>
+
+                {/* 404 Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </>
+    );
 };
 
 export default Mainapp;

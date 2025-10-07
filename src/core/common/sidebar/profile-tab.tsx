@@ -4,9 +4,12 @@ import { Link } from 'react-router-dom'
 import { all_routes } from '../../../feature-module/router/all_routes'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
+import { useLogout } from '../../../hooks/useLogout';
 
 export const ProfileTab = () => {
     const routes = all_routes
+
+    const { handleLogout } = useLogout();
   return (
     <>
         {/* Profile sidebar */}
@@ -214,11 +217,15 @@ export const ProfileTab = () => {
                   <div className="d-flex profile-list justify-content-between align-items-center">
                     <div>
                       <h6 className="fs-14">Logout</h6>
-                      <p className="fs-16 ">Sign out from this Device</p>
+                      <p className="fs-16">Sign out from this Device</p>
                     </div>
-                    <Link to={routes.signin} className="link-icon">
-                      <i className="ti ti-logout fs-16" />
-                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="link-icon btn btn-link p-0"
+                    >
+                        <i className="ti ti-logout fs-16" />
+                    </button>
                   </div>
                 </div>
               </div>
