@@ -86,7 +86,7 @@ export const useRefreshToken = () => {
     return useMutation({
         mutationFn: async (refreshToken: string): Promise<{ accessToken: string }> => {
             const response = await http.post<{ accessToken: string }>(
-                authUri.refreshToken,
+                authUri.refresh,
                 { refreshToken }
             );
             return response.data;
