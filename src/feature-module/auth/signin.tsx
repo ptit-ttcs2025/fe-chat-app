@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/slices/auth/reducer';
 import { useLogin } from '@/apis/auth/auth.api';
@@ -9,6 +9,7 @@ import ImageWithBasePath from '@/core/common/imageWithBasePath';
 
 const Signin: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const dispatch = useDispatch();
     const { mutate: login, isPending } = useLogin();
 
@@ -66,15 +67,12 @@ const Signin: React.FC = () => {
 
         login(formData, {
             onSuccess: (response) => {
-                console.log('Login successful:', response);
-                // Save token to Redux and localStorage
+                console.log('✅ Đăng nhập thành công:', response);
+                
+                // ✅ Tokens đã được lưu vào cookies tự động trong authApis.login
+                // Chỉ cần dispatch để update Redux store và lưu user vào sessionStorage
                 dispatch(setCredentials({
-                    user: {
-                        id: response.id,
-                        username: response.username,
-                        email: response.email,
-                        fullName: response.fullName,
-                    },
+                    user: response.user,
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                 }));
@@ -85,10 +83,10 @@ const Signin: React.FC = () => {
             },
             onError: (error: any) => {
                 const errorMessage =
-                    error?.response?.data?.message ||
                     error?.message ||
-                    'Đăng nhập thất bại. Vui lòng thử lại.';
+                    'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
                 setApiError(errorMessage);
+                console.error('❌ Lỗi đăng nhập:', error);
             },
         });
     }, [formData, validateForm, login, dispatch, navigate, location]);
