@@ -72,12 +72,7 @@ const Signin: React.FC = () => {
                 // ✅ Tokens đã được lưu vào cookies tự động trong authApis.login
                 // Chỉ cần dispatch để update Redux store và lưu user vào sessionStorage
                 dispatch(setCredentials({
-                    user: {
-                        id: response.id,
-                        username: response.username,
-                        email: response.email,
-                        fullName: response.fullName,
-                    },
+                    user: response.user,
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                 }));

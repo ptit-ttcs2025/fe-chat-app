@@ -2,7 +2,7 @@ import http from '@/lib/apiBase';
 import authStorage from '@/lib/authStorage';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import type { IAuth, IAuthResponse, IAuthUser } from './auth.type';
+import {IAuth, IAuthResponse, IAuthUser, ILoginResponse, ISignupRequest} from './auth.type';
 
 const URI = '/api/v1/auth';
 
@@ -10,6 +10,7 @@ export const authUri = {
     login: `${URI}/login`,
     refresh: `${URI}/refresh`,
     me: `${URI}/profile`,
+    signup: `${URI}/register`
 };
 
 export const authApis = {
@@ -17,18 +18,23 @@ export const authApis = {
      * Login API - Lưu tokens vào cookies
      */
     login: async (payload: IAuth): Promise<IAuthResponse> => {
-        const response = await http.post<IAuthResponse>(authUri.login, payload);
+        const response = await http.post<ILoginResponse>(authUri.login, payload);
 
-        // ✅ Lưu toàn bộ auth data ngay sau khi login thành công
-        if (response.data?.accessToken) {
-            authStorage.saveAuthData(
-                response.data.accessToken,
-                response.data.refreshToken,
-                response.data.user
-            );
-        }
+        const apiData = response.data;
 
-        return response.data;
+        // ✅ Transform sang IAuthResponse format
+        const authResponse: IAuthResponse = {
+            accessToken: apiData.accessToken,
+            refreshToken: apiData.refreshToken,
+            user: {
+                id: apiData.id,
+                username: apiData.username,
+                email: apiData.email,
+                fullName: apiData.fullName,
+            }
+        };
+
+        return authResponse;
     },
 
     /**
@@ -62,6 +68,18 @@ export const authApis = {
         authStorage.setRefreshToken(response.data.refreshToken);
 
         return response.data;
+    },
+
+    signup: async (payload: ISignupRequest): Promise<IAuthResponse>=> {
+        const response = await http.post<IAuthResponse>(authUri.signup, payload);
+
+        if (response.data?.accessToken) {
+            authStorage.setAccessToken(response.data.accessToken);
+            authStorage.setRefreshToken(response.data.refreshToken);
+        }
+
+        return response.data;
+
     },
 };
 
@@ -100,3 +118,9 @@ export const useMe = () => {
         retry: false,
     });
 };
+
+export const useSignup = () => {
+    return useMutation<IAuthResponse, AxiosError<{message: string}>, ISignupRequest>({
+        mutationFn: authApis.signup,
+    });
+}
