@@ -1,4 +1,5 @@
-import http, { tokenManager } from '@/lib/apiBase';
+import http from '@/lib/apiBase';
+import authStorage from '@/lib/authStorage';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import type { IAuth, IAuthResponse, IAuthUser } from './auth.type';
@@ -7,97 +8,95 @@ const URI = '/api/v1/auth';
 
 export const authUri = {
     login: `${URI}/login`,
-    logout: `${URI}/logout`,
     refresh: `${URI}/refresh`,
-    me: `${URI}/me`,
+    me: `${URI}/profile`,
 };
 
 export const authApis = {
+    /**
+     * Login API - Lưu tokens vào cookies
+     */
     login: async (payload: IAuth): Promise<IAuthResponse> => {
         const response = await http.post<IAuthResponse>(authUri.login, payload);
 
-        // ✅ Đồng bộ với response structure từ backend
+        // ✅ Lưu toàn bộ auth data ngay sau khi login thành công
         if (response.data?.accessToken) {
-            tokenManager.setAccessToken(response.data.accessToken);
-            tokenManager.setRefreshToken(response.data.refreshToken);
+            authStorage.saveAuthData(
+                response.data.accessToken,
+                response.data.refreshToken,
+                response.data.user
+            );
         }
 
         return response.data;
     },
 
-    logout: async (): Promise<void> => {
-        await http.post(authUri.logout);
-        tokenManager.clearTokens();
-    },
-
+    /**
+     * Get user profile
+     */
     me: async (): Promise<IAuthUser> => {
         const response = await http.get<IAuthUser>(authUri.me);
         return response.data;
     },
 
+    /**
+     * Refresh token API
+     */
     refreshToken: async (): Promise<{
-        accessToken: string;      // ✅ Consistent naming
-        refreshToken: string;     // ✅ Consistent naming
+        accessToken: string;
+        refreshToken: string;
     }> => {
-        const refreshToken = tokenManager.getRefreshToken();
+        const refreshToken = authStorage.getRefreshToken();
 
         if (!refreshToken) {
             throw new Error('No refresh token available');
         }
 
         const response = await http.post<{
-            accessToken: string;  // ✅ Match response structure
-            refreshToken: string; // ✅ Match response structure
-        }>(
-            authUri.refresh,
-            { refreshToken }
-        );
+            accessToken: string;
+            refreshToken: string;
+        }>(authUri.refresh, { refreshToken });
 
-        // ✅ Update tokens after refresh
-        tokenManager.setAccessToken(response.data.accessToken);
-        tokenManager.setRefreshToken(response.data.refreshToken);
+        // ✅ Cập nhật tokens mới vào cookies
+        authStorage.setAccessToken(response.data.accessToken);
+        authStorage.setRefreshToken(response.data.refreshToken);
 
         return response.data;
     },
 };
 
-// ✅ React Query hooks (no changes needed)
-// Login mutation
+// ==================== REACT QUERY HOOKS ====================
+
+/**
+ * Hook login - Tự động lưu tokens vào cookies
+ */
 export const useLogin = () => {
     return useMutation({
         mutationFn: async (payload: IAuth): Promise<IAuthResponse> => {
-            const response = await http.post<IAuthResponse>(authUri.login, payload);
-            return response.data;
+            return authApis.login(payload);
         },
     });
 };
 
-// Logout mutation
-export const useLogout = () => {
-    return useMutation({
-        mutationFn: async (): Promise<void> => {
-            await http.post(authUri.logout);
-        },
-    });
-};
-
-// Refresh token mutation
+/**
+ * Hook refresh token
+ */
 export const useRefreshToken = () => {
     return useMutation({
-        mutationFn: async (refreshToken: string): Promise<{ accessToken: string }> => {
-            const response = await http.post<{ accessToken: string }>(
-                authUri.refreshToken,
-                { refreshToken }
-            );
-            return response.data;
+        mutationFn: async (): Promise<{ accessToken: string; refreshToken: string }> => {
+            return authApis.refreshToken();
         },
     });
 };
 
+/**
+ * Hook lấy thông tin user hiện tại
+ */
 export const useMe = () => {
     return useQuery<IAuthUser, AxiosError>({
         queryKey: ['me'],
         queryFn: authApis.me,
-        enabled: !!tokenManager.getAccessToken(),
+        enabled: !!authStorage.getAccessToken(),
+        retry: false,
     });
 };

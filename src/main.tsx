@@ -2,11 +2,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { HelmetProvider } from 'react-helmet-async'; // ✅ Import
+import { HelmetProvider } from 'react-helmet-async';
 import { queryClient } from '@/lib/queryClient';
 import { store } from '@/store/store';
 import { Provider } from 'react-redux';
 import Mainapp from '@/feature-module/router/router';
+import AppInitializer from '@/core/common/AppInitializer';
 import { base_path } from './environment.tsx';
 
 // CSS imports
@@ -25,13 +26,15 @@ import "./index.scss";
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
-        <HelmetProvider> {/* ✅ Wrap toàn bộ app */}
+        <HelmetProvider>
             <Provider store={store}>
-                <QueryClientProvider client={queryClient}>
-                    <BrowserRouter basename={base_path}>
-                        <Mainapp />
-                    </BrowserRouter>
-                </QueryClientProvider>
+                <AppInitializer>
+                    <QueryClientProvider client={queryClient}>
+                        <BrowserRouter basename={base_path}>
+                            <Mainapp />
+                        </BrowserRouter>
+                    </QueryClientProvider>
+                </AppInitializer>
             </Provider>
         </HelmetProvider>
     </StrictMode>
