@@ -1,7 +1,7 @@
 import http, { tokenManager } from '@/lib/apiBase';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import type { IAuth, IAuthResponse, IAuthUser } from './auth.type';
+import type {IAuth, IAuthResponse, IAuthUser, ISignupRequest} from './auth.type';
 
 const URI = '/api/v1/auth';
 
@@ -10,6 +10,7 @@ export const authUri = {
     logout: `${URI}/logout`,
     refresh: `${URI}/refresh`,
     me: `${URI}/me`,
+    signup: `${URI}/register`
 };
 
 export const authApis = {
@@ -59,6 +60,18 @@ export const authApis = {
 
         return response.data;
     },
+
+    signup: async (payload: ISignupRequest): Promise<IAuthResponse>=> {
+        const response = await http.post<IAuthResponse>(authUri.signup, payload);
+
+        if (response.data?.accessToken) {
+            tokenManager.setAccessToken(response.data.accessToken);
+            tokenManager.setRefreshToken(response.data.refreshToken);
+        }
+
+        return response.data;
+
+    },
 };
 
 // ✅ React Query hooks (no changes needed)
@@ -101,3 +114,9 @@ export const useMe = () => {
         enabled: !!tokenManager.getAccessToken(),
     });
 };
+
+export const useSignup = () => {
+    return useMutation<IAuthResponse, AxiosError<{message: string}>, ISignupRequest>({
+        mutationFn: authApis.signup,
+    });
+}
