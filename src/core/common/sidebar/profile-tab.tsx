@@ -1,6 +1,5 @@
 
 import ImageWithBasePath from '../imageWithBasePath'
-import { Link } from 'react-router-dom'
 import { all_routes } from '../../../feature-module/router/all_routes'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
@@ -8,6 +7,7 @@ import { useLogout } from '../../../hooks/useLogout';
 
 export const ProfileTab = () => {
     const routes = all_routes
+
 
     const { handleLogout } = useLogout();
   return (
@@ -52,12 +52,12 @@ export const ProfileTab = () => {
             {/* /Profile */}
             <div className="sidebar-body chat-body">
               {/* Profile Info */}
-              <h5 className="mb-2">Profile Info</h5>
+              <h5 className="mb-2">Thông tin tài khoản</h5>
               <div className="card">
                 <div className="card-body">
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Name</h6>
+                      <h6 className="fs-14">Họ và tên</h6>
                       <p className="fs-16 ">Salom Katherine</p>
                     </div>
                     <span>

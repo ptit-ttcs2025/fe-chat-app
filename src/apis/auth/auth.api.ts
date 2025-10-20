@@ -9,7 +9,7 @@ export const authUri = {
     login: `${URI}/login`,
     logout: `${URI}/logout`,
     refresh: `${URI}/refresh`,
-    me: `${URI}/me`,
+    me: `${URI}/profile`,
     signup: `${URI}/register`
 };
 

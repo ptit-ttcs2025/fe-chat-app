@@ -78,9 +78,8 @@ const Signup = () => {
         signup(formData, {
             onSuccess: (response) => {
                 message.success('Đăng ký thành công!');
-                //TODO: Có thể thêm xác thực email ở đây
-                // TODO: Có thể tự động login sau khi đăng ký thành công
-                navigate(routes.signin, {replace: true});
+                //TODO: Có thể thêm xác thực OTP hoặc tự động login ở đây
+                navigate(routes.signin, {replace: true}); // Chuyển hướng đến trang đăng nhập
             },
             onError: (error: any) => {
                 const errorMsg = error?.response?.data?.message ||
