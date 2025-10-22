@@ -5,6 +5,7 @@ import AdminSidebar from './admin/common/adminSidebar'
 import ThemeSettings from './admin/common/themeSettings'
 import { useDispatch, useSelector } from 'react-redux'
 import { setMobileSidebar } from '../core/data/redux/commonSlice'
+import { useModalAutoCleanup, useModalNavigationCleanup } from '@/hooks/useModalAutoCleanup'
 
 const AdminFeature = () => {
   const dispatch = useDispatch();
@@ -13,6 +14,11 @@ const AdminFeature = () => {
   const miniSidebar = useSelector((state: any) => state.miniSidebar);
   const expandMenu = useSelector((state: any) => state.expandMenu);
   const mobileSidebar = useSelector((state: any) => state.mobileSidebar);
+  
+  // Cleanup modal khi route thay đổi và khi dùng browser back/forward
+  useModalAutoCleanup();
+  useModalNavigationCleanup();
+  
   const loaders = () => {
     setIsLoading(true)
     setTimeout(() => {

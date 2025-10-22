@@ -19,6 +19,7 @@ export default defineConfig({
             '@/slices': path.resolve(__dirname, './src/slices'),
             '@/lib': path.resolve(__dirname, './src/lib'),
             '@/types': path.resolve(__dirname, './src/types'),
+            '@/hooks': path.resolve(__dirname, './src/hooks'),
             '@/environment': path.resolve(__dirname, './src/environment.ts'),
         }
     },

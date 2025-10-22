@@ -15,6 +15,7 @@ import BlockUser from './block-user'
 import ContactDetails from './contact-details'
 import EditContact from './edit-contact'
 import InviteModal from './invite-modal'
+import FriendRequests from './friend-requests'
 
 const CommonModals = () => {
   return (
@@ -30,6 +31,7 @@ const CommonModals = () => {
     <VoiceCall/>
     <VoiceGroup/>
     <AddContact/>
+    <FriendRequests/>
     <MuteUser/>
     <BlockUser/>
     <ContactDetails/>
