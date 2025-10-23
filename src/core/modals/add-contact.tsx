@@ -7,6 +7,7 @@ import ImageWithBasePath from '../common/imageWithBasePath';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
+import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 
 const AddContact = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,27 +104,6 @@ const AddContact = () => {
         confirmButtonColor: '#dc3545',
         footer: '<p>Vui lòng kiểm tra lại kết nối hoặc thử lại sau.</p>'
       });
-    }
-  };
-
-  // Generate avatar color from name
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-      '#DFE6E9', '#74B9FF', '#A29BFE', '#FD79A8', '#FDCB6E'
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
-  // Check if avatar URL is valid
-  const isValidUrl = (url?: string | null) => {
-    if (!url) return false;
-    try {
-      new URL(url);
-      return url.startsWith('http://') || url.startsWith('https://');
-    } catch {
-      return false;
     }
   };
 
@@ -277,7 +257,7 @@ const AddContact = () => {
                                       fontSize: '24px'
                                     }}
                                   >
-                                    {user.fullName.charAt(0).toUpperCase()}
+                                    {getInitial(user.fullName)}
                                   </div>
                                 )}
                               </div>

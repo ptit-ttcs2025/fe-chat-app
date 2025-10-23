@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 import { useState, useMemo, useEffect } from 'react';
-import { useGetFriends, useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
+import { useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
+import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 
 const ContactTab = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,40 +20,14 @@ const ContactTab = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch friends và search friends
-  const { data: allFriends, isLoading: loadingAll } = useGetFriends();
-  const { data: searchedFriends, isLoading: loadingSearch } = useSearchFriends(
+  // Chỉ dùng searchFriends cho cả get all (q rỗng) và search
+  const { data: friends, isLoading, refetch } = useSearchFriends(
     { q: debouncedQuery },
-    debouncedQuery.length > 0
+    true // Luôn enabled để gọi ngay khi mount
   );
 
   // Get request count
   const { data: requestCount } = useGetRequestCount();
-
-  // Determine which data to use
-  const friends = debouncedQuery.length > 0 ? searchedFriends : allFriends;
-  const isLoading = debouncedQuery.length > 0 ? loadingSearch : loadingAll;
-
-  // Get avatar color
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-      '#DFE6E9', '#74B9FF', '#A29BFE', '#FD79A8', '#FDCB6E'
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
-  // Check if avatar URL is valid
-  const isValidUrl = (url?: string | null) => {
-    if (!url) return false;
-    try {
-      new URL(url);
-      return url.startsWith('http://') || url.startsWith('https://');
-    } catch {
-      return false;
-    }
-  };
 
   // Group friends by first letter
   const groupedFriends = useMemo(() => {
@@ -88,7 +63,7 @@ const ContactTab = () => {
           <div className="slimscroll">
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
-                <h4 className="mb-3">Contacts</h4>
+                <h4 className="mb-3">Bạn bè</h4>
                 <div className="d-flex align-items-center mb-3">
                   <Link
                     to="#"
@@ -123,7 +98,7 @@ const ContactTab = () => {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Search Contacts"
+                      placeholder="Tìm bạn bè"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -138,10 +113,21 @@ const ContactTab = () => {
             <div className="sidebar-body chat-body">
               {/* Left Chat Title */}
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5>All Contacts</h5>
-                {friends && (
-                  <span className="badge bg-primary">{friends.length}</span>
-                )}
+                <h5>
+                  {searchQuery ? `Kết quả tìm kiếm` : 'Tất cả bạn bè'}
+                </h5>
+                <div className="d-flex align-items-center gap-2">
+                  {friends && (
+                    <span className="badge bg-primary">{friends.length}</span>
+                  )}
+                  <button 
+                    className="btn btn-sm btn-light" 
+                    onClick={() => refetch()}
+                    title="Làm mới"
+                  >
+                    <i className="ti ti-refresh"></i>
+                  </button>
+                </div>
               </div>
               {/* /Left Chat Title */}
 
@@ -151,7 +137,9 @@ const ContactTab = () => {
                   <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Đang tải...</span>
                   </div>
-                  <p className="text-muted mt-2">Đang tải danh bạ...</p>
+                  <p className="text-muted mt-2">
+                    {searchQuery ? 'Đang tìm kiếm...' : 'Đang tải danh bạ...'}
+                  </p>
                 </div>
               )}
 
@@ -202,7 +190,7 @@ const ContactTab = () => {
                                   fontSize: '18px'
                                 }}
                               >
-                                {friend.displayName.charAt(0).toUpperCase()}
+                                {getInitial(friend.displayName)}
                               </div>
                             )}
                           </div>

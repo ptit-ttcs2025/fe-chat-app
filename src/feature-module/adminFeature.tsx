@@ -11,9 +11,9 @@ const AdminFeature = () => {
   const dispatch = useDispatch();
   const location = useLocation();
   const [isLoading , setIsLoading] = useState(false)
-  const miniSidebar = useSelector((state: any) => state.miniSidebar);
-  const expandMenu = useSelector((state: any) => state.expandMenu);
-  const mobileSidebar = useSelector((state: any) => state.mobileSidebar);
+  const miniSidebar = useSelector((state: any) => state.common.miniSidebar);
+  const expandMenu = useSelector((state: any) => state.common.expandMenu);
+  const mobileSidebar = useSelector((state: any) => state.common.mobileSidebar);
   
   // Cleanup modal khi route thay đổi và khi dùng browser back/forward
   useModalAutoCleanup();

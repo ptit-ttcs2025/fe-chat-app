@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from 'react-redux';
 const AdminSidebar = () => {
   const Location = useLocation();
   const dispatch = useDispatch();
-  const miniSidebar = useSelector((state: any) => state.miniSidebar);
+  const miniSidebar = useSelector((state: any) => state.common.miniSidebar);
   const [subOpen, setSubopen] = useState<any>('');
   const [subsidebar, setSubsidebar] = useState("");
 

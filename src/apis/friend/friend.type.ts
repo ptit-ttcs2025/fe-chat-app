@@ -69,12 +69,17 @@ export interface IFriendsResponse {
 // Friend Request (Lời mời kết bạn)
 export interface IFriendRequest {
     id: string;
-    sender: IFriend;
-    receiver: IFriend;
-    message?: string;
+    senderId: string;
+    senderDisplayName: string;
+    senderAvatarUrl: string | null;
+    receiverId: string;
+    receiverDisplayName: string;
+    receiverAvatarUrl: string | null;
     status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    message?: string;
     createdAt: string;
-    updatedAt?: string;
+    processedAt?: string | null;
+    expiresAt?: string;
 }
 
 export interface IFriendRequestsResponse {

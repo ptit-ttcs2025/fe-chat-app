@@ -8,6 +8,7 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
 import { useQueryClient } from '@tanstack/react-query';
+import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 
 const FriendRequests = () => {
   const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
@@ -18,32 +19,11 @@ const FriendRequests = () => {
   useModalCleanup('friend-requests');
 
   // Fetch data
-  const { data: receivedRequests, isLoading: loadingReceived, refetch: refetchReceived } = useGetReceivedRequests();
+  const { data: receivedRequests, isLoading: loadingReceived } = useGetReceivedRequests();
   const { data: sentRequests, isLoading: loadingSent } = useGetSentRequests();
   
   // Respond mutation
   const respondMutation = useRespondFriendRequest();
-
-  // Get avatar color
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-      '#DFE6E9', '#74B9FF', '#A29BFE', '#FD79A8', '#FDCB6E'
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
-  // Check if avatar URL is valid
-  const isValidUrl = (url?: string | null) => {
-    if (!url) return false;
-    try {
-      new URL(url);
-      return url.startsWith('http://') || url.startsWith('https://');
-    } catch {
-      return false;
-    }
-  };
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -225,7 +205,10 @@ const FriendRequests = () => {
                 {!isLoading && currentRequests && currentRequests.length > 0 && (
                   <div className="list-group">
                     {currentRequests.map((request, index) => {
-                      const displayUser = activeTab === 'received' ? request.sender : request.receiver;
+                      // Lấy thông tin người dùng tương ứng
+                      const displayName = activeTab === 'received' ? request.senderDisplayName : request.receiverDisplayName;
+                      const avatarUrl = activeTab === 'received' ? request.senderAvatarUrl : request.receiverAvatarUrl;
+                      
                       return (
                         <div
                           key={request.id}
@@ -237,12 +220,12 @@ const FriendRequests = () => {
                           <div className="d-flex align-items-start">
                             {/* Avatar */}
                             <div className="flex-shrink-0 me-3">
-                              {isValidUrl(displayUser?.avatarUrl) && displayUser?.avatarUrl ? (
+                              {isValidUrl(avatarUrl) && avatarUrl ? (
                                 <div style={{ width: '60px', height: '60px' }}>
                                   <ImageWithBasePath
-                                    src={displayUser.avatarUrl}
+                                    src={avatarUrl}
                                     className="rounded-circle"
-                                    alt={displayUser.displayName}
+                                    alt={displayName}
                                     width={60}
                                     height={60}
                                   />
@@ -253,11 +236,11 @@ const FriendRequests = () => {
                                   style={{
                                     width: '60px',
                                     height: '60px',
-                                    backgroundColor: getAvatarColor(displayUser?.displayName || 'User'),
+                                    backgroundColor: getAvatarColor(displayName || 'User'),
                                     fontSize: '24px'
                                   }}
                                 >
-                                  {displayUser?.displayName?.charAt(0).toUpperCase() || 'U'}
+                                  {getInitial(displayName)}
                                 </div>
                               )}
                             </div>
@@ -266,7 +249,7 @@ const FriendRequests = () => {
                             <div className="flex-grow-1">
                               <div className="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                  <h6 className="mb-1">{displayUser?.displayName || 'Unknown User'}</h6>
+                                  <h6 className="mb-1">{displayName || 'Unknown User'}</h6>
                                   <p className="mb-0 text-muted small">
                                     <i className="ti ti-clock me-1"></i>
                                     {formatDate(request.createdAt)}
@@ -289,7 +272,7 @@ const FriendRequests = () => {
                                   <button
                                     type="button"
                                     className="btn btn-success btn-sm"
-                                    onClick={() => handleAccept(request.id, displayUser?.displayName || 'người dùng')}
+                                    onClick={() => handleAccept(request.id, displayName || 'người dùng')}
                                     disabled={respondMutation.isPending}
                                   >
                                     <i className="ti ti-check me-1"></i>
@@ -298,7 +281,7 @@ const FriendRequests = () => {
                                   <button
                                     type="button"
                                     className="btn btn-danger btn-sm"
-                                    onClick={() => handleReject(request.id, displayUser?.displayName || 'người dùng')}
+                                    onClick={() => handleReject(request.id, displayName || 'người dùng')}
                                     disabled={respondMutation.isPending}
                                   >
                                     <i className="ti ti-x me-1"></i>

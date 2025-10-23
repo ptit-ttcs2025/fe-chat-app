@@ -5,12 +5,9 @@ import {
     IUser, 
     ISearchUserParams, 
     IAddFriendRequest, 
-    IAddFriendResponse, 
-    ISearchUserResponse,
+    IAddFriendResponse,
     IFriend,
-    IFriendsResponse,
     IFriendRequest,
-    IFriendRequestsResponse,
     IRespondFriendRequestPayload,
     IRespondFriendRequestResponse,
     ISearchFriendsParams,
@@ -36,10 +33,11 @@ export const friendApis = {
      * Search users by name
      */
     searchUsers: async (params: ISearchUserParams): Promise<IUser[]> => {
-        const response = await http.get<ISearchUserResponse>(friendUri.searchUsers, {
+        const response = await http.get(friendUri.searchUsers, {
             params: { name: params.name }
-        });
-        return response.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, path, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
@@ -54,20 +52,22 @@ export const friendApis = {
      * Get received friend requests
      */
     getReceivedRequests: async (page: number = 0, size: number = 50): Promise<IFriendRequest[]> => {
-        const response = await http.get<IFriendRequestsResponse>(friendUri.getReceivedRequests, {
+        const response = await http.get(friendUri.getReceivedRequests, {
             params: { page, size }
-        });
-        return response.data.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
      * Get sent friend requests
      */
     getSentRequests: async (page: number = 0, size: number = 50): Promise<IFriendRequest[]> => {
-        const response = await http.get<IFriendRequestsResponse>(friendUri.getSentRequests, {
+        const response = await http.get(friendUri.getSentRequests, {
             params: { page, size }
-        });
-        return response.data.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
@@ -84,14 +84,15 @@ export const friendApis = {
      * Search friends by name (q rỗng = lấy tất cả)
      */
     searchFriends: async (params: ISearchFriendsParams): Promise<IFriend[]> => {
-        const response = await http.get<IFriendsResponse>(friendUri.searchFriends, {
+        const response = await http.get(friendUri.searchFriends, {
             params: {
                 q: params.q || '', // q rỗng = lấy tất cả
                 pageNumber: params.pageNumber || 0,
                 pageSize: params.pageSize || 50
             }
-        });
-        return response.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**

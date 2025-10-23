@@ -10,8 +10,8 @@ const AdminHeader = () => {
   const [themeSetting , setThemeSetting] = useState(false)
   const [layoutBs, setLayoutBs]= useState(localStorage.getItem("layoutThemeColors") || "light");
   const dispatch = useDispatch();
-  const mobileSidebar = useSelector((state: any) => state.mobileSidebar);
-  const miniSidebar = useSelector((state: any) => state.miniSidebar);
+  const mobileSidebar = useSelector((state: any) => state.common.mobileSidebar);
+  const miniSidebar = useSelector((state: any) => state.common.miniSidebar);
 
   const toggleMobileSidebar = () => {
     dispatch(setMobileSidebar(!mobileSidebar));
