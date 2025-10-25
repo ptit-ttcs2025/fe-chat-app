@@ -23,6 +23,9 @@ import AdminLogin from '../admin/authentication/login';
 // Routes Config
 import { userRoutes, authRoutes, adminRoutes, adminAuth } from './router.link';
 
+// Toast Notification Manager
+import NotificationToastManager from '@/core/components/NotificationToastManager';
+
 
 const Mainapp: React.FC = () => {
   const location = useLocation();
@@ -63,6 +66,9 @@ const Mainapp: React.FC = () => {
             <Helmet>
                 <title>{fullTitle}</title>
             </Helmet>
+
+            {/* Toast Notification Manager - Display toast notifications */}
+            <NotificationToastManager />
 
             <Routes>
                 {/* Public Auth Routes - Restricted for authenticated users */}

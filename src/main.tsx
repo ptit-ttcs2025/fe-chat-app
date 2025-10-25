@@ -8,6 +8,7 @@ import { store } from '@/store/store';
 import { Provider } from 'react-redux';
 import Mainapp from '@/feature-module/router/router';
 import AppInitializer from '@/core/common/AppInitializer';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import { base_path } from './environment.tsx';
 
 // CSS imports
@@ -30,9 +31,11 @@ createRoot(document.getElementById('root')!).render(
             <Provider store={store}>
                 <AppInitializer>
                     <QueryClientProvider client={queryClient}>
-                        <BrowserRouter basename={base_path}>
-                            <Mainapp />
-                        </BrowserRouter>
+                        <NotificationProvider>
+                            <BrowserRouter basename={base_path}>
+                                <Mainapp />
+                            </BrowserRouter>
+                        </NotificationProvider>
                     </QueryClientProvider>
                 </AppInitializer>
             </Provider>

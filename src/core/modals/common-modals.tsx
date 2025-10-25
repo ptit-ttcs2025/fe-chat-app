@@ -16,6 +16,7 @@ import ContactDetails from './contact-details'
 import EditContact from './edit-contact'
 import InviteModal from './invite-modal'
 import FriendRequests from './friend-requests'
+import Notifications from './notifications'
 
 const CommonModals = () => {
   return (
@@ -32,6 +33,7 @@ const CommonModals = () => {
     <VoiceGroup/>
     <AddContact/>
     <FriendRequests/>
+    <Notifications/>
     <MuteUser/>
     <BlockUser/>
     <ContactDetails/>

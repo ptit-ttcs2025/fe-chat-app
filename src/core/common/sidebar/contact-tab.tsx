@@ -6,6 +6,7 @@ import "overlayscrollbars/overlayscrollbars.css";
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 const ContactTab = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +29,9 @@ const ContactTab = () => {
 
   // Get request count
   const { data: requestCount } = useGetRequestCount();
+  
+  // Get notification count
+  const { unreadCount: notificationCount } = useNotifications();
 
   // Group friends by first letter
   const groupedFriends = useMemo(() => {
@@ -65,6 +69,21 @@ const ContactTab = () => {
               <div className="header-title d-flex align-items-center justify-content-between">
                 <h4 className="mb-3">Bạn bè</h4>
                 <div className="d-flex align-items-center mb-3">
+                  <Link
+                    to="#"
+                    data-bs-toggle="modal"
+                    data-bs-target="#notifications-modal"
+                    className="add-icon btn btn-info p-0 d-flex align-items-center justify-content-center fs-16 me-2 position-relative"
+                    title="Thông báo"
+                  >
+                    <i className="ti ti-bell" />
+                    {notificationCount > 0 && (
+                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
+                            style={{ fontSize: '10px' }}>
+                        {notificationCount}
+                      </span>
+                    )}
+                  </Link>
                   <Link
                     to="#"
                     data-bs-toggle="modal"

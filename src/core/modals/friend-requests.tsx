@@ -49,6 +49,8 @@ const FriendRequests = () => {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
       queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.invalidateQueries({ queryKey: ['searchFriends'] });
+      queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
 
       MySwal.fire({
         icon: 'success',
@@ -94,6 +96,7 @@ const FriendRequests = () => {
 
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
 
       MySwal.fire({
         icon: 'success',

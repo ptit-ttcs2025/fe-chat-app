@@ -8,6 +8,7 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
+import { useQueryClient } from '@tanstack/react-query';
 
 const AddContact = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,6 +16,7 @@ const AddContact = () => {
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
 
   const MySwal = withReactContent(Swal);
+  const queryClient = useQueryClient();
   
   // Use modal cleanup hook để tránh vấn đề backdrop khi navigate
   useModalCleanup('add-contact');
@@ -81,6 +83,13 @@ const AddContact = () => {
 
       // Add to sent requests
       setSentRequests(prev => new Set(prev).add(userId));
+
+      // Invalidate queries để cập nhật UI
+      queryClient.invalidateQueries({ queryKey: ['friendRequests', 'sent'] });
+      queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
+      
+      // Backend sẽ tự động gửi WebSocket notification đến người nhận
+      // NotificationContext sẽ tự động xử lý khi nhận được notification
 
       // Show success alert
       MySwal.fire({

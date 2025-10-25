@@ -1,0 +1,339 @@
+// Template colors - PTIT Chat Theme
+$primary-color: #6338F6;
+$primary-light: #E3DBFD;
+$primary-dark: #734CF7;
+$success-color: #28a745;
+$danger-color: #dc3545;
+$warning-color: #ffc107;
+$info-color: #17a2b8;
+
+// Toast Container - Fixed position at top right
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none; // Allow clicks to pass through container
+  max-width: 420px;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+
+// Individual Toast Notification
+.toast-notification {
+  position: relative;
+  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(99, 56, 246, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: auto; // Re-enable clicks on toast
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  transform: translateX(120%);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  // Show animation
+  &.show {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  // Hide animation
+  &.hide {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+
+  // Hover effect
+  &:hover {
+    box-shadow: 0 6px 30px rgba(99, 56, 246, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+// Close button
+.toast-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  z-index: 2;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+  }
+
+  i {
+    display: flex;
+  }
+}
+
+// Toast Content Layout
+.toast-content {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+// Avatar/Icon
+.toast-avatar {
+  flex-shrink: 0;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: white; // Nền trắng cho logo PTIT
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; // Contain để logo không bị cắt
+    padding: 4px; // Padding cho logo
+  }
+}
+
+.toast-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+// Toast Body
+.toast-body {
+  flex: 1;
+  color: white;
+  padding-right: 30px; // Space for close button
+}
+
+.toast-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.toast-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 12px;
+
+  strong {
+    font-weight: 600;
+    color: white;
+  }
+}
+
+.toast-submessage {
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.9;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+// Action Buttons
+.toast-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.toast-btn {
+  flex: 1;
+  padding: 8px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  i {
+    font-size: 14px;
+  }
+}
+
+.toast-btn-accept {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  
+  &:hover {
+    background: $success-color;
+    border-color: $success-color;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+  }
+}
+
+.toast-btn-reject {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  
+  &:hover {
+    background: $danger-color;
+    border-color: $danger-color;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+  }
+}
+
+// Progress Bar
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 0 0 16px 16px;
+  animation: toast-progress linear forwards;
+  transform-origin: left;
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+// Stack effect for multiple toasts
+.toast-container > div {
+  animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+// Different background gradients for notification types - PTIT Theme
+.toast-notification {
+  // Friend Request - Primary gradient (PTIT purple)
+  &[data-type="FRIEND_REQUEST"] {
+    background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+    box-shadow: 0 4px 20px rgba(99, 56, 246, 0.3);
+  }
+
+  // Friend Request Accepted - Success gradient
+  &[data-type="FRIEND_REQUEST_ACCEPTED"] {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
+  }
+
+  // Friend Request Rejected - Danger gradient
+  &[data-type="FRIEND_REQUEST_REJECTED"] {
+    background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+    box-shadow: 0 4px 20px rgba(220, 53, 69, 0.3);
+  }
+
+  // New Message - Info gradient
+  &[data-type="NEW_MESSAGE"] {
+    background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+    box-shadow: 0 4px 20px rgba(23, 162, 184, 0.3);
+  }
+
+  // System - Warning gradient
+  &[data-type="SYSTEM"] {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    box-shadow: 0 4px 20px rgba(255, 193, 7, 0.3);
+  }
+}
+
+// Mobile responsive
+@media (max-width: 768px) {
+  .toast-notification {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .toast-avatar {
+    width: 45px;
+    height: 45px;
+  }
+
+  .toast-icon {
+    font-size: 24px;
+  }
+
+  .toast-title {
+    font-size: 14px;
+  }
+
+  .toast-message {
+    font-size: 13px;
+  }
+
+  .toast-btn {
+    font-size: 12px;
+    padding: 7px 12px;
+  }
+
+  .toast-close-btn {
+    width: 26px;
+    height: 26px;
+    top: 10px;
+    right: 10px;
+    font-size: 14px;
+  }
+}
+
+// Dark mode support (optional)
+@media (prefers-color-scheme: dark) {
+  .toast-notification {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+}
+

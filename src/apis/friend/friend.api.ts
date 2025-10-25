@@ -101,6 +101,7 @@ export const friendApis = {
     getRequestCount: async (): Promise<number> => {
         try {
             const response = await http.get<IFriendRequestCountResponse>(friendUri.getRequestCount);
+            console.log('response', response.data);
             return response.data.data || 0; // Fallback to 0 if undefined
         } catch (error) {
             console.error('Error fetching request count:', error);

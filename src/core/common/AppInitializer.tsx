@@ -1,16 +1,21 @@
 import { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { rehydrateAuth, setCredentials } from '@/slices/auth/reducer';
 import authStorage from '@/lib/authStorage';
 import { authApis } from '@/apis/auth/auth.api';
+import websocketService from '@/core/services/websocket.service';
+import { RootState } from '@/store/store';
 
 /**
  * Component này chạy khi app khởi động
- * Nhiệm vụ: Rehydrate auth state từ cookies + sessionStorage
- * Nếu có token nhưng không có user → Tự động fetch user từ API
+ * Nhiệm vụ: 
+ * - Rehydrate auth state từ cookies + sessionStorage
+ * - Nếu có token nhưng không có user → Tự động fetch user từ API
+ * - Kết nối WebSocket khi user đã đăng nhập
  */
 export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const dispatch = useDispatch();
+    const { user, accessToken } = useSelector((state: RootState) => state.auth);
 
     useEffect(() => {
         const initializeAuth = async () => {
@@ -51,6 +56,27 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
         
         initializeAuth();
     }, [dispatch]);
+
+    // ✅ Kết nối WebSocket khi user đã đăng nhập
+    useEffect(() => {
+        if (user && accessToken) {
+            const baseUrl = 'http://localhost:8080/api/v1'; // Hoặc lấy từ environment
+            console.log('🔌 Connecting WebSocket for user:', user.username);
+            websocketService.connect(baseUrl, accessToken, user.id);
+        } else {
+            // Disconnect nếu user đăng xuất
+            if (websocketService.getConnectionStatus()) {
+                console.log('🔌 Disconnecting WebSocket');
+                websocketService.disconnect();
+            }
+        }
+
+        // Cleanup: disconnect khi component unmount hoặc user change
+        return () => {
+            // Không disconnect tự động vì có thể là hot-reload
+            // WebSocket sẽ tự disconnect khi logout
+        };
+    }, [user, accessToken]);
 
     return <>{children}</>;
 };
