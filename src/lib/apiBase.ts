@@ -122,47 +122,72 @@ http.interceptors.response.use(
 
             if (!refreshToken) {
                 // Không có refresh token → Logout
+                console.error('❌ No refresh token available');
                 tokenManager.clearTokens();
                 store.dispatch(logout());
-                window.location.href = '/';
+                
+                // ✅ Chỉ redirect nếu chưa ở trang login
+                if (!window.location.pathname.includes('/signin') && 
+                    !window.location.pathname.includes('/login')) {
+                    window.location.href = '/signin';
+                }
+                
                 return Promise.reject(error);
             }
 
             try {
                 // Gọi API refresh token
-                const response = await axios.post<{ accessToken: string; refreshToken: string }>(
+                const response = await axios.post(
                     `${environment.apiBaseUrl}/api/v1/auth/refresh`,
-                    { refreshToken },
+                    { 
+                        refreshToken,
+                        accessToken: tokenManager.getAccessToken()
+                    },
                 );
 
-                const { accessToken, refreshToken: newRefreshToken } = response.data;
+                // ✅ Parse response theo cấu trúc backend
+                const responseData = response.data?.data || response.data;
+                const newAccessToken = responseData.accessToken;
 
-                // Lưu token mới vào cookies
-                tokenManager.setAccessToken(accessToken);
-                tokenManager.setRefreshToken(newRefreshToken);
+                if (!newAccessToken) {
+                    throw new Error('No access token in refresh response');
+                }
 
-                // Cập nhật Redux store với cả accessToken và refreshToken
+                // Lưu accessToken mới vào cookies
+                tokenManager.setAccessToken(newAccessToken);
+                // ✅ Giữ nguyên refreshToken cũ (backend không trả về refreshToken mới)
+
+                // Cập nhật Redux store với accessToken mới
                 store.dispatch(setToken({
-                    accessToken,
-                    refreshToken: newRefreshToken,
+                    accessToken: newAccessToken,
+                    refreshToken: refreshToken, // Giữ nguyên refreshToken cũ
                 }));
+
+                console.log('✅ Token refreshed successfully');
 
                 // Thêm token mới vào header
                 if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                 }
 
                 // Xử lý các request đang đợi
-                processQueue(null, accessToken);
+                processQueue(null, newAccessToken);
 
                 // Retry request gốc
                 return axios(originalRequest);
             } catch (refreshError) {
                 // Refresh token thất bại → Logout
+                console.error('❌ Refresh token failed:', refreshError);
                 processQueue(refreshError as AxiosError, null);
                 tokenManager.clearTokens();
                 store.dispatch(logout());
-                window.location.href = '/';
+                
+                // ✅ Chỉ redirect nếu chưa ở trang login
+                if (!window.location.pathname.includes('/signin') && 
+                    !window.location.pathname.includes('/login')) {
+                    window.location.href = '/signin';
+                }
+                
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

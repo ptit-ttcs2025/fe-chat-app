@@ -7,10 +7,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
 
 const ContactTab = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  
+  // Selected friend context
+  const { setSelectedFriendId } = useSelectedFriend();
   
   // Debounce search query
   useEffect(() => {
@@ -191,6 +195,7 @@ const ContactTab = () => {
                           data-bs-toggle="modal"
                           data-bs-target="#contact-details"
                           className="chat-user-list"
+                          onClick={() => setSelectedFriendId(friend.friendId)}
                         >
                           <div className={`avatar avatar-lg ${friend.isOnline ? 'online' : 'offline'} me-2`}>
                             {isValidUrl(friend.avatarUrl) && friend.avatarUrl ? (

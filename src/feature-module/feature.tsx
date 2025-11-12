@@ -5,6 +5,7 @@ import Sidebar from "../core/common/sidebar/sidebar";
 import ChatSidebar from "../core/common/sidebar/chatSidebar";
 import CommonModals from "../core/modals/common-modals";
 import { useModalAutoCleanup, useModalNavigationCleanup } from "@/hooks/useModalAutoCleanup";
+import { SelectedFriendProvider } from "@/contexts/SelectedFriendContext";
 
 const Feature = () => {
   const themeDark = useSelector((state: any) => state?.darkMode);
@@ -14,16 +15,18 @@ const Feature = () => {
   useModalNavigationCleanup();
   
   return (
-    <div className={themeDark?'darkmode':''}>
-      <div className="main-wrapper" style={{ visibility: "visible" }}>
-        <div className="content main_content">
-          <Sidebar/>
-          <ChatSidebar/>
-          <Outlet />
+    <SelectedFriendProvider>
+      <div className={themeDark?'darkmode':''}>
+        <div className="main-wrapper" style={{ visibility: "visible" }}>
+          <div className="content main_content">
+            <Sidebar/>
+            <ChatSidebar/>
+            <Outlet />
+          </div>
+          <CommonModals/>
         </div>
-        <CommonModals/>
       </div>
-    </div>
+    </SelectedFriendProvider>
   );
 };
 

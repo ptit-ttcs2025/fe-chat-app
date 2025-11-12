@@ -12,7 +12,8 @@ import {
     IRespondFriendRequestResponse,
     ISearchFriendsParams,
     IFriendRequestCountResponse,
-    IDeleteFriendResponse
+    IDeleteFriendResponse,
+    IFriendDetail
 } from './friend.type';
 
 const URI = '/api/v1';
@@ -26,6 +27,7 @@ export const friendUri = {
     getRequestCount: `${URI}/friends/requests/count`,
     respondRequest: (requestId: string, action: string) => `${URI}/friends/requests/${requestId}/${action.toLowerCase()}`,
     deleteFriend: (friendId: string) => `${URI}/friends/${friendId}`,
+    getFriendDetail: (friendId: string) => `${URI}/friends/${friendId}`,
 };
 
 export const friendApis = {
@@ -114,6 +116,15 @@ export const friendApis = {
      */
     deleteFriend: async (friendId: string): Promise<IDeleteFriendResponse> => {
         const response = await http.delete<IDeleteFriendResponse>(friendUri.deleteFriend(friendId));
+        return response.data;
+    },
+
+    /**
+     * Get friend detail
+     */
+    getFriendDetail: async (friendId: string): Promise<IFriendDetail> => {
+        const response = await http.get(friendUri.getFriendDetail(friendId)) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { ... } }
         return response.data;
     },
 };
@@ -214,6 +225,18 @@ export const useGetRequestCount = () => {
 export const useDeleteFriend = () => {
     return useMutation<IDeleteFriendResponse, AxiosError<{message: string}>, string>({
         mutationFn: friendApis.deleteFriend,
+    });
+};
+
+/**
+ * Hook get friend detail
+ */
+export const useGetFriendDetail = (friendId: string, enabled: boolean = true) => {
+    return useQuery<IFriendDetail, AxiosError>({
+        queryKey: ['friendDetail', friendId],
+        queryFn: () => friendApis.getFriendDetail(friendId),
+        enabled: enabled && !!friendId,
+        retry: false,
     });
 };
 

@@ -48,6 +48,7 @@ export interface IAddFriendResponse {
 // Friend (Bạn bè) - Match với backend response
 export interface IFriend {
     userId: string;
+    friendId: string; // ID của friend (dùng để lấy detail)
     displayName: string;
     avatarUrl: string | null;
     becameFriendsAt: string;
@@ -125,5 +126,25 @@ export interface IDeleteFriendResponse {
     statusCode: number;
     message: string;
     data?: any;
+}
+
+// Friend Detail
+export interface IFriendDetail {
+    id: string;
+    email: string;
+    fullName: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER' | null;
+    dob: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    lastActiveAt: string | null;
+    status: 'ONLINE' | 'OFFLINE' | 'AWAY';
+}
+
+export interface IFriendDetailResponse {
+    statusCode: number;
+    message: string;
+    timestamp: string;
+    data: IFriendDetail;
 }
 
