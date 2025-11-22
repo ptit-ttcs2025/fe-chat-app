@@ -53,21 +53,32 @@ export const authApis = {
         refreshToken: string;
     }> => {
         const refreshToken = authStorage.getRefreshToken();
+        const accessToken = authStorage.getAccessToken();
 
         if (!refreshToken) {
             throw new Error('No refresh token available');
         }
 
-        const response = await http.post<{
-            accessToken: string;
-            refreshToken: string;
-        }>(authUri.refresh, { refreshToken });
+        const response = await http.post(authUri.refresh, { 
+            refreshToken,
+            accessToken 
+        }) as any;
 
-        // ✅ Cập nhật tokens mới vào cookies
-        authStorage.setAccessToken(response.data.accessToken);
-        authStorage.setRefreshToken(response.data.refreshToken);
+        // ✅ Parse response theo cấu trúc backend: { statusCode, message, timestamp, path, data: { accessToken, ... } }
+        const responseData = response.data || response;
+        const newAccessToken = responseData.accessToken;
 
-        return response.data;
+        if (!newAccessToken) {
+            throw new Error('No access token in refresh response');
+        }
+
+        // ✅ Cập nhật accessToken mới vào cookies (giữ nguyên refreshToken cũ)
+        authStorage.setAccessToken(newAccessToken);
+
+        return {
+            accessToken: newAccessToken,
+            refreshToken: refreshToken, // Backend không trả về refreshToken mới, giữ nguyên cũ
+        };
     },
 
     signup: async (payload: ISignupRequest): Promise<IAuthResponse>=> {

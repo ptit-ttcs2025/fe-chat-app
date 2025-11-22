@@ -22,9 +22,11 @@ const commonSlice = createSlice({
     setExpandMenu: (state, { payload }) => {
       state.expandMenu = payload;
     },
+    // ✅ Reset common state về initial state (khi logout)
+    resetCommonState: () => initialState,
   },
 });
 
-export const { setDark, setMobileSidebar, setMiniSidebar, setExpandMenu } = commonSlice.actions;
+export const { setDark, setMobileSidebar, setMiniSidebar, setExpandMenu, resetCommonState } = commonSlice.actions;
 
 export default commonSlice.reducer;

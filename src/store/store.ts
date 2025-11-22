@@ -1,9 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/slices/auth/reducer';
+import commonReducer from '@/core/data/redux/commonSlice';
 
 export const store = configureStore({
     reducer: {
         auth: authReducer,
+        common: commonReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({

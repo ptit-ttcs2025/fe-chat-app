@@ -7,6 +7,13 @@ export const all_routes = {
   success: "/success",
   otp: "/otp",
 
+  // Friends
+  friends: "/friends",
+  friendRequests: "/friends/requests",
+  friendRequestsReceived: "/friends/requests/received",
+  friendRequestsAccepted: "/friends/requests/:id/accept",
+  friendRequestsRejected: "/friends/requests/:id/reject",
+
   //Chat
   index: "/index",
   chat: "/chat",
