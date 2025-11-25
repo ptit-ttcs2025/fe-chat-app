@@ -10,6 +10,7 @@ import Mainapp from '@/feature-module/router/router';
 import AppInitializer from '@/core/common/AppInitializer';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { base_path } from './environment.tsx';
+import '@ant-design/v5-patch-for-react-19';
 
 // CSS imports
 import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
@@ -24,6 +25,7 @@ import "../src/assets/style/icon/tabler-icons/webfont/tabler-icons.css";
 import "../src/assets/style/icon/feather/css/iconfont.css";
 import "../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js";
 import "./index.scss";
+import "antd/dist/reset.css";
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

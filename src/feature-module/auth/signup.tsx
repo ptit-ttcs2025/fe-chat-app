@@ -5,6 +5,7 @@ import ImageWithBasePath from '../../core/common/imageWithBasePath';
 import { ISignupRequest } from "src/apis/auth/auth.type";
 import { useSignup } from "@/apis/auth/auth.api.ts";
 import { message } from "antd";
+// import { signupSchema } from 'src/apis/auth/auth.schema';
 
 
 const Signup = () => {
@@ -55,7 +56,7 @@ const Signup = () => {
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return false;
     }, [formData]);
 
     const handleChange = useCallback( (field: keyof ISignupRequest, value: string) => {
@@ -76,7 +77,7 @@ const Signup = () => {
         if (!validateForm()) return; // Validate form
 
         signup(formData, {
-            onSuccess: (response) => {
+            onSuccess: () => {
                 message.success('Đăng ký thành công!');
                 //TODO: Có thể thêm xác thực OTP hoặc tự động login ở đây
                 navigate(routes.signin, {replace: true}); // Chuyển hướng đến trang đăng nhập

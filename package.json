@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@fortawesome/fontawesome-free": "^6.7.2",
+    "@hookform/resolvers": "^5.2.2",
     "@react-latest-ui/react-sticky-notes": "^0.2.6",
     "@reduxjs/toolkit": "^2.9.0",
     "@stomp/stompjs": "^7.2.1",
@@ -25,6 +27,7 @@
     "chart.js": "^4.5.0",
     "clipboard-copy": "^4.0.1",
     "date-fns": "^4.1.0",
+    "dayjs": "^1.11.19",
     "dragula": "^3.7.3",
     "overlayscrollbars": "^2.12.0",
     "overlayscrollbars-react": "^0.5.6",
@@ -41,6 +44,7 @@
     "react-dom": "^19.1.1",
     "react-feather": "^2.0.10",
     "react-helmet-async": "^2.0.5",
+    "react-hook-form": "^7.66.1",
     "react-input-mask": "^2.0.4",
     "react-player": "^2.16.1",
     "react-redux": "^9.2.0",
@@ -57,7 +61,8 @@
     "sweetalert2-react-content": "^5.1.0",
     "swiper": "^11.2.10",
     "web-vitals": "^2.1.4",
-    "yet-another-react-lightbox": "^3.25.0"
+    "yet-another-react-lightbox": "^3.25.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
