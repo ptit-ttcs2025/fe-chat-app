@@ -1,30 +1,317 @@
-import  { useState } from 'react'
-import ImageWithBasePath from '../imageWithBasePath'
-import { Link } from 'react-router-dom'
-import { all_routes } from '../../../feature-module/router/all_routes'
+/**
+ * ChatTab - Sidebar Conversations với API Integration
+ * Hiển thị danh sách conversations từ API thay vì dữ liệu tĩnh
+ */
+
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import { Swiper, SwiperSlide } from 'swiper/react';
 
-// Import Swiper styles
+// Styles
 import '../../../../node_modules/swiper/swiper.css';
 import "overlayscrollbars/overlayscrollbars.css";
+
+// Components
+import ImageWithBasePath from '../imageWithBasePath';
+import { all_routes } from '../../../feature-module/router/all_routes';
+
+// API Hooks
+import { useChatConversations } from '@/hooks/useChatConversations';
+import type { IConversation } from '@/apis/chat/chat.type';
+
+// Redux
+import { setSelectedConversation } from '@/core/data/redux/commonSlice';
+
+interface RootState {
+  common: {
+    selectedConversationId: string | null;
+  };
+  auth: {
+    user: {
+      id: string;
+      fullName: string;
+      avatarUrl?: string;
+    } | null;
+  };
+}
+
 const ChatTab = () => {
-    const routes = all_routes;
-    const [activeTab,setActiveTab] = useState('All Chats')
+  const routes = all_routes;
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  
+  // Redux state
+  const user = useSelector((state: RootState) => state.auth?.user);
+  const selectedConversationId = useSelector((state: RootState) => state.common?.selectedConversationId);
+  
+  // Local state
+  const [activeTab, setActiveTab] = useState('All Chats');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // API Hooks
+  const {
+    conversations,
+    isLoading,
+    refresh: refetchConversations,
+    toggleMute,
+    togglePin: togglePinConversation,
+    deleteConversation,
+  } = useChatConversations({
+    pageSize: 50,
+    autoRefresh: true,
+  });
+  
+  // Filter conversations based on tab and search
+  const filteredConversations = useMemo(() => {
+    let result = conversations || [];
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      result = result.filter(conv =>
+        conv.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Tab filter
+    switch (activeTab) {
+      case 'Favourite Chats':
+        result = result.filter(conv => conv.favourite);
+        break;
+      case 'Pinned Chats':
+        result = result.filter(conv => conv.pinned);
+        break;
+      case 'Archive Chats':
+        result = result.filter(conv => conv.archived);
+        break;
+      case 'Trash':
+        result = result.filter(conv => conv.deleted);
+        break;
+      default:
+        result = result.filter(conv => !conv.archived && !conv.deleted);
+    }
+    
+    // Sort: Pinned first, then by last message time
+    result.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      
+      const timeA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const timeB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    return result;
+  }, [conversations, searchQuery, activeTab]);
+  
+  // Recent/Online users for swiper
+  const recentUsers = useMemo(() => {
+    return (conversations || [])
+      .filter(conv => conv.type === 'PRIVATE' && conv.isOnline)
+      .slice(0, 7);
+  }, [conversations]);
+  
+  // Handlers
+  const handleConversationClick = useCallback((conversation: IConversation) => {
+    // Dispatch action để set selected conversation
+    dispatch(setSelectedConversation(conversation.id));
+    navigate(routes.chat);
+  }, [dispatch, navigate, routes.chat]);
+  
+  const handleDeleteConversation = useCallback((e: React.MouseEvent, conversationId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm('Bạn có chắc muốn xóa cuộc trò chuyện này?')) {
+      deleteConversation(conversationId);
+    }
+  }, [deleteConversation]);
+  
+  const handleTogglePin = useCallback((e: React.MouseEvent, conversationId: string, isPinned: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePinConversation(conversationId, !isPinned);
+  }, [togglePinConversation]);
+  
+  const handleToggleMute = useCallback((e: React.MouseEvent, conversationId: string, isMuted: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMute(conversationId, !isMuted);
+  }, [toggleMute]);
+  
+  // Format helpers
+  const formatTime = (timestamp?: string) => {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 1) {
+      const diffInMins = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+      return `${diffInMins} min`;
+    } else if (diffInHours < 24) {
+      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffInHours < 48) {
+      return 'Yesterday';
+    } else if (diffInHours < 168) {
+      return date.toLocaleDateString('vi-VN', { weekday: 'long' });
+    } else {
+      return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    }
+  };
+  
+  const getConversationName = (conv: IConversation) => {
+    return conv.name || 'Cuộc trò chuyện';
+  };
+  
+  const getConversationAvatar = (conv: IConversation) => {
+    return conv.avatarUrl || 'assets/img/profiles/avatar-default.jpg';
+  };
+  
+  const getLastMessagePreview = (conv: IConversation) => {
+    if (!conv.lastMessage) return 'Chưa có tin nhắn';
+    
+    const { content, type, senderName, senderId } = conv.lastMessage;
+    const isOwnMessage = senderId === user?.id;
+    const prefix = isOwnMessage ? 'Bạn: ' : '';
+    
+    if (type === 'TEXT') {
+      return `${prefix}${content?.slice(0, 30)}${content && content.length > 30 ? '...' : ''}`;
+    } else if (type === 'IMAGE') {
+      return `${prefix}📷 Hình ảnh`;
+    } else if (type === 'FILE') {
+      return `${prefix}📎 File`;
+    } else if (type === 'AUDIO') {
+      return `${prefix}🎵 Âm thanh`;
+    } else if (type === 'VIDEO') {
+      return `${prefix}🎬 Video`;
+    }
+    return `${prefix}Tin nhắn`;
+  };
+  
+  // Render single conversation item
+  const renderConversationItem = (conv: IConversation) => (
+    <div className="chat-list" key={conv.id}>
+      <Link 
+        to="#" 
+        className={`chat-user-list ${selectedConversationId === conv.id ? 'active' : ''}`}
+        onClick={(e) => {
+          e.preventDefault();
+          handleConversationClick(conv);
+        }}
+      >
+        <div className={`avatar avatar-lg ${conv.isOnline ? 'online' : ''} me-2`}>
+          <ImageWithBasePath
+            src={getConversationAvatar(conv)}
+            className={`rounded-circle ${conv.pinned ? 'border border-warning border-2' : ''}`}
+            alt={getConversationName(conv)}
+          />
+        </div>
+        <div className="chat-user-info">
+          <div className="chat-user-msg">
+            <h6>
+              {getConversationName(conv)}
+              {conv.muted && <i className="ti ti-volume-off ms-1 text-muted fs-12" />}
+            </h6>
+            <p>
+              {conv.typing ? (
+                <span className="animate-typing text-primary">
+                  đang nhập
+                  <span className="dot mx-1" />
+                  <span className="dot me-1" />
+                  <span className="dot" />
+                </span>
+              ) : (
+                getLastMessagePreview(conv)
+              )}
+            </p>
+          </div>
+          <div className="chat-user-time">
+            <span className="time">{formatTime(conv.lastMessage?.createdAt)}</span>
+            <div className="chat-pin">
+              {conv.pinned && <i className="ti ti-pin me-2" />}
+              {conv.unreadCount > 0 ? (
+                <span className="count-message fs-12 fw-semibold">
+                  {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                </span>
+              ) : conv.lastMessage?.readCount ? (
+                <i className="ti ti-checks text-success" />
+              ) : (
+                <i className="ti ti-check text-muted" />
+              )}
+            </div>
+          </div>
+        </div>
+      </Link>
+      <div className="chat-dropdown">
+        <Link className="#" to="#" data-bs-toggle="dropdown">
+          <i className="ti ti-dots-vertical" />
+        </Link>
+        <ul className="dropdown-menu dropdown-menu-end p-3">
+          <li>
+            <Link 
+              className="dropdown-item" 
+              to="#"
+              onClick={(e) => handleTogglePin(e, conv.id, conv.pinned)}
+            >
+              <i className={`ti ti-pin${conv.pinned ? '-filled' : ''} me-2`} />
+              {conv.pinned ? 'Bỏ ghim' : 'Ghim chat'}
+            </Link>
+          </li>
+          <li>
+            <Link className="dropdown-item" to="#">
+              <i className="ti ti-heart me-2" />
+              {conv.favourite ? 'Bỏ yêu thích' : 'Yêu thích'}
+            </Link>
+          </li>
+          <li>
+            <Link 
+              className="dropdown-item" 
+              to="#"
+              onClick={(e) => handleToggleMute(e, conv.id, conv.muted)}
+            >
+              <i className={`ti ti-volume${conv.muted ? '' : '-off'} me-2`} />
+              {conv.muted ? 'Bật thông báo' : 'Tắt thông báo'}
+            </Link>
+          </li>
+          <li>
+            <Link className="dropdown-item" to="#">
+              <i className="ti ti-box-align-right me-2" />
+              Lưu trữ
+            </Link>
+          </li>
+          <li>
+            <Link
+              className="dropdown-item text-danger"
+              to="#"
+              onClick={(e) => handleDeleteConversation(e, conv.id)}
+            >
+              <i className="ti ti-trash me-2" />
+              Xóa
+            </Link>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+  
   return (
     <>
-        {/* Chats sidebar */}
-        <div id="chats" className="sidebar-content active ">
+      {/* Chats sidebar */}
+      <div id="chats" className="sidebar-content active">
         <OverlayScrollbarsComponent
-            options={{
-              scrollbars: {
-                autoHide: 'scroll',
-                autoHideDelay: 1000,
-              },
-            }}
-            style={{ maxHeight: '100vh' }}
-          >
+          options={{
+            scrollbars: {
+              autoHide: 'scroll',
+              autoHideDelay: 1000,
+            },
+          }}
+          style={{ maxHeight: '100vh' }}
+        >
           <div className="">
+            {/* Header */}
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
                 <h4 className="mb-3">Chats</h4>
@@ -54,153 +341,110 @@ const ChatTab = () => {
                           data-bs-target="#invite"
                         >
                           <i className="ti ti-send me-2" />
-                          Invite Others
+                          Mời bạn bè
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          className="dropdown-item"
+                          to="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            refetchConversations();
+                          }}
+                        >
+                          <i className="ti ti-refresh me-2" />
+                          Làm mới
                         </Link>
                       </li>
                     </ul>
                   </div>
                 </div>
               </div>
-              {/* Chat Search */}
+              
+              {/* Search */}
               <div className="search-wrap">
-                <form >
+                <form onSubmit={(e) => e.preventDefault()}>
                   <div className="input-group">
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Search For Contacts or Messages"
+                      placeholder="Tìm kiếm tin nhắn hoặc liên hệ..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                     />
                     <span className="input-group-text">
-                      <i className="ti ti-search" />
+                      {searchQuery ? (
+                        <i 
+                          className="ti ti-x cursor-pointer" 
+                          onClick={() => setSearchQuery('')}
+                        />
+                      ) : (
+                        <i className="ti ti-search" />
+                      )}
                     </span>
                   </div>
                 </form>
               </div>
-              {/* /Chat Search */}
             </div>
-            {/* Online Contacts */}
-            <div className="top-online-contacts">
-              <div className="d-flex align-items-center justify-content-between">
-                <h5 className="mb-3">Recent Chats</h5>
-                <div className="dropdown mb-3">
-                  <Link
-                    to="#"
-                    className="text-default"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item mb-1" to="#">
-                        <i className="ti ti-eye-off me-2" />
-                        Hide Recent
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-users me-2" />
-                        Active Contacts
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="swiper-container">
-                <div className="swiper-wrapper">
-                <Swiper
-                    spaceBetween={15}
-                    slidesPerView={4}
+            
+            {/* Recent/Online Contacts */}
+            {recentUsers.length > 0 && (
+              <div className="top-online-contacts">
+                <div className="d-flex align-items-center justify-content-between">
+                  <h5 className="mb-3">Đang hoạt động</h5>
+                  <div className="dropdown mb-3">
+                    <Link
+                      to="#"
+                      className="text-default"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
                     >
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-11.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Nichol</p>
+                      <i className="ti ti-dots-vertical" />
                     </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-12.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Titus</p>
-                    </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-14.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Geoffrey</p>
-                    </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-15.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Laverty</p>
-                    </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online bg-primary avatar-rounded">
-                        <span className="avatar-title fs-14 fw-medium">KG</span>
-                      </div>
-                      <p>Kitamura</p>
-                    </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-01.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Mark</p>
-                    </Link>
-                    </SwiperSlide>
-                    <SwiperSlide>
-                    <Link to={routes.chat} className="chat-status text-center">
-                      <div className="avatar avatar-lg online d-block">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-05.jpg"
-                          alt="Image"
-                          className="rounded-circle"
-                        />
-                      </div>
-                      <p>Smith</p>
-                    </Link>
-                    </SwiperSlide>
+                    <ul className="dropdown-menu dropdown-menu-end p-3">
+                      <li>
+                        <Link className="dropdown-item mb-1" to="#">
+                          <i className="ti ti-eye-off me-2" />
+                          Ẩn
+                        </Link>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="swiper-container">
+                  <div className="swiper-wrapper">
+                    <Swiper spaceBetween={15} slidesPerView={4}>
+                      {recentUsers.map((conv) => (
+                        <SwiperSlide key={conv.id}>
+                          <Link 
+                            to="#" 
+                            className="chat-status text-center"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleConversationClick(conv);
+                            }}
+                          >
+                            <div className="avatar avatar-lg online d-block">
+                              <ImageWithBasePath
+                                src={getConversationAvatar(conv)}
+                                alt={getConversationName(conv)}
+                                className="rounded-circle"
+                              />
+                            </div>
+                            <p className="text-truncate">{getConversationName(conv).split(' ')[0]}</p>
+                          </Link>
+                        </SwiperSlide>
+                      ))}
                     </Swiper>
-                  
+                  </div>
                 </div>
               </div>
-            </div>
-            {/* /Online Contacts */}
+            )}
+            
+            {/* Conversations List */}
             <div className="sidebar-body chat-body" id="chatsidebar">
-              {/* Left Chat Title */}
+              {/* Title and Filter */}
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h5 className="chat-title">{activeTab}</h5>
                 <div className="dropdown">
@@ -212,4939 +456,142 @@ const ChatTab = () => {
                   >
                     <i className="ti ti-filter" />
                   </Link>
-                  <ul
-                    className=" dropdown-menu dropdown-menu-end p-3"
-                    id="innerTab"
-                    role="tablist"
-                  >
+                  <ul className="dropdown-menu dropdown-menu-end p-3" id="innerTab" role="tablist">
                     <li role="presentation">
                       <Link
-                        className="dropdown-item active"
-                        id="all-chats-tab"
-                        data-bs-toggle="tab"
-                        to="#all-chats"
-                        role="tab"
-                        aria-controls="all-chats"
-                        aria-selected="true"
-                        onClick={()=>setActiveTab('All Chats')}
+                        className={`dropdown-item ${activeTab === 'All Chats' ? 'active' : ''}`}
+                        to="#"
+                        onClick={() => setActiveTab('All Chats')}
                       >
-                        All Chats
+                        Tất cả
                       </Link>
                     </li>
                     <li role="presentation">
                       <Link
-                        className="dropdown-item"
-                        id="favourites-chat-tab"
-                        data-bs-toggle="tab"
-                        to="#favourites-chat"
-                        role="tab"
-                        aria-controls="favourites-chat"
-                        aria-selected="false"
-                        onClick={()=>setActiveTab('Favourite Chats')}
+                        className={`dropdown-item ${activeTab === 'Favourite Chats' ? 'active' : ''}`}
+                        to="#"
+                        onClick={() => setActiveTab('Favourite Chats')}
                       >
-                        Favourite Chats
+                        Yêu thích
                       </Link>
                     </li>
                     <li role="presentation">
                       <Link
-                        className="dropdown-item"
-                        id="pinned-chats-tab"
-                        data-bs-toggle="tab"
-                        to="#pinned-chats"
-                        role="tab"
-                        aria-controls="pinned-chats"
-                        aria-selected="false"
-                        onClick={()=>setActiveTab('Pinned Chats')}
+                        className={`dropdown-item ${activeTab === 'Pinned Chats' ? 'active' : ''}`}
+                        to="#"
+                        onClick={() => setActiveTab('Pinned Chats')}
                       >
-                        Pinned Chats
+                        Đã ghim
                       </Link>
                     </li>
                     <li role="presentation">
                       <Link
-                        className="dropdown-item"
-                        id="archive-chats-tab"
-                        data-bs-toggle="tab"
-                        to="#archive-chats"
-                        role="tab"
-                        aria-controls="archive-chats"
-                        aria-selected="false"
-                        onClick={()=>setActiveTab('Archive Chats')}
+                        className={`dropdown-item ${activeTab === 'Archive Chats' ? 'active' : ''}`}
+                        to="#"
+                        onClick={() => setActiveTab('Archive Chats')}
                       >
-                        Archive Chats
-                      </Link>
-                    </li>
-                    <li role="presentation">
-                      <Link
-                        className="dropdown-item"
-                        id="trash-chats-tab"
-                        data-bs-toggle="tab"
-                        to="#trash-chats"
-                        role="tab"
-                        aria-controls="trash-chats"
-                        aria-selected="false"
-                        onClick={()=>setActiveTab('Trash')}
-                      >
-                        Trash
+                        Lưu trữ
                       </Link>
                     </li>
                   </ul>
                 </div>
               </div>
-              {/* /Left Chat Title */}
+              
+              {/* Conversations Content */}
               <div className="tab-content" id="innerTabContent">
-                <div
-                  className="tab-pane fade show active"
-                  id="all-chats"
-                  role="tabpanel"
-                  aria-labelledby="all-chats-tab"
-                >
+                <div className="tab-pane fade show active" id="all-chats" role="tabpanel">
                   <div className="chat-users-wrap">
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-01.jpg"
-                            className="rounded-circle border border-warning border-2"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Mark Villiams</h6>
-                            <p>
-                              <span className="animate-typing">
-                                is typing
-                                <span className="dot mx-1" />
-                                <span className="dot me-1" />
-                                <span className="dot" />
-                              </span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sarika Jain</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">06:12 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Clyde Smith</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">03:15 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                55
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            AG
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Amfr_boys_Group</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Yesterday</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                5
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Carla Jenkins</h6>
-                            <p className="text-success">
-                              <i className="ti ti-video-plus me-2" />
-                              Incoming Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Sunday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-05.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Federico Wells</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Wednesday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                              <i className="bx bx-check-double" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Edward Lietz</h6>
-                            <p>
-                              <i className="ti ti-file me-2" />
-                              Document
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            GU
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Gustov_family</h6>
-                            <p>
-                              Please Check
-                              <span className="text-primary ms-1">@rev</span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">24 Jul 2024</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-07.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Estell Gibson</h6>
-                            <p className="text-danger">
-                              <i className="ti ti-video-off me-2" />
-                              Missed Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-08.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sharon Ford</h6>
-                            <p>Hi How are you 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-09.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Thomas Rethman</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-10.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Wilbur Martinez</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-11.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Danielle Baker</h6>
-                            <p>
-                              <i className="ti ti-map-pin-plus me-2" />
-                              Location
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-13.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Morkel Jerrin</h6>
-                            <p>
-                              <i className="ti ti-video me-2" />
-                              Video
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="favourites-chat"
-                  role="tabpanel"
-                  aria-labelledby="favourites-chat-tab"
-                >
-                  <div className="chat-users-wrap">
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Clyde Smith</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">03:15 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                55
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            AG
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Amfr_boys_Group</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Yesterday</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                5
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Carla Jenkins</h6>
-                            <p className="text-success">
-                              <i className="ti ti-video-plus me-2" />
-                              Incoming Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Sunday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-05.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Federico Wells</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Wednesday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                              <i className="bx bx-check-double" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-01.jpg"
-                            className="rounded-circle border border-warning border-2"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Mark Villiamss</h6>
-                            <p>
-                              <span className="animate-typing">
-                                is typing
-                                <span className="dot mx-1" />
-                                <span className="dot me-1" />
-                                <span className="dot" />
-                              </span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sarika Jain</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">06:12 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Edward Lietz</h6>
-                            <p>
-                              <i className="ti ti-file me-2" />
-                              Document
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            GU
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Gustov_family</h6>
-                            <p>
-                              Please Check
-                              <span className="text-primary ms-1">@rev</span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">24 Jul 2024</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-07.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Estell Gibson</h6>
-                            <p className="text-danger">
-                              <i className="ti ti-video-off me-2" />
-                              Missed Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-08.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sharon Ford</h6>
-                            <p>Hi How are you 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-09.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Thomas Rethman</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-10.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Wilbur Martinez</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-11.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Danielle Baker</h6>
-                            <p>
-                              <i className="ti ti-map-pin-plus me-2" />
-                              Location
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-13.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Morkel Jerrin</h6>
-                            <p>
-                              <i className="ti ti-video me-2" />
-                              Video
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="pinned-chats"
-                  role="tabpanel"
-                  aria-labelledby="pinned-chats-tab"
-                >
-                  <div className="chat-users-wrap">
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Carla Jenkins</h6>
-                            <p className="text-success">
-                              <i className="ti ti-video-plus me-2" />
-                              Incoming Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Sunday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-05.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Federico Wells</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Wednesday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                              <i className="bx bx-check-double" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Clyde Smith</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">03:15 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                55
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            AG
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Amfr_boys_Group</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Yesterday</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                5
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-01.jpg"
-                            className="rounded-circle border border-warning border-2"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Mark Villiamss</h6>
-                            <p>
-                              <span className="animate-typing">
-                                is typing
-                                <span className="dot mx-1" />
-                                <span className="dot me-1" />
-                                <span className="dot" />
-                              </span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sarika Jain</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">06:12 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Edward Lietz</h6>
-                            <p>
-                              <i className="ti ti-file me-2" />
-                              Document
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            GU
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Gustov_family</h6>
-                            <p>
-                              Please Check
-                              <span className="text-primary ms-1">@rev</span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">24 Jul 2024</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-07.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Estell Gibson</h6>
-                            <p className="text-danger">
-                              <i className="ti ti-video-off me-2" />
-                              Missed Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-08.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sharon Ford</h6>
-                            <p>Hi How are you 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-09.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Thomas Rethman</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-10.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Wilbur Martinez</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-11.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Danielle Baker</h6>
-                            <p>
-                              <i className="ti ti-map-pin-plus me-2" />
-                              Location
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-13.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Morkel Jerrin</h6>
-                            <p>
-                              <i className="ti ti-video me-2" />
-                              Video
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="archive-chats"
-                  role="tabpanel"
-                  aria-labelledby="archive-chats-tab"
-                >
-                  <div className="chat-users-wrap">
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Clyde Smith</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">03:15 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                55
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            AG
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Amfr_boys_Group</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Yesterday</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                5
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Carla Jenkins</h6>
-                            <p className="text-success">
-                              <i className="ti ti-video-plus me-2" />
-                              Incoming Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Sunday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-05.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Federico Wells</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Wednesday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                              <i className="bx bx-check-double" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-01.jpg"
-                            className="rounded-circle border border-warning border-2"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Mark Villiamss</h6>
-                            <p>
-                              <span className="animate-typing">
-                                is typing
-                                <span className="dot mx-1" />
-                                <span className="dot me-1" />
-                                <span className="dot" />
-                              </span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sarika Jain</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">06:12 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Edward Lietz</h6>
-                            <p>
-                              <i className="ti ti-file me-2" />
-                              Document
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            GU
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Gustov_family</h6>
-                            <p>
-                              Please Check
-                              <span className="text-primary ms-1">@rev</span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">24 Jul 2024</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-07.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Estell Gibson</h6>
-                            <p className="text-danger">
-                              <i className="ti ti-video-off me-2" />
-                              Missed Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-08.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sharon Ford</h6>
-                            <p>Hi How are you 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-09.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Thomas Rethman</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-10.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Wilbur Martinez</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-11.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Danielle Baker</h6>
-                            <p>
-                              <i className="ti ti-map-pin-plus me-2" />
-                              Location
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-13.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Morkel Jerrin</h6>
-                            <p>
-                              <i className="ti ti-video me-2" />
-                              Video
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="tab-pane fade"
-                  id="trash-chats"
-                  role="tabpanel"
-                  aria-labelledby="trash-chats-tab"
-                >
-                  <div className="chat-users-wrap">
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sarika Jain</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">06:12 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Clyde Smith</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">03:15 AM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                55
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-01.jpg"
-                            className="rounded-circle border border-warning border-2"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Mark Villiamss</h6>
-                            <p>
-                              <span className="animate-typing">
-                                is typing
-                                <span className="dot mx-1" />
-                                <span className="dot me-1" />
-                                <span className="dot" />
-                              </span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            AG
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Amfr_boys_Group</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Yesterday</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                5
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Carla Jenkins</h6>
-                            <p className="text-success">
-                              <i className="ti ti-video-plus me-2" />
-                              Incoming Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Sunday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-05.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Federico Wells</h6>
-                            <p>
-                              <i className="ti ti-photo me-2" />
-                              Photo
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">Wednesday</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                12
-                              </span>
-                              <i className="bx bx-check-double" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Edward Lietz</h6>
-                            <p>
-                              <i className="ti ti-file me-2" />
-                              Document
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                          <span className="avatar-title fs-14 fw-medium">
-                            GU
-                          </span>
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Gustov_family</h6>
-                            <p>
-                              Please Check
-                              <span className="text-primary ms-1">@rev</span>
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">24 Jul 2024</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-07.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Estell Gibson</h6>
-                            <p className="text-danger">
-                              <i className="ti ti-video-off me-2" />
-                              Missed Video Call
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-08.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Sharon Ford</h6>
-                            <p>Hi How are you 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-09.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Thomas Rethman</h6>
-                            <p>Do you know which...</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-10.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Wilbur Martinez</h6>
-                            <p>Haha oh man 🔥</p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-pin me-2" />
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-11.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Danielle Baker</h6>
-                            <p>
-                              <i className="ti ti-map-pin-plus me-2" />
-                              Location
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-checks text-success" />
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-list">
-                      <Link to={routes.chat} className="chat-user-list">
-                        <div className="avatar avatar-lg online me-2">
-                          <ImageWithBasePath
-                            src="assets/img/profiles/avatar-13.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                          />
-                        </div>
-                        <div className="chat-user-info">
-                          <div className="chat-user-msg">
-                            <h6>Morkel Jerrin</h6>
-                            <p>
-                              <i className="ti ti-video me-2" />
-                              Video
-                            </p>
-                          </div>
-                          <div className="chat-user-time">
-                            <span className="time">02:40 PM</span>
-                            <div className="chat-pin">
-                              <i className="ti ti-heart-filled text-warning me-2" />
-                              <span className="count-message fs-12 fw-semibold">
-                                25
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                      <div className="chat-dropdown">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-box-align-right me-2" />
-                              Archive Chat
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-heart me-2" />
-                              Mark as Favourite
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-check me-2" />
-                              Mark as Unread
-                            </Link>
-                          </li>
-                          <li>
-                            <Link className="dropdown-item" to="#">
-                              <i className="ti ti-pinned me-2" />
-                              Pin Chats
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-chat"
-                            >
-                              <i className="ti ti-trash me-2" />
-                              Delete
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
+                    {/* Loading State */}
+                    {isLoading && (
+                      <div className="text-center py-4">
+                        <div className="spinner-border text-primary spinner-border-sm" role="status">
+                          <span className="visually-hidden">Đang tải...</span>
+                        </div>
+                        <p className="text-muted mt-2 mb-0 small">Đang tải cuộc trò chuyện...</p>
+                      </div>
+                    )}
+                    
+                    {/* Conversations List */}
+                    {!isLoading && filteredConversations.length > 0 && (
+                      filteredConversations.map(renderConversationItem)
+                    )}
+                    
+                    {/* Empty State */}
+                    {!isLoading && filteredConversations.length === 0 && (
+                      <div className="text-center py-5">
+                        <i className="ti ti-message-off fs-1 text-muted" />
+                        <h6 className="mt-3">
+                          {searchQuery 
+                            ? 'Không tìm thấy kết quả' 
+                            : 'Chưa có cuộc trò chuyện'}
+                        </h6>
+                        <p className="text-muted small">
+                          {searchQuery 
+                            ? 'Thử tìm với từ khóa khác' 
+                            : 'Bắt đầu trò chuyện mới!'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          </OverlayScrollbarsComponent>
-        </div>
-        {/* / Chats sidebar */}
+        </OverlayScrollbarsComponent>
+      </div>
+      
+      {/* Styles */}
+      <style>{`
+        .chat-user-list.active {
+          background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+          border-left: 3px solid #667eea;
+        }
+        
+        .chat-user-list:hover {
+          background: rgba(0, 0, 0, 0.02);
+        }
+        
+        .animate-typing {
+          display: inline-flex;
+          align-items: center;
+        }
+        
+        .animate-typing .dot {
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: #667eea;
+          animation: typing 1.4s infinite;
+        }
+        
+        .animate-typing .dot:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        
+        .animate-typing .dot:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+        
+        @keyframes typing {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+        
+        .cursor-pointer {
+          cursor: pointer;
+        }
+        
+        .count-message {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 2px 6px;
+          border-radius: 10px;
+          min-width: 20px;
+          text-align: center;
+        }
+      `}</style>
     </>
-  )
-}
+  );
+};
 
-export default ChatTab
+export default ChatTab;
