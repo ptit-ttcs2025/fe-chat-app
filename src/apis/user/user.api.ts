@@ -1,9 +1,8 @@
-
 import http from '@/lib/apiBase';
 import authStorage from '@/lib/authStorage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { IUserProfile } from './user.type';
+import { IUploadAvatarResponse, IUserProfile } from './user.type';
 import { IUpdateProfileRequest, IChangePasswordRequest } from './user.schema';
 
 const URI = '/api/v1';
@@ -12,6 +11,7 @@ export const userUri = {
     profile: `${URI}/auth/profile`,
     updateProfile: (id: string) =>  `${URI}/users/${id}`,
     changePassword: `${URI}/auth/change-password`,
+    uploadImage: `${URI}/files/upload`,
 };
 
 export const userApis = {
@@ -38,6 +38,21 @@ export const userApis = {
         const response = await http.post<{ message: string }>(userUri.changePassword, payload);
         return response.data;
     },
+
+    /**
+     * Upload avatar
+     */
+    uploadAvatar: async (file: File, folder: string = 'AVATARS'): Promise<IUploadAvatarResponse> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', folder);
+
+        // ✅ Không set Content-Type, để axios tự động set với boundary
+        const response = await http.post<IUploadAvatarResponse>(userUri.uploadImage, formData, {
+        });
+
+        return response.data;
+    }   
 };
 
 // ==================== REACT QUERY HOOKS ====================
@@ -87,3 +102,17 @@ export const useChangePassword = () => {
         mutationFn: (payload) => userApis.changePassword(payload),
     });
 };
+
+/**
+ * Hook upload avatar
+ */
+
+export const useUploadAvatar = () => {
+    return useMutation<
+        IUploadAvatarResponse,
+        AxiosError<{message: string}>,
+        { file: File; folder?: string}
+    >({
+        mutationFn: ({ file ,folder }) => userApis.uploadAvatar(file, folder),
+    });
+}

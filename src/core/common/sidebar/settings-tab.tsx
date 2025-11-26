@@ -1,4 +1,4 @@
-import  { useState, useEffect } from 'react'
+import  { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithBasePath from '../imageWithBasePath'
 import type { DatePickerProps } from 'antd';
@@ -8,7 +8,7 @@ import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 type PasswordField =  'confirmPassword' | 'newpassword' | 'oldpassword';
 import { useLogout } from '../../../hooks/useLogout';
-import { useGetProfile, useUpdateProfile, useChangePassword } from '../../../apis/user/user.api';
+import { useGetProfile, useUpdateProfile, useChangePassword, useUploadAvatar } from '../../../apis/user/user.api';
 import dayjs from 'dayjs';
 import { updateProfileSchema } from '../../../apis/user/user.schema';
 import { changePasswordSchema } from '../../../apis/user/user.schema';
@@ -33,6 +33,7 @@ const SettingsTab = () => {
     dob: null as dayjs.Dayjs | null,
     email: '',
     bio: '',
+    avatarUrl: '',
   });
 
   // State quản lý lỗi
@@ -51,11 +52,23 @@ const SettingsTab = () => {
   // State quản lý lỗi password
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
 
+  // State cho avatar preview
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  
+  // State để lưu file đã chọn (chưa upload)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Ref cho input file
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Lấy dữ liệu profile
   const { data: profile } = useGetProfile();
   const updateProfileMutation = useUpdateProfile();
   // Hook đổi mật khẩu
   const changePasswordMutation = useChangePassword();
+  // Hook upload ảnh
+  const uploadAvatarMutation = useUploadAvatar();
 
   // Khởi tạo form data từ profile
   useEffect(() => {
@@ -66,10 +79,22 @@ const SettingsTab = () => {
         dob: profile.dob ? dayjs(profile.dob) : null,
         email: profile.email || '',
         bio: profile.bio || '',
+        avatarUrl: profile.avatarUrl || '',
       });
+      setAvatarPreview(null); // Reset preview khi load lại
       setErrors({});
     }
   }, [profile, isEditing]);
+
+  // Cleanup blob URL khi component unmount hoặc preview thay đổi
+  useEffect(() => {
+    return () => {
+      // Cleanup blob URL khi component unmount
+      if (avatarPreview && avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, []);
 
   const togglePasswordVisibility = (field: PasswordField) => {
     setPasswordVisibility((prevState) => ({
@@ -116,7 +141,70 @@ const SettingsTab = () => {
     setIsEditing(true);
   };
 
+  // Xử lý chọn file - dùng URL.createObjectURL() thay vì FileReader
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    
+    if (!file) {
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      message.error('Vui lòng chọn file ảnh');
+      return;
+    }
+
+    // Validate file size (ví dụ: max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      message.error('Kích thước file không được vượt quá 5MB');
+      return;
+    }
+
+    // Revoke URL cũ nếu có
+    if (avatarPreview && avatarPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+
+    // Lưu file đã chọn (chưa upload)
+    setSelectedFile(file);
+
+    // Tạo preview bằng blob URL (ngắn hơn nhiều so với data URL)
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+  };
+
+  // Xử lý click vào icon để mở file picker
+  const handleAvatarClick = () => {
+    if (isEditing && !uploadingAvatar && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   const handleSaveClick = async () => {
+    // ✅ Upload avatar TRƯỚC nếu có file mới được chọn
+    let avatarUrlToUpdate = formData.avatarUrl;
+    
+    if (selectedFile) {
+      try {
+        setUploadingAvatar(true);
+        const uploadResult = await uploadAvatarMutation.mutateAsync({
+          file: selectedFile,
+          folder: 'AVATARS'
+        });
+        avatarUrlToUpdate = uploadResult.fileUrl;
+        setSelectedFile(null); // Clear sau khi upload thành công
+      } catch (error: any) {
+        const errorMessage = error?.response?.data?.message || error?.message || 'Upload ảnh thất bại';
+        message.error(errorMessage);
+        setUploadingAvatar(false);
+        return; // Dừng lại nếu upload ảnh thất bại
+      } finally {
+        setUploadingAvatar(false);
+      }
+    }
+
     // Chuẩn bị data để validate (chuyển dayjs thành string)
     const dataToValidate = {
       fullName: formData.fullName,
@@ -124,6 +212,7 @@ const SettingsTab = () => {
       gender: formData.gender || undefined,
       dob: formData.dob ? formData.dob.toISOString() : undefined,
       bio: formData.bio || undefined,
+      avatarUrl: avatarUrlToUpdate || undefined, // ✅ Cập nhật avatarUrl nếu có
     };
 
     // Validate bằng Zod
@@ -154,9 +243,13 @@ const SettingsTab = () => {
         });
         message.success('Cập nhật thông tin thành công');
         setIsEditing(false);
+        // ✅ Cleanup blob URL sau khi save thành công
+        if (avatarPreview && avatarPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(avatarPreview);
+        }
+        setAvatarPreview(null);
       } catch (error: any) {
-        // Xử lý lỗi từ API nếu cần
-        const errorMessage = error?.[0].message || 'Cập nhật thông tin thất bại.';
+        const errorMessage = error?.[0]?.message || error?.response?.data?.message || 'Cập nhật thông tin thất bại.';
         message.error(errorMessage);
         console.error('Error updating profile:', error);
       }
@@ -172,10 +265,18 @@ const SettingsTab = () => {
         dob: profile.dob ? dayjs(profile.dob) : null,
         email: profile.email || '',
         bio: profile.bio || '',
+        avatarUrl: profile.avatarUrl || '',
       });
     }
     setIsEditing(false);
     setErrors({});
+    
+    // ✅ Cleanup blob URL khi cancel
+    if (avatarPreview && avatarPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setSelectedFile(null);
+    setAvatarPreview(null);
   };
 
   const handlePasswordInputChange = (field: string, value: string) => {
@@ -341,12 +442,33 @@ const SettingsTab = () => {
                               <div className="d-flex justify-content-center align-items-center">
                                 <span className="set-pro avatar avatar-xxl rounded-circle mb-3 p-1">
                                   <ImageWithBasePath
-                                    src={profile?.avatarUrl || "assets/img/profiles/avatar-16.jpg"}
+                                    src={avatarPreview || formData.avatarUrl || profile?.avatarUrl || "assets/img/profiles/avatar-16.jpg"}
                                     className="rounded-circle"
                                     alt="user"
                                   />
-                                  <span className="add avatar avatar-sm d-flex justify-content-center align-items-center">
-                                    <i className="ti ti-plus rounded-circle d-flex justify-content-center align-items-center" />
+                                  {/* Input file ẩn */}
+                                  <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileSelect}
+                                    disabled={!isEditing || uploadingAvatar}
+                                    style={{ display: 'none' }}
+                                  />
+                                  {/* Icon click để chọn file */}
+                                  <span 
+                                    className="add avatar avatar-sm d-flex justify-content-center align-items-center" 
+                                    style={{ 
+                                      cursor: (isEditing && !uploadingAvatar) ? 'pointer' : 'not-allowed',
+                                      opacity: (isEditing && !uploadingAvatar) ? 1 : 0.5
+                                    }}
+                                    onClick={handleAvatarClick}
+                                  >
+                                    {uploadingAvatar ? (
+                                      <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />
+                                    ) : (
+                                      <i className="ti ti-plus rounded-circle d-flex justify-content-center align-items-center" />
+                                    )}
                                   </span>
                                 </span>
                               </div>

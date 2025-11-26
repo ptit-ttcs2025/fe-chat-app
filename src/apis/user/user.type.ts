@@ -8,5 +8,12 @@ export interface IUserProfile {
     bio: string,
     avatarUrl: string,
     createdAt: Date,
-    
 }
+
+export interface IUploadAvatarResponse {
+    fileUrl: string,
+    fileType: string,
+    fileSize: number,
+    mimeType: string,
+}
+
