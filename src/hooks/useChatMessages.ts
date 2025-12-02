@@ -52,16 +52,21 @@ export const useChatMessages = ({
     });
 
   // Update local messages khi data thay đổi
+  // API trả về theo thứ tự DESC (mới nhất trước), cần reverse để hiển thị cũ → mới
   useEffect(() => {
-    if (messagesData?.data) {
-      // Handle both PaginatedResponse and direct array
-      const results = messagesData.data.results || messagesData.data;
+    if (messagesData) {
+      // messagesData bây giờ là PaginatedResponse<IMessage> trực tiếp
+      const results = messagesData.results || [];
+      
       if (Array.isArray(results)) {
+        // Reverse để có thứ tự cũ → mới (ASC)
+        const orderedResults = [...results].reverse();
+        
         if (page === 0) {
-          setMessages(results);
+          setMessages(orderedResults);
         } else {
-          // Append older messages (pagination)
-          setMessages((prev) => [...results, ...prev]);
+          // Append older messages to the beginning (pagination - load older messages)
+          setMessages((prev) => [...orderedResults, ...prev]);
         }
       }
     }
@@ -162,14 +167,36 @@ export const useChatMessages = ({
 
     // Helper: Load more messages (pagination)
     const loadMoreMessages = useCallback(() => {
-        if (messagesData?.data?.hasNext) {
+        const meta = messagesData?.meta;
+        if (meta && meta.pageNumber < meta.totalPages - 1) {
             setPage((prev) => prev + 1);
         }
     }, [messagesData]);
 
-    // Helper: Scroll to bottom
-    const scrollToBottom = useCallback(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Helper: Scroll to bottom - sử dụng scrollTop để đảm bảo scroll
+    const scrollToBottom = useCallback((instant: boolean = false) => {
+        // Cách 1: Sử dụng scrollIntoView
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ 
+                behavior: instant ? 'instant' : 'smooth',
+                block: 'end'
+            });
+        }
+        
+        // Cách 2: Backup - scroll parent container trực tiếp
+        setTimeout(() => {
+            const chatBody = document.querySelector('.chat-body.chat-page-group');
+            if (chatBody) {
+                if (instant) {
+                    chatBody.scrollTop = chatBody.scrollHeight;
+                } else {
+                    chatBody.scrollTo({
+                        top: chatBody.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        }, 50);
     }, []);
 
     // Helper: Send message
@@ -221,13 +248,15 @@ export const useChatMessages = ({
         refetch();
     }, [refetch]);
 
+    const meta = messagesData?.meta;
+    
     return {
         // Data
         messages,
         isLoading,
         error,
-        hasMore: messagesData?.data?.hasNext || false,
-        totalPages: messagesData?.data?.totalPages || 0,
+        hasMore: meta ? meta.pageNumber < meta.totalPages - 1 : false,
+        totalPages: meta?.totalPages || 0,
         currentPage: page,
 
         // Actions

@@ -7,17 +7,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Tooltip } from "antd";
-import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
-import "overlayscrollbars/overlayscrollbars.css";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
 
 // Theme Components
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
-import ContactFavourite from "../../../core/modals/contact-favourite-canva";
-import ForwardMessage from "../../../core/modals/forward-message";
-import MessageDelete from "../../../core/modals/message-delete";
 import { all_routes } from "../../router/all_routes";
 
 // API & Hooks - Tích hợp real-time
@@ -26,6 +18,50 @@ import { useChatConversations } from "@/hooks/useChatConversations";
 import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
 import websocketService from "@/core/services/websocket.service";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
+
+// Avatar Helper
+import { isValidUrl, getInitial, getAvatarColor } from "@/lib/avatarHelper";
+
+// Avatar Component với fallback
+const Avatar = ({ src, name, className = "" }: { src?: string; name?: string; className?: string }) => {
+  const [imgError, setImgError] = useState(false);
+  const avatarName = name || "User";
+  const initial = getInitial(avatarName);
+  const bgColor = getAvatarColor(avatarName);
+  const hasValidUrl = isValidUrl(src) && !imgError;
+
+  if (hasValidUrl && src) {
+    // Sử dụng img trực tiếp để có thể xử lý onError
+    const fullSrc = src.startsWith('http') ? src : `${import.meta.env.VITE_IMG_PATH || ''}${src}`;
+    return (
+      <img
+        src={fullSrc}
+        className={className}
+        alt={avatarName}
+        onError={() => setImgError(true)}
+        style={{ objectFit: 'cover' }}
+      />
+    );
+  }
+
+  // Fallback: Avatar với chữ cái đầu
+  return (
+    <div
+      className={`${className} d-inline-flex align-items-center justify-content-center`}
+      style={{
+        width: "40px",
+        height: "40px",
+        borderRadius: "50%",
+        backgroundColor: bgColor,
+        color: "#fff",
+        fontWeight: "600",
+        fontSize: "16px",
+      }}
+    >
+      {initial}
+    </div>
+  );
+};
 
 // Redux State Interface
 interface RootState {
@@ -49,13 +85,11 @@ const Chat = () => {
   const selectedConversationId = useSelector((state: RootState) => state.common?.selectedConversationId);
   
   // ==================== Local State (UI) ====================
-  const [open1, setOpen1] = useState(false);
-  const [showReply, setShowReply] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [showEmoji, setShowEmoji] = useState<Record<string, boolean>>({});
   const [searchKeyword, setSearchKeyword] = useState("");
   const [inputMessage, setInputMessage] = useState("");
   const [selectedConversation, setSelectedConversation] = useState<IConversation | null>(null);
+  const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
   
   // ==================== Refs ====================
   const inputRef = useRef<HTMLInputElement>(null);
@@ -181,10 +215,34 @@ const Chat = () => {
     };
   }, []);
   
-  // Auto scroll to bottom
+  // Auto scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      // Delay để đảm bảo DOM đã render
+      setTimeout(() => {
+        scrollToBottom(true); // instant scroll
+      }, 50);
+      
+      // Smooth scroll sau đó
+      setTimeout(() => {
+        scrollToBottom(false);
+      }, 200);
+    }
   }, [messages.length, scrollToBottom]);
+  
+  // Filter messages when search keyword changes
+  // Hook đã xử lý sắp xếp theo thứ tự cũ → mới, không cần reverse
+  useEffect(() => {
+    if (searchKeyword.trim()) {
+      const filtered = messages.filter(msg => 
+        msg.content?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        msg.senderName?.toLowerCase().includes(searchKeyword.toLowerCase())
+      );
+      setFilteredMessages(filtered);
+    } else {
+      setFilteredMessages(messages);
+    }
+  }, [searchKeyword, messages]);
   
   // Focus input when conversation changes
   useEffect(() => {
@@ -194,13 +252,6 @@ const Chat = () => {
   }, [selectedConversation?.id]);
   
   // ==================== Handlers ====================
-  
-  const toggleEmoji = useCallback((groupId: string) => {
-    setShowEmoji((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId],
-    }));
-  }, []);
   
   const toggleSearch = useCallback(() => {
     setShowSearch((prev) => !prev);
@@ -262,13 +313,27 @@ const Chat = () => {
           typingTimeoutRef.current = null;
         }
         
-        // Focus input
-        inputRef.current?.focus();
+        // Auto scroll to bottom và focus input ngay lập tức
+        requestAnimationFrame(() => {
+          scrollToBottom(true); // instant scroll
+          inputRef.current?.focus();
+        });
+        
+        // Double check scroll sau 100ms
+        setTimeout(() => {
+          scrollToBottom(true);
+          inputRef.current?.focus();
+        }, 100);
+        
+        // Smooth scroll cuối cùng để mượt mà
+        setTimeout(() => {
+          scrollToBottom(false);
+        }, 300);
       } catch (error) {
         console.error("❌ Error sending message:", error);
       }
     },
-    [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user]
+    [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user, scrollToBottom]
   );
   
   const handleKeyDown = useCallback(
@@ -314,7 +379,7 @@ const Chat = () => {
   };
   
   const getConversationAvatar = (conversation: IConversation) => {
-    return conversation.avatarUrl || "assets/img/profiles/avatar-default.jpg";
+    return conversation.avatarUrl;
   };
   
   const renderMessage = (message: IMessage) => {
@@ -330,10 +395,10 @@ const Chat = () => {
       >
         {!isOwnMessage && (
                 <div className="chat-avatar">
-                  <ImageWithBasePath
-              src={message.senderAvatarUrl || "assets/img/profiles/avatar-default.jpg"}
+            <Avatar
+              src={message.senderAvatarUrl}
+              name={message.senderName}
                     className="rounded-circle"
-              alt={message.senderName}
                   />
                 </div>
         )}
@@ -341,8 +406,8 @@ const Chat = () => {
                 <div className="chat-content">
           <div className={`chat-profile-name ${isOwnMessage ? "text-end" : ""}`}>
                     <h6>
-              {message.senderName}
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
+              <span>{message.senderName}</span>
+                      <i className="ti ti-circle-filled fs-7" />
               <span className="chat-time">{formatTime(message.createdAt)}</span>
               {isOwnMessage && message.readCount > 0 && (
                       <span className="msg-read success">
@@ -350,9 +415,9 @@ const Chat = () => {
                       </span>
               )}
               {message.pinned && (
-                <span className="badge bg-primary ms-2">
-                  <i className="ti ti-pin" />
-                      </span>
+                <span className="pin-badge-modern">
+                  <i className="ti ti-pin-filled" />
+                </span>
               )}
                     </h6>
                   </div>
@@ -363,24 +428,6 @@ const Chat = () => {
                         <i className="ti ti-dots-vertical" />
                       </Link>
                       <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                  <Link className="dropdown-item" onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                    Trả lời
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                    Chuyển tiếp
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                    Sao chép
-                          </Link>
-                        </li>
                         <li>
                           <Link
                             className="dropdown-item"
@@ -408,62 +455,24 @@ const Chat = () => {
             
                     <div className="message-content">
               {message.content}
-              
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                    <Link to="#" onClick={() => toggleEmoji(message.id)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                    <div 
-                      className="emoj-group-list" 
-                      onClick={() => toggleEmoji(message.id)} 
-                      style={{ display: showEmoji[message.id] ? 'block' : 'none' }}
-                    >
-                      <ul>
-                        <li><Link to="#">❤️</Link></li>
-                        <li><Link to="#">👍</Link></li>
-                        <li><Link to="#">😂</Link></li>
-                        <li><Link to="#">😮</Link></li>
-                        <li><Link to="#">😢</Link></li>
-                        <li><Link to="#">🔥</Link></li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
                             </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
             
             {isOwnMessage && message.readCount > 0 && (
               <div className="chat-actions mt-1">
                 <small className="text-muted">
                   ✓ Đã xem bởi {message.readCount} người
                 </small>
-                  </div>
+                      </div>
             )}
+                    </div>
                   </div>
-                </div>
         
         {isOwnMessage && (
                 <div className="chat-avatar">
-                  <ImageWithBasePath
-              src={user?.avatarUrl || "assets/img/profiles/avatar-default.jpg"}
+            <Avatar
+              src={user?.avatarUrl}
+              name={user?.fullName || user?.username}
                     className="rounded-circle dreams_chat"
-              alt="You"
                   />
                 </div>
         )}
@@ -489,9 +498,36 @@ const Chat = () => {
   
   return (
     <>
-      {/* Modern Styles - Tích hợp animations */}
+      {/* Modern Styles - Fix layout hoàn chỉnh */}
       <style>{`
         @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        
+        /* ========== TYPING INDICATOR - DƯỚI INPUT ========== */
+        .typing-indicator-footer {
+          position: absolute;
+          bottom: 100%;
+          left: 0;
+          right: 0;
+          padding: 8px 20px;
+          background: #f8f9fa;
+          border-top: 1px solid #e9ecef;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: #667eea;
+          animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
           from {
             opacity: 0;
             transform: translateY(10px);
@@ -502,95 +538,312 @@ const Chat = () => {
           }
         }
         
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        
         .typing-indicator-modern {
-          padding: 8px 15px;
-          background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-          border-radius: 20px;
           display: inline-flex;
           align-items: center;
-          gap: 5px;
-          animation: slideIn 0.3s ease-out;
+          gap: 6px;
         }
         
         .typing-dot {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #667eea;
           animation: pulse 1.4s infinite;
         }
         
-        .typing-dot:nth-child(2) {
-          animation-delay: 0.2s;
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        /* ========== PIN BADGE MODERN ========== */
+        .pin-badge-modern {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: #fff;
+          font-size: 10px;
+          margin-left: 8px;
+          box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+          flex-shrink: 0;
         }
         
-        .typing-dot:nth-child(3) {
-          animation-delay: 0.4s;
+        .pin-badge-modern i {
+          font-size: 10px;
         }
         
-        .chats {
-          animation: slideIn 0.3s ease-out;
+        /* ========== TRUNCATE TÊN NGƯỜI DÙNG ========== */
+        .chat-profile-name h6 {
+          display: flex;
+          align-items: center;
+          flex-wrap: nowrap;
+          gap: 8px;
         }
         
-        .message-actions {
-          opacity: 0.7;
-          transition: opacity 0.2s;
+        .chat-profile-name h6 > span:first-of-type,
+        .chat-profile-name h6 > span:first-child {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 180px;
+          display: inline-block;
         }
         
-        .chats:hover .message-actions {
+        .chat-header .ms-2 h6 {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 200px;
+        }
+        
+        /* ========== SEARCH BAR - ẨN MẶC ĐỊNH ========== */
+        .chat-search.search-wrap.contact-search {
+          max-height: 0;
+          opacity: 0;
+          overflow: hidden;
+          padding: 0 15px;
+          transition: all 0.3s ease;
+          visibility: hidden;
+        }
+        
+        .chat-search.search-wrap.contact-search.visible-chat {
+          max-height: 60px;
           opacity: 1;
+          padding: 10px 15px;
+          background: #f8f9fa;
+          border-bottom: 1px solid #e9ecef;
+          visibility: visible;
+        }
+        
+        /* ========== MAIN CHAT LAYOUT - FIX HEIGHT ========== */
+        #middle.chat.chat-messages {
+          display: flex !important;
+          flex-direction: column !important;
+          height: calc(100vh - 0px) !important;
+          max-height: 100vh !important;
+          overflow: hidden !important;
+          position: relative !important;
+        }
+        
+        #middle.chat.chat-messages > div {
+          display: flex !important;
+          flex-direction: column !important;
+          height: 100% !important;
+          overflow: hidden !important;
+        }
+        
+        /* Header - fixed at top */
+        .chat-header {
+          flex-shrink: 0 !important;
+          background: #fff;
+          z-index: 10;
+          position: relative;
+        }
+        
+        /* ========== CHAT BODY - SCROLL AREA ========== */
+        .chat-body.chat-page-group {
+          flex: 1 1 auto !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          padding: 20px !important;
+          min-height: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        
+        .messages {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+          flex: 1;
+        }
+        
+        /* ========== FOOTER - FIXED AT BOTTOM ========== */
+        .chat-footer {
+          flex-shrink: 0 !important;
+          background: #fff !important;
+          border-top: 1px solid #e9ecef;
+          padding: 12px 20px !important;
+          z-index: 100;
+          margin-top: auto !important;
+          position: relative;
+        }
+        
+        .footer-form {
+          margin: 0;
+        }
+        
+        .chat-footer-wrap {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .chat-footer-wrap .form-wrap {
+          flex: 1;
+          position: relative;
+        }
+        
+        .chat-footer-wrap .form-wrap .form-control {
+          width: 100%;
+          height: 42px;
+          border-radius: 21px;
+          padding: 0 18px;
+          border: 1px solid #d0d0d0;
+          background: #f8f9fa;
+          font-size: 14px;
+          line-height: 42px;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          outline: none;
+          color: #212529;
+          letter-spacing: 0;
+          box-shadow: none;
+        }
+        
+        .chat-footer-wrap .form-wrap .form-control:hover:not(:disabled) {
+          background: #fff;
+          border-color: #c0c0c0;
+        }
+        
+        .chat-footer-wrap .form-wrap .form-control:focus {
+          background: #fff;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+          transform: none;
+        }
+        
+        .chat-footer-wrap .form-wrap .form-control:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          opacity: 0.6;
+          border-color: #e0e0e0;
+        }
+        
+        .chat-footer-wrap .form-wrap .form-control::placeholder {
+          color: #9ca3af;
+          font-style: normal;
+          font-weight: 400;
+        }
+        
+        .chat-footer-wrap .form-item {
+          flex-shrink: 0;
+        }
+        
+        .chat-footer-wrap .form-item .action-circle {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f5f5f5;
+          color: #666;
+          transition: all 0.2s ease;
+        }
+        
+        .chat-footer-wrap .form-item .action-circle:hover {
+          background: #667eea;
+          color: #fff;
+        }
+        
+        .chat-footer-wrap .form-btn {
+          flex-shrink: 0;
+        }
+        
+        .chat-footer-wrap .form-btn button {
+          border-radius: 50%;
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+          color: #fff;
+          font-size: 18px;
+          transition: all 0.25s ease;
+          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .chat-footer-wrap .form-btn button:hover:not(:disabled) {
+          transform: scale(1.05);
+          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .chat-footer-wrap .form-btn button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+        
+        /* Own message styling */
+        .chats.chats-right {
+          justify-content: flex-end;
+        }
+        
+        .chats.chats-right .message-content {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        
+        .chats.chats-right .chat-time {
+          color: rgba(255,255,255,0.8);
+        }
+        
+        /* Message animation */
+        .chats {
+          animation: slideIn 0.2s ease-out;
         }
       `}</style>
       
       {/* Chat */}
-      <div className={`chat chat-messages show`} id="middle">
-        <div>
+      <div 
+        className={`chat chat-messages show`} 
+        id="middle"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           {/* Chat Header */}
           <div className="chat-header">
             <div className="user-details">
               <div className="d-xl-none">
                 <Link className="text-muted chat-close me-2" to="#">
                   <i className="fas fa-arrow-left" />
-                      </Link>
+                          </Link>
                     </div>
               
               {selectedConversation ? (
                 <>
                   <div className="avatar avatar-lg online flex-shrink-0">
-                                  <ImageWithBasePath
+                    <Avatar
                       src={getConversationAvatar(selectedConversation)}
+                      name={getConversationName(selectedConversation)}
                     className="rounded-circle"
-                      alt={getConversationName(selectedConversation)}
                   />
                 </div>
-                  <div className="ms-2 overflow-hidden">
-                    <h6>{getConversationName(selectedConversation)}</h6>
+                  <div className="ms-2 overflow-hidden flex-grow-1">
+                    <h6 className="text-truncate mb-0" style={{ maxWidth: '200px' }}>{getConversationName(selectedConversation)}</h6>
                     <span className="last-seen">
-                      {typingUsers.length > 0 ? (
-                        <span className="typing-indicator-modern">
-                          <span className="typing-dot"></span>
-                          <span className="typing-dot"></span>
-                          <span className="typing-dot"></span>
-                          <span className="ms-1">{typingUsers[0]} đang nhập...</span>
-                      </span>
-                      ) : (
-                        "Online"
-                      )}
+                      Online
                       </span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="avatar avatar-lg flex-shrink-0">
-                          <ImageWithBasePath
-                      src="assets/img/profiles/avatar-default.jpg"
+                    <Avatar
+                      name="Select chat"
                     className="rounded-circle"
-                      alt="Select chat"
                   />
                 </div>
                         <div className="ms-2 overflow-hidden">
@@ -708,175 +961,85 @@ const Chat = () => {
             {/* /Chat Search */}
                       </div>
           
-          {/* Chat Body */}
-          <OverlayScrollbarsComponent
-            options={{
-              scrollbars: {
-                autoHide: 'scroll',
-                autoHideDelay: 1000,
-              },
-            }}
-            style={{ maxHeight: '88vh' }}
-          >
-            <div className="chat-body chat-page-group">
-              <div className="messages">
-                {/* Loading State */}
-                {isLoadingMessages && (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Đang tải...</span>
+          {/* Chat Body - Scrollable area */}
+          <div className="chat-body chat-page-group">
+            <div className="messages">
+              {/* Loading State */}
+              {isLoadingMessages && (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Đang tải...</span>
+                            </div>
+                  <p className="text-muted mt-2">Đang tải tin nhắn...</p>
                       </div>
-                    <p className="text-muted mt-2">Đang tải tin nhắn...</p>
+              )}
+              
+              {/* Messages - Hiển thị theo thứ tự thời gian (cũ → mới) */}
+              {!isLoadingMessages && filteredMessages.length > 0 && 
+                filteredMessages.map(renderMessage)
+              }
+              
+              {/* No search results */}
+              {!isLoadingMessages && searchKeyword && filteredMessages.length === 0 && messages.length > 0 && (
+                <div className="text-center py-5">
+                  <i className="ti ti-search-off" style={{ fontSize: "48px", color: "#667eea" }} />
+                  <h5 className="mt-3">Không tìm thấy kết quả</h5>
+                  <p className="text-muted">Thử tìm với từ khóa khác</p>
                     </div>
-                )}
-                
-                {/* Messages */}
-                {!isLoadingMessages && messages.length > 0 && messages.map(renderMessage)}
-                
-                {/* Empty State */}
-                {!isLoadingMessages && messages.length === 0 && selectedConversation && (
-                  <div className="text-center py-5">
-                    <i className="ti ti-message-off" style={{ fontSize: "64px", color: "#667eea" }} />
-                    <h5 className="mt-3">Chưa có tin nhắn nào</h5>
-                    <p className="text-muted">Hãy bắt đầu cuộc trò chuyện! 💬</p>
+              )}
+              
+              {/* Empty State */}
+              {!isLoadingMessages && messages.length === 0 && selectedConversation && !searchKeyword && (
+                <div className="text-center py-5">
+                  <i className="ti ti-message-off" style={{ fontSize: "64px", color: "#667eea" }} />
+                  <h5 className="mt-3">Chưa có tin nhắn nào</h5>
+                  <p className="text-muted">Hãy bắt đầu cuộc trò chuyện! 💬</p>
                     </div>
-                )}
-                
-                {/* No conversation selected */}
-                {!selectedConversation && (
-                  <div className="text-center py-5">
-                    <i className="ti ti-message-circle" style={{ fontSize: "64px", color: "#667eea" }} />
-                    <h5 className="mt-3">Chọn một cuộc trò chuyện</h5>
-                    <p className="text-muted">Chọn một cuộc trò chuyện từ sidebar để bắt đầu</p>
+              )}
+              
+              {/* No conversation selected */}
+              {!selectedConversation && (
+                <div className="text-center py-5">
+                  <i className="ti ti-message-circle" style={{ fontSize: "64px", color: "#667eea" }} />
+                  <h5 className="mt-3">Chọn một cuộc trò chuyện</h5>
+                  <p className="text-muted">Chọn một cuộc trò chuyện từ sidebar để bắt đầu</p>
                   </div>
-                )}
-                
-                {/* Scroll anchor */}
-                <div ref={messagesEndRef} />
-            </div>
-          </div>
-          </OverlayScrollbarsComponent>
+              )}
+              
+              {/* Scroll anchor - để scroll đến đây khi có tin nhắn mới */}
+              <div ref={messagesEndRef} />
+                </div>
+              </div>
           
           {/* Chat Footer */}
         <div className="chat-footer">
+            {/* Typing Indicator - Hiển thị dưới input như Zalo, Messenger */}
+            {typingUsers.length > 0 && selectedConversation && (
+              <div className="typing-indicator-footer">
+                <span className="typing-indicator-modern">
+                  <span className="typing-dot"></span>
+                  <span className="typing-dot"></span>
+                  <span className="typing-dot"></span>
+                </span>
+                <span>{typingUsers[0]} đang nhập...</span>
+              </div>
+            )}
+            
             <form className="footer-form" onSubmit={handleSendMessage}>
             <div className="chat-footer-wrap">
-              <div className="form-item">
-                <Link to="#" className="action-circle">
-                  <i className="ti ti-microphone" />
-                </Link>
-              </div>
-                
-              <div className="form-wrap">
-                  {/* Reply Preview */}
-              <div
-                    className={`chats reply-chat ${showReply ? "d-flex" : "d-none"}`}
-                  >
-                    <div className="chat-avatar">
-                      <ImageWithBasePath
-                        src="assets/img/profiles/avatar-06.jpg"
-                        className="rounded-circle"
-                        alt="image"
-                      />
-                    </div>
-                    <div className="chat-content">
-                      <div className="chat-profile-name">
-                        <h6>Đang trả lời</h6>
-                      </div>
-                      <div className="chat-info">
-                        <div className="message-content">
-                          <div className="message-reply reply-content">
-                            Thank you for your support
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <Link
-                      to="#"
-                      className="close-replay"
-                      onClick={() => setShowReply(false)}
-                    >
-                      <i className="ti ti-x" />
-                    </Link>
-                  </div>
-                  
+              <div className="form-wrap" style={{ position: 'relative' }}>
                   {/* Message Input */}
                 <input
                     ref={inputRef}
                   type="text"
                   className="form-control"
-                    placeholder="Nhập tin nhắn... 💬"
+                    placeholder="Nhập tin nhắn..."
                     value={inputMessage}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     disabled={isSending || !selectedConversation}
+                    autoFocus
                 />
-              </div>
-                
-                {/* Emoji Picker */}
-              <div className="form-item emoj-action-foot">
-                  <Link to="#" className="action-circle" onClick={() => toggleEmoji("footer")}>
-                  <i className="ti ti-mood-smile" />
-                </Link>
-                  <div 
-                    className="emoj-group-list-foot down-emoji-circle" 
-                    onClick={() => toggleEmoji("footer")} 
-                    style={{ display: showEmoji["footer"] ? 'block' : 'none' }}
-                  >
-                    <ul>
-                      <li><Link to="#">😊</Link></li>
-                      <li><Link to="#">❤️</Link></li>
-                      <li><Link to="#">👍</Link></li>
-                      <li><Link to="#">😂</Link></li>
-                      <li><Link to="#">🔥</Link></li>
-                    <li className="add-emoj">
-                      <Link to="#">
-                        <i className="ti ti-plus" />
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-                
-                {/* File Attachment */}
-                <div className="form-item position-relative d-flex align-items-center justify-content-center">
-                <Link
-                  to="#"
-                  className="action-circle file-action position-absolute"
-                >
-                  <i className="ti ti-folder" />
-                </Link>
-                <input
-                  type="file"
-                  className="open-file position-relative"
-                  name="files"
-                  id="files"
-                />
-              </div>
-                
-                {/* More Options */}
-              <div className="form-item">
-                <Link to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <div className="dropdown-menu dropdown-menu-end p-3">
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-camera-selfie me-2" />
-                    Camera
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-photo-up me-2" />
-                    Gallery
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-music me-2" />
-                    Audio
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-map-pin-share me-2" />
-                    Location
-                  </Link>
-                </div>
               </div>
                 
                 {/* Send Button */}
@@ -889,14 +1052,14 @@ const Chat = () => {
                     {isSending ? (
                       <div className="spinner-border spinner-border-sm" role="status">
                         <span className="visually-hidden">Đang gửi...</span>
-                      </div>
+              </div>
                     ) : (
-                  <i className="ti ti-send" />
+                      <i className="ti ti-send" />
                     )}
-                </button>
+                  </button>
               </div>
             </div>
-          </form>
+            </form>
           </div>
         </div>
       </div>
@@ -904,19 +1067,6 @@ const Chat = () => {
       
       {/* Modals */}
       <ContactInfo />
-      <ContactFavourite />
-      <ForwardMessage />
-      <MessageDelete />
-      
-      {/* Lightbox */}
-      <Lightbox
-        open={open1}
-        close={() => setOpen1(false)}
-        slides={[
-          { src: "assets/img/gallery/gallery-01.jpg" },
-          { src: "assets/img/gallery/gallery-02.jpg" },
-        ]}
-      />
     </>
   );
 };

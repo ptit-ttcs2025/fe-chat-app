@@ -78,7 +78,7 @@ const ChatTab = () => {
     // Tab filter
     switch (activeTab) {
       case 'Favourite Chats':
-        result = result.filter(conv => conv.favourite);
+        result = result.filter(conv => conv.favorite); // API trả về "favorite" không phải "favourite"
         break;
       case 'Pinned Chats':
         result = result.filter(conv => conv.pinned);

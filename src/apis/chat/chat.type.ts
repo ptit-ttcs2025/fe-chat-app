@@ -47,16 +47,40 @@ export interface IConversation {
   id: string;
   name?: string;
   type: ConversationType;
-  participants: IParticipant[];
-  lastMessage?: IMessage;
-  lastMessageAt?: string;
-  unreadCount: number;
-  createdAt: string;
-  updatedAt?: string;
   avatarUrl?: string;
-  isActive: boolean;
-  isMuted: boolean;
-  isPinned: boolean;
+  
+  // Last message info
+  lastMessage?: IMessage;
+  lastMessageTimestamp?: string; // Format: "dd/MM/yyyy HH:mm"
+  
+  // Status flags
+  unreadCount: number;
+  muted: boolean;    // API trả về "muted" không phải "isMuted"
+  pinned: boolean;   // API trả về "pinned" không phải "isPinned"
+  archived: boolean;
+  favorite: boolean; // API trả về "favorite" không phải "favourite"
+  
+  // Group specific fields
+  groupId?: string;
+  adminId?: string;
+  description?: string;
+  isPublic?: boolean;
+  isSendMessageAllowed?: boolean;
+  
+  // Participants (for PRIVATE conversations)
+  participants?: IParticipant[];
+  isOnline?: boolean;
+  typing?: boolean;
+  
+  // Timestamps
+  createdAt?: string;
+  updatedAt?: string;
+  
+  // Legacy fields (for backward compatibility)
+  isActive?: boolean;
+  isMuted?: boolean;
+  isPinned?: boolean;
+  deleted?: boolean;
 }
 
 export interface IParticipant {

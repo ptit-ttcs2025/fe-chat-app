@@ -212,9 +212,15 @@ export const useChatConversations = ({
         refetch();
     }, [refetch]);
 
-  // Extract results from response (handle both formats)
-  const results = conversationsData?.data?.results || conversationsData?.data || [];
-  const meta = conversationsData?.data?.meta;
+  // conversationsData bây giờ là PaginatedResponse<IConversation> trực tiếp
+  const results = conversationsData?.results || [];
+  const meta = conversationsData?.meta || null;
+
+  // Find selected conversation
+  const findSelectedConversation = () => {
+    if (!selectedConversationId || !Array.isArray(results)) return undefined;
+    return results.find((c: IConversation) => c.id === selectedConversationId);
+  };
 
   return {
     // Data
@@ -227,9 +233,7 @@ export const useChatConversations = ({
 
         // Selected conversation
         selectedConversationId,
-        selectedConversation: conversationsData?.data?.results?.find(
-            (c) => c.id === selectedConversationId
-        ),
+        selectedConversation: findSelectedConversation(),
 
         // Actions
         createConversation,

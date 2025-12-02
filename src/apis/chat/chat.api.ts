@@ -7,8 +7,6 @@ import http  from '@/lib/apiBase';
 import {
   SendMessageRequest,
   MarkAsReadRequest,
-  SearchMessagesRequest,
-  CreateConversationRequest,
   UpdateConversationRequest,
   AddParticipantsRequest,
   RemoveParticipantRequest,
@@ -19,8 +17,10 @@ import {
   PaginatedResponse,
   FileUploadResponse,
   ConversationFilter,
-  MessageFilter,
 } from './chat.type';
+
+// API Base URI
+const URI = '/api/v1';
 
 // ===========================
 // MESSAGE APIs
@@ -28,25 +28,25 @@ import {
 
 /**
  * Gửi tin nhắn mới
- * POST /messages
+ * POST /api/v1/messages
  */
 export const sendMessage = async (data: SendMessageRequest): Promise<ApiResponse<IMessage>> => {
-  const response = await http.post<ApiResponse<IMessage>>('/messages', data);
+  const response = await http.post<ApiResponse<IMessage>>(`${URI}/messages`, data);
   return response.data;
 };
 
 /**
  * Lấy danh sách tin nhắn của conversation
- * GET /messages?conversationId={id}&page={page}&size={size}&keyword={keyword}
+ * GET /api/v1/messages?conversationId={id}&page={page}&size={size}&keyword={keyword}
  */
 export const getMessages = async (
   conversationId: string,
   page: number = 0,
   size: number = 20,
   keyword?: string
-): Promise<ApiResponse<PaginatedResponse<IMessage>>> => {
-  const response = await http.get<ApiResponse<PaginatedResponse<IMessage>>>(
-    '/messages',
+): Promise<PaginatedResponse<IMessage>> => {
+  const response = await http.get(
+    `${URI}/messages`,
     {
       params: {
         conversationId,
@@ -56,20 +56,37 @@ export const getMessages = async (
       },
     }
   );
-  return response.data;
+  
+  // console.log('📡 getMessages raw response:', response);
+  
+  const responseAny = response as any;
+  
+  // Nếu response đã là { meta, results } (đã unwrap)
+  if (responseAny && Array.isArray(responseAny.results)) {
+    return responseAny as PaginatedResponse<IMessage>;
+  }
+  
+  // Nếu response là { data: { meta, results } }
+  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
+    return responseAny.data as PaginatedResponse<IMessage>;
+  }
+  
+  // Fallback - trả về empty
+  console.warn('⚠️ Unexpected messages response format:', response);
+  return { meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 }, results: [] };
 };
 
 /**
  * Lấy một tin nhắn cụ thể
  */
 export const getMessage = async (messageId: string): Promise<ApiResponse<IMessage>> => {
-  const response = await http.get<ApiResponse<IMessage>>(`/messages/${messageId}`);
+  const response = await http.get<ApiResponse<IMessage>>(`${URI}/messages/${messageId}`);
   return response.data;
 };
 
 /**
  * Tìm kiếm tin nhắn trong conversation
- * GET /messages/search?conversationId={id}&keyword={keyword}
+ * GET /api/v1/messages/search?conversationId={id}&keyword={keyword}
  */
 export const searchMessages = async (
   conversationId: string,
@@ -78,7 +95,7 @@ export const searchMessages = async (
   size: number = 20
 ): Promise<ApiResponse<PaginatedResponse<IMessage>>> => {
   const response = await http.get<ApiResponse<PaginatedResponse<IMessage>>>(
-    '/messages/search',
+    `${URI}/messages/search`,
     {
       params: {
         conversationId,
@@ -97,7 +114,7 @@ export const searchMessages = async (
 export const markMessagesAsRead = async (
   data: MarkAsReadRequest
 ): Promise<ApiResponse<void>> => {
-  const response = await http.post<ApiResponse<void>>('/messages/read', data);
+  const response = await http.post<ApiResponse<void>>(`${URI}/messages/read`, data);
   return response.data;
 };
 
@@ -109,7 +126,7 @@ export const togglePinMessage = async (
   pinned: boolean
 ): Promise<ApiResponse<IMessage>> => {
   const response = await http.put<ApiResponse<IMessage>>(
-    `/messages/${messageId}/pin`,
+    `${URI}/messages/${messageId}/pin`,
     null,
     {
       params: { pinned },
@@ -122,7 +139,7 @@ export const togglePinMessage = async (
  * Xóa tin nhắn
  */
 export const deleteMessage = async (messageId: string): Promise<ApiResponse<void>> => {
-  const response = await http.delete<ApiResponse<void>>(`/messages/${messageId}`);
+  const response = await http.delete<ApiResponse<void>>(`${URI}/messages/${messageId}`);
   return response.data;
 };
 
@@ -134,7 +151,7 @@ export const updateMessage = async (
   content: string
 ): Promise<ApiResponse<IMessage>> => {
   const response = await http.put<ApiResponse<IMessage>>(
-    `/messages/${messageId}`,
+    `${URI}/messages/${messageId}`,
     { content }
   );
   return response.data;
@@ -147,7 +164,7 @@ export const getPinnedMessages = async (
   conversationId: string
 ): Promise<ApiResponse<IMessage[]>> => {
   const response = await http.get<ApiResponse<IMessage[]>>(
-    '/messages/pinned',
+    `${URI}/messages/pinned`,
     {
       params: { conversationId },
     }
@@ -166,9 +183,9 @@ export const getConversations = async (
   page: number = 0,
   size: number = 20,
   filter?: ConversationFilter
-): Promise<ApiResponse<PaginatedResponse<IConversation>>> => {
-  const response = await http.get<ApiResponse<PaginatedResponse<IConversation>>>(
-    '/conversations',
+): Promise<PaginatedResponse<IConversation>> => {
+  const response = await http.get(
+    `${URI}/conversations`,
     {
       params: {
         page,
@@ -177,7 +194,30 @@ export const getConversations = async (
       },
     }
   );
-  return response.data;
+  
+  // Debug log để xem response format
+  // console.log('📡 getConversations raw response:', response);
+  
+  // Response có thể đã được unwrap bởi interceptor thành nhiều format khác nhau:
+  // Format 1: { meta, results } - đã unwrap từ data
+  // Format 2: { statusCode, data: { meta, results } } - full response
+  // Format 3: { data: { meta, results } } - partial unwrap
+  
+  const responseAny = response as any;
+  
+  // Nếu response đã là { meta, results } (đã unwrap)
+  if (responseAny && Array.isArray(responseAny.results)) {
+    return responseAny as PaginatedResponse<IConversation>;
+  }
+  
+  // Nếu response là { data: { meta, results } }
+  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
+    return responseAny.data as PaginatedResponse<IConversation>;
+  }
+  
+  // Fallback - trả về empty
+  console.warn('⚠️ Unexpected response format:', response);
+  return { meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 }, results: [] };
 };
 
 /**
@@ -187,20 +227,20 @@ export const getConversation = async (
   conversationId: string
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.get<ApiResponse<IConversation>>(
-    `/conversations/${conversationId}`
+    `${URI}/conversations/${conversationId}`
   );
   return response.data;
 };
 
 /**
  * Tạo conversation ONE_TO_ONE mới
- * POST /conversations
+ * POST /api/v1/conversations
  */
 export const createConversation = async (
   otherMemberId: string
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.post<ApiResponse<IConversation>>(
-    '/conversations',
+    `${URI}/conversations`,
     { otherMemberId }
   );
   return response.data;
@@ -214,7 +254,7 @@ export const updateConversation = async (
   data: UpdateConversationRequest
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.put<ApiResponse<IConversation>>(
-    `/conversations/${conversationId}`,
+    `${URI}/conversations/${conversationId}`,
     data
   );
   return response.data;
@@ -227,7 +267,7 @@ export const deleteConversation = async (
   conversationId: string
 ): Promise<ApiResponse<void>> => {
   const response = await http.delete<ApiResponse<void>>(
-    `/conversations/${conversationId}`
+    `${URI}/conversations/${conversationId}`
   );
   return response.data;
 };
@@ -239,7 +279,7 @@ export const addParticipants = async (
   data: AddParticipantsRequest
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.post<ApiResponse<IConversation>>(
-    `/conversations/${data.conversationId}/participants`,
+    `${URI}/conversations/${data.conversationId}/participants`,
     { userIds: data.userIds }
   );
   return response.data;
@@ -252,7 +292,7 @@ export const removeParticipant = async (
   data: RemoveParticipantRequest
 ): Promise<ApiResponse<void>> => {
   const response = await http.delete<ApiResponse<void>>(
-    `/conversations/${data.conversationId}/participants/${data.userId}`
+    `${URI}/conversations/${data.conversationId}/participants/${data.userId}`
   );
   return response.data;
 };
@@ -264,7 +304,7 @@ export const leaveConversation = async (
   conversationId: string
 ): Promise<ApiResponse<void>> => {
   const response = await http.post<ApiResponse<void>>(
-    `/conversations/${conversationId}/leave`
+    `${URI}/conversations/${conversationId}/leave`
   );
   return response.data;
 };
@@ -277,7 +317,7 @@ export const toggleMuteConversation = async (
   muted: boolean
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.put<ApiResponse<IConversation>>(
-    `/conversations/${conversationId}/mute`,
+    `${URI}/conversations/${conversationId}/mute`,
     null,
     {
       params: { muted },
@@ -294,7 +334,7 @@ export const togglePinConversation = async (
   pinned: boolean
 ): Promise<ApiResponse<IConversation>> => {
   const response = await http.put<ApiResponse<IConversation>>(
-    `/conversations/${conversationId}/pin`,
+    `${URI}/conversations/${conversationId}/pin`,
     null,
     {
       params: { pinned },
@@ -319,7 +359,7 @@ export const uploadFile = async (
   formData.append('type', data.type);
 
   const response = await http.post<ApiResponse<FileUploadResponse>>(
-    '/files/upload',
+    `${URI}/files/upload`,
     formData,
     {
       headers: {
@@ -366,7 +406,7 @@ export const uploadVoice = async (
  * Lấy số tin nhắn chưa đọc tổng
  */
 export const getTotalUnreadCount = async (): Promise<ApiResponse<number>> => {
-  const response = await http.get<ApiResponse<number>>('/messages/unread/count');
+  const response = await http.get<ApiResponse<number>>(`${URI}/messages/unread/count`);
   return response.data;
 };
 
@@ -377,7 +417,7 @@ export const getConversationUnreadCount = async (
   conversationId: string
 ): Promise<ApiResponse<number>> => {
   const response = await http.get<ApiResponse<number>>(
-    `/messages/unread/count/${conversationId}`
+    `${URI}/messages/unread/count/${conversationId}`
   );
   return response.data;
 };
