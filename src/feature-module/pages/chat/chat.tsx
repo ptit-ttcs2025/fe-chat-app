@@ -18,6 +18,7 @@ import { useChatConversations } from "@/hooks/useChatConversations";
 import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
 import websocketService from "@/core/services/websocket.service";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
+import { uploadImage, uploadFile, chatApi } from "@/apis/chat/chat.api";
 
 // Avatar Helper
 import { isValidUrl, getInitial, getAvatarColor } from "@/lib/avatarHelper";
@@ -90,11 +91,16 @@ const Chat = () => {
   const [inputMessage, setInputMessage] = useState("");
   const [selectedConversation, setSelectedConversation] = useState<IConversation | null>(null);
   const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   
   // ==================== Refs ====================
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(100);
   
   // ==================== API Hooks ====================
   
@@ -134,6 +140,24 @@ const Chat = () => {
     autoMarkAsRead: true,
     currentUserId: user?.id,
   });
+  
+  // Pinned messages state
+  const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
+  
+  // Get sendMessageMutation để gửi message với attachment
+  const sendMessageWithAttachment = useCallback(
+    async (content: string, type: 'TEXT' | 'IMAGE' | 'FILE', attachmentId?: string) => {
+      if (!selectedConversation) return;
+      
+      await chatApi.sendMessage({
+        conversationId: selectedConversation.id,
+        content,
+        type,
+        attachmentId,
+      });
+    },
+    [selectedConversation]
+  );
   
   // Chat actions (typing, etc)
   const { sendTypingStatus } = useChatActions();
@@ -221,12 +245,17 @@ const Chat = () => {
       // Delay để đảm bảo DOM đã render
       setTimeout(() => {
         scrollToBottom(true); // instant scroll
-      }, 50);
+      }, 100);
       
-      // Smooth scroll sau đó
+      // Double check scroll sau 200ms
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 300);
+      
+      // Smooth scroll cuối cùng
       setTimeout(() => {
         scrollToBottom(false);
-      }, 200);
+      }, 400);
     }
   }, [messages.length, scrollToBottom]);
   
@@ -249,6 +278,59 @@ const Chat = () => {
     if (selectedConversation) {
       inputRef.current?.focus();
     }
+  }, [selectedConversation?.id]);
+  
+  // Tính toán chiều cao footer động
+  useEffect(() => {
+    const updateFooterHeight = () => {
+      if (footerRef.current) {
+        const height = footerRef.current.offsetHeight;
+        setFooterHeight(height + 20); // Thêm 20px buffer
+      }
+    };
+    
+    updateFooterHeight();
+    
+    // Update khi typing indicator xuất hiện/ẩn
+    const resizeObserver = new ResizeObserver(() => {
+      updateFooterHeight();
+    });
+    
+    if (footerRef.current) {
+      resizeObserver.observe(footerRef.current);
+    }
+    
+    // Update khi window resize
+    window.addEventListener('resize', updateFooterHeight);
+    
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateFooterHeight);
+    };
+  }, [typingUsers.length, selectedConversation]);
+  
+  // Fetch pinned messages when conversation changes
+  useEffect(() => {
+    const fetchPinnedMessages = async () => {
+      if (!selectedConversation?.id) {
+        setPinnedMessages([]);
+        return;
+      }
+      
+      try {
+        const response = await chatApi.getPinnedMessages(selectedConversation.id);
+        if (response.data) {
+          setPinnedMessages(Array.isArray(response.data) ? response.data : []);
+        } else {
+          setPinnedMessages([]);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching pinned messages:", error);
+        setPinnedMessages([]);
+      }
+    };
+    
+    fetchPinnedMessages();
   }, [selectedConversation?.id]);
   
   // ==================== Handlers ====================
@@ -294,9 +376,16 @@ const Chat = () => {
       
       if (!inputMessage.trim() || !selectedConversation || isSending) return;
       
+      const messageToSend = inputMessage.trim();
+      
       try {
-        await sendMessageHook(inputMessage.trim(), "TEXT");
+        // Clear input trước để UI phản hồi nhanh
         setInputMessage("");
+        
+        // Focus input ngay lập tức trước khi gửi để đảm bảo không mất focus
+        inputRef.current?.focus();
+        
+        sendMessageHook(messageToSend, "TEXT");
         
         // Stop typing indicator
         if (selectedConversation) {
@@ -313,24 +402,42 @@ const Chat = () => {
           typingTimeoutRef.current = null;
         }
         
-        // Auto scroll to bottom và focus input ngay lập tức
+        // Auto scroll to bottom và đảm bảo focus
         requestAnimationFrame(() => {
           scrollToBottom(true); // instant scroll
-          inputRef.current?.focus();
+          // Focus input sau khi DOM đã cập nhật
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
         });
         
-        // Double check scroll sau 100ms
+        // Double check scroll sau 50ms và đảm bảo focus
         setTimeout(() => {
           scrollToBottom(true);
           inputRef.current?.focus();
-        }, 100);
+        }, 50);
         
-        // Smooth scroll cuối cùng để mượt mà
+        // Smooth scroll cuối cùng và đảm bảo focus vẫn còn
         setTimeout(() => {
           scrollToBottom(false);
-        }, 300);
+          // Đảm bảo input vẫn focus sau khi scroll
+          if (document.activeElement !== inputRef.current) {
+            inputRef.current?.focus();
+          }
+        }, 200);
+        
+        // Final focus check sau khi mọi thứ đã ổn định
+        setTimeout(() => {
+          if (document.activeElement !== inputRef.current && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, 400);
       } catch (error) {
         console.error("❌ Error sending message:", error);
+        // Vẫn focus input ngay cả khi có lỗi
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
       }
     },
     [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user, scrollToBottom]
@@ -358,10 +465,99 @@ const Chat = () => {
   
   const handleTogglePin = useCallback(
     (messageId: string, currentlyPinned: boolean) => {
-      togglePin(messageId, !currentlyPinned);
+      try {
+        togglePin(messageId, !currentlyPinned);
+        
+        // Refresh pinned messages after toggle
+        if (selectedConversation?.id) {
+          setTimeout(async () => {
+            try {
+              const response = await chatApi.getPinnedMessages(selectedConversation.id);
+              if (response.data) {
+                setPinnedMessages(Array.isArray(response.data) ? response.data : []);
+              } else {
+                setPinnedMessages([]);
+              }
+            } catch (error) {
+              console.error("❌ Error refreshing pinned messages:", error);
+            }
+          }, 300);
+        }
+      } catch (error) {
+        console.error("❌ Error toggling pin:", error);
+      }
     },
-    [togglePin]
+    [togglePin, selectedConversation?.id]
   );
+  
+  // Handle file upload
+  const handleFileUpload = useCallback(
+    async (file: File, type: 'IMAGE' | 'FILE') => {
+      if (!selectedConversation || isUploading) return;
+      
+      setIsUploading(true);
+      try {
+        const uploadResponse = await (type === 'IMAGE' 
+          ? uploadImage(file, selectedConversation.id)
+          : uploadFile({ file, conversationId: selectedConversation.id, type: 'FILE' }));
+        
+        if (uploadResponse.data) {
+          // Gửi tin nhắn với attachment
+          await sendMessageWithAttachment(
+            uploadResponse.data.fileName || (type === 'IMAGE' ? 'Ảnh' : 'File'),
+            type,
+            uploadResponse.data.id
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error uploading file:", error);
+        alert("Không thể tải file lên. Vui lòng thử lại.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [selectedConversation, isUploading, sendMessageWithAttachment]
+  );
+  
+  // Handle image selection
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && file.type.startsWith('image/')) {
+        handleFileUpload(file, 'IMAGE');
+      }
+      // Reset input
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
+    },
+    [handleFileUpload]
+  );
+  
+  // Handle file selection
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        handleFileUpload(file, 'FILE');
+      }
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    [handleFileUpload]
+  );
+  
+  // Trigger file input
+  const triggerFileInput = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+  
+  // Trigger image input
+  const triggerImageInput = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
   
   // ==================== Render Helpers ====================
   
@@ -374,6 +570,61 @@ const Chat = () => {
     });
   };
   
+  // Format date marker - hiển thị ngày/thứ/tháng/năm
+  const formatDateMarker = (timestamp: string): string => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    // So sánh ngày (không tính giờ)
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const diffDays = Math.floor((nowOnly.getTime() - dateOnly.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Hôm nay
+    if (diffDays === 0) {
+      return "Hôm nay";
+    }
+    
+    // Hôm qua
+    if (diffDays === 1) {
+      return "Hôm qua";
+    }
+    
+    // Trong tuần này (từ 2-6 ngày trước)
+    if (diffDays >= 2 && diffDays <= 6) {
+      return date.toLocaleDateString("vi-VN", { weekday: "long" });
+    }
+    
+    // Cùng tháng nhưng khác tuần
+    if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+      return date.toLocaleDateString("vi-VN", { day: "numeric", month: "long" });
+    }
+    
+    // Cùng năm nhưng khác tháng
+    if (date.getFullYear() === now.getFullYear()) {
+      return date.toLocaleDateString("vi-VN", { day: "numeric", month: "long" });
+    }
+    
+    // Khác năm
+    return date.toLocaleDateString("vi-VN", { day: "numeric", month: "long", year: "numeric" });
+  };
+  
+  // Kiểm tra xem có cần hiển thị date marker không
+  const shouldShowDateMarker = (currentMessage: IMessage, previousMessage: IMessage | null): boolean => {
+    if (!previousMessage) return true; // Tin nhắn đầu tiên
+    
+    const currentDate = new Date(currentMessage.createdAt);
+    const previousDate = new Date(previousMessage.createdAt);
+    
+    // So sánh ngày (không tính giờ)
+    const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    const previousDateOnly = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate());
+    
+    return currentDateOnly.getTime() !== previousDateOnly.getTime();
+  };
+  
   const getConversationName = (conversation: IConversation) => {
     return conversation.name || "Cuộc trò chuyện";
   };
@@ -382,101 +633,218 @@ const Chat = () => {
     return conversation.avatarUrl;
   };
   
-  const renderMessage = (message: IMessage) => {
+  const renderMessage = (message: IMessage, index: number) => {
     const isOwnMessage = message.senderId === user?.id;
+    const previousMessage = index > 0 ? filteredMessages[index - 1] : null;
+    const showDateMarker = shouldShowDateMarker(message, previousMessage);
     
     return (
-      <div
-        key={message.id}
-        className={`chats ${isOwnMessage ? "chats-right" : ""}`}
-        style={{
-          animation: "slideIn 0.3s ease-out",
-        }}
-      >
-        {!isOwnMessage && (
-                <div className="chat-avatar">
-            <Avatar
-              src={message.senderAvatarUrl}
-              name={message.senderName}
-                    className="rounded-circle"
-                  />
-                </div>
+      <>
+        {/* Date Marker */}
+        {showDateMarker && (
+          <div className="date-marker">
+            <span>{formatDateMarker(message.createdAt)}</span>
+          </div>
         )}
         
-                <div className="chat-content">
-          <div className={`chat-profile-name ${isOwnMessage ? "text-end" : ""}`}>
-                    <h6>
-              <span>{message.senderName}</span>
-                      <i className="ti ti-circle-filled fs-7" />
-              <span className="chat-time">{formatTime(message.createdAt)}</span>
-              {isOwnMessage && message.readCount > 0 && (
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-              )}
-              {message.pinned && (
-                <span className="pin-badge-modern">
-                  <i className="ti ti-pin-filled" />
-                </span>
-              )}
-                    </h6>
-                  </div>
+        <div
+          key={message.id}
+          data-message-id={message.id}
+          className={`chats ${isOwnMessage ? "chats-right" : ""}`}
+          style={{
+            animation: "slideIn 0.3s ease-out",
+          }}
+        >
+          {!isOwnMessage && (
+            <div className="chat-avatar">
+              <Avatar
+                src={message.senderAvatarUrl}
+                name={message.senderName}
+                className="rounded-circle"
+              />
+            </div>
+          )}
           
-                  <div className="chat-info">
-            <div className={`chat-actions ${!isOwnMessage ? "" : "order-first"}`}>
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                    onClick={() => handleTogglePin(message.id, message.pinned)}
-                          >
-                    <i className={`ti ti-pin${message.pinned ? "-filled" : ""} me-2`} />
-                    {message.pinned ? "Bỏ ghim" : "Ghim"}
-                          </Link>
-                        </li>
-                {isOwnMessage && (
-                        <li>
-                          <Link
-                      className="dropdown-item text-danger"
-                            to="#"
-                      onClick={() => handleDeleteMessage(message.id)}
-                          >
-                            <i className="ti ti-trash me-2" />
-                      Xóa
-                          </Link>
-                        </li>
+          <div className="chat-content">
+            <div className={`chat-profile-name ${isOwnMessage ? "text-end" : ""}`}>
+              <h6>
+                <span>{message.senderName}</span>
+                <i className="ti ti-circle-filled fs-7" />
+                <span className="chat-time">{formatTime(message.createdAt)}</span>
+                {isOwnMessage && message.readCount > 0 && (
+                  <span className="msg-read success">
+                    <i className="ti ti-checks" />
+                  </span>
                 )}
-                      </ul>
-                    </div>
+                {message.pinned && (
+                  <span className="pin-badge-modern">
+                    <i className="ti ti-pin-filled" />
+                  </span>
+                )}
+              </h6>
+            </div>
             
-                    <div className="message-content">
-              {message.content}
-                            </div>
-            
-            {isOwnMessage && message.readCount > 0 && (
-              <div className="chat-actions mt-1">
-                <small className="text-muted">
-                  ✓ Đã xem bởi {message.readCount} người
-                </small>
+            <div className="chat-info">
+              <div className={`chat-actions ${!isOwnMessage ? "" : "order-first"}`}>
+                <Link className="#" to="#" data-bs-toggle="dropdown">
+                  <i className="ti ti-dots-vertical" />
+                </Link>
+                <ul className="dropdown-menu dropdown-menu-end p-3">
+                  <li>
+                    <Link
+                      className="dropdown-item"
+                      to="#"
+                      onClick={() => handleTogglePin(message.id, message.pinned)}
+                    >
+                      <i className={`ti ti-pin${message.pinned ? "-filled" : ""} me-2`} />
+                      {message.pinned ? "Bỏ ghim" : "Ghim"}
+                    </Link>
+                  </li>
+                  {isOwnMessage && (
+                    <li>
+                      <Link
+                        className="dropdown-item text-danger"
+                        to="#"
+                        onClick={() => handleDeleteMessage(message.id)}
+                      >
+                        <i className="ti ti-trash me-2" />
+                        Xóa
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              </div>
+              
+              <div className="message-content">
+                {/* Hiển thị ảnh */}
+                {message.type === 'IMAGE' && message.attachment && (
+                  <div className="message-image" style={{ marginBottom: message.content ? '8px' : '0' }}>
+                    <img
+                      src={message.attachment.url.startsWith('http') 
+                        ? message.attachment.url 
+                        : `${import.meta.env.VITE_IMG_PATH || ''}${message.attachment.url}`}
+                      alt="Ảnh"
+                      style={{
+                        maxWidth: '300px',
+                        maxHeight: '300px',
+                        borderRadius: '12px',
+                        objectFit: 'cover',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        // Mở ảnh trong modal hoặc tab mới
+                        window.open(
+                          message.attachment!.url.startsWith('http') 
+                            ? message.attachment!.url 
+                            : `${import.meta.env.VITE_IMG_PATH || ''}${message.attachment!.url}`,
+                          '_blank'
+                        );
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {/* Hiển thị file */}
+                {message.type === 'FILE' && message.attachment && (
+                  <div className="message-file" style={{ marginBottom: message.content ? '8px' : '0' }}>
+                    <div className="file-attach" style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px',
+                      backgroundColor: isOwnMessage ? 'rgba(255,255,255,0.2)' : '#f0f0f0',
+                      borderRadius: '12px',
+                      maxWidth: '300px'
+                    }}>
+                      <div className="file-icon" style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '12px',
+                        backgroundColor: isOwnMessage ? 'rgba(255,255,255,0.3)' : '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                        flexShrink: 0
+                      }}>
+                        <i className="ti ti-file" />
                       </div>
-            )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {message.attachment.fileName || 'File đính kèm'}
+                        </p>
+                        <small style={{
+                          fontSize: '12px',
+                          opacity: 0.7
+                        }}>
+                          {(message.attachment.fileSize / 1024).toFixed(1)} KB
+                        </small>
+                      </div>
+                      <a
+                        href={message.attachment.url.startsWith('http') 
+                          ? message.attachment.url 
+                          : `${import.meta.env.VITE_IMG_PATH || ''}${message.attachment.url}`}
+                        download
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          backgroundColor: isOwnMessage ? 'rgba(255,255,255,0.3)' : '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textDecoration: 'none',
+                          color: 'inherit',
+                          flexShrink: 0
+                        }}
+                        title="Tải xuống"
+                      >
+                        <i className="ti ti-download" />
+                      </a>
                     </div>
                   </div>
-        
-        {isOwnMessage && (
-                <div className="chat-avatar">
-            <Avatar
-              src={user?.avatarUrl}
-              name={user?.fullName || user?.username}
-                    className="rounded-circle dreams_chat"
-                  />
-                </div>
-        )}
+                )}
+                
+                {/* Hiển thị nội dung text */}
+                {message.content && (
+                  <div style={{ 
+                    wordWrap: 'break-word',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {message.content}
+                  </div>
+                )}
               </div>
+              
+              {/* Read status - chỉ hiển thị "Đã xem" cho 1-1 conversation */}
+              {isOwnMessage && message.readCount > 0 && selectedConversation?.type === 'PRIVATE' && (
+                <div className="chat-actions mt-1">
+                  <small className="text-muted">
+                    ✓ Đã xem
+                  </small>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {isOwnMessage && (
+            <div className="chat-avatar">
+              <Avatar
+                src={user?.avatarUrl}
+                name={user?.fullName || user?.username}
+                className="rounded-circle dreams_chat"
+              />
+            </div>
+          )}
+        </div>
+      </>
     );
   };
   
@@ -648,10 +1016,11 @@ const Chat = () => {
           flex: 1 1 auto !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
-          padding: 20px !important;
+          padding: 20px 20px calc(var(--footer-height, 100px) + 20px) 20px !important;
           min-height: 0 !important;
           display: flex !important;
           flex-direction: column !important;
+          position: relative;
         }
         
         .messages {
@@ -659,6 +1028,52 @@ const Chat = () => {
           flex-direction: column;
           gap: 15px;
           flex: 1;
+          min-height: 0;
+        }
+        
+        /* ========== EMPTY/LOADING STATE - CĂN GIỮA ========== */
+        .empty-state-container,
+        .loading-state-container {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: calc(100% - 40px);
+          max-width: 400px;
+          text-align: center;
+          padding: 20px;
+          z-index: 1;
+        }
+        
+        .empty-state-container i,
+        .loading-state-container i {
+          display: block;
+          margin: 0 auto 16px;
+        }
+        
+        .empty-state-container h5,
+        .loading-state-container h5 {
+          margin-top: 0;
+          margin-bottom: 8px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #333;
+        }
+        
+        .empty-state-container p,
+        .loading-state-container p {
+          margin: 0;
+          font-size: 14px;
+          color: #666;
+        }
+        
+        .loading-state-container .spinner-border {
+          width: 48px;
+          height: 48px;
+          border-width: 4px;
+          margin: 0 auto;
+          border-color: #667eea;
+          border-right-color: transparent;
         }
         
         /* ========== FOOTER - FIXED AT BOTTOM ========== */
@@ -670,6 +1085,7 @@ const Chat = () => {
           z-index: 100;
           margin-top: auto !important;
           position: relative;
+          box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
         }
         
         .footer-form {
@@ -798,6 +1214,113 @@ const Chat = () => {
         /* Message animation */
         .chats {
           animation: slideIn 0.2s ease-out;
+        }
+        
+        /* ========== DATE MARKER ========== */
+        .date-marker {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 20px 0;
+          position: relative;
+        }
+        
+        .date-marker::before,
+        .date-marker::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: #e0e0e0;
+        }
+        
+        .date-marker span {
+          display: inline-block;
+          padding: 6px 16px;
+          background: #f0f0f0;
+          border-radius: 20px;
+          font-size: 13px;
+          color: #666;
+          font-weight: 500;
+          margin: 0 12px;
+        }
+        
+        /* ========== MESSAGE IMAGE ========== */
+        .message-image img {
+          max-width: 300px;
+          max-height: 300px;
+          border-radius: 12px;
+          object-fit: cover;
+          cursor: pointer;
+          transition: transform 0.2s ease;
+        }
+        
+        .message-image img:hover {
+          transform: scale(1.02);
+        }
+        
+        /* ========== MESSAGE FILE ========== */
+        .message-file .file-attach {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px;
+          background: #f0f0f0;
+          border-radius: 12px;
+          max-width: 300px;
+          transition: background 0.2s ease;
+        }
+        
+        .chats-right .message-file .file-attach {
+          background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .message-file .file-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          flex-shrink: 0;
+        }
+        
+        .chats-right .message-file .file-icon {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* ========== HIGHLIGHT MESSAGE ========== */
+        .highlight-message {
+          animation: highlightPulse 2s ease;
+        }
+        
+        @keyframes highlightPulse {
+          0% { background-color: rgba(102, 126, 234, 0.3); }
+          50% { background-color: rgba(102, 126, 234, 0.1); }
+          100% { background-color: transparent; }
+        }
+        
+        /* ========== PINNED MESSAGES SECTION ========== */
+        .pinned-messages-section {
+          flex-shrink: 0;
+        }
+        
+        .pinned-messages-section::-webkit-scrollbar {
+          width: 4px;
+        }
+        
+        .pinned-messages-section::-webkit-scrollbar-track {
+          background: #f1f1f1;
+        }
+        
+        .pinned-messages-section::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 2px;
+        }
+        
+        .pinned-messages-section::-webkit-scrollbar-thumb:hover {
+          background: #555;
         }
       `}</style>
       
@@ -931,7 +1454,7 @@ const Chat = () => {
                             className="dropdown-item"
                             data-bs-toggle="modal"
                         data-bs-target="#clear-chat"
-                      >
+                          >
                         <i className="ti ti-clear-all me-2" />
                         Xóa tin nhắn
                           </Link>
@@ -951,7 +1474,7 @@ const Chat = () => {
                     placeholder="Tìm kiếm tin nhắn..."
                     value={searchKeyword}
                     onChange={(e) => setSearchKeyword(e.target.value)}
-                  />
+                                    />
                   <span className="input-group-text">
                     <i className="ti ti-search" />
                       </span>
@@ -962,57 +1485,180 @@ const Chat = () => {
                       </div>
           
           {/* Chat Body - Scrollable area */}
-          <div className="chat-body chat-page-group">
+          <div 
+            className="chat-body chat-page-group"
+            style={{
+              paddingBottom: `${footerHeight + 20}px`
+            }}
+          >
+            {/* Pinned Messages Section */}
+            {pinnedMessages.length > 0 && (
+              <div className="pinned-messages-section" style={{
+                padding: '12px 20px',
+                backgroundColor: '#f8f9fa',
+                borderBottom: '1px solid #e9ecef',
+                marginBottom: '10px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <i className="ti ti-pin-filled" style={{ color: '#667eea', fontSize: '16px' }} />
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#667eea' }}>
+                    Tin nhắn đã ghim
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  {pinnedMessages.map((pinnedMsg) => (
+                    <div
+                      key={pinnedMsg.id}
+                      onClick={() => {
+                        // Scroll to message
+                        const messageElement = document.querySelector(`[data-message-id="${pinnedMsg.id}"]`);
+                        if (messageElement) {
+                          messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Highlight message
+                          messageElement.classList.add('highlight-message');
+                          setTimeout(() => {
+                            messageElement.classList.remove('highlight-message');
+                          }, 2000);
+                        }
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#fff',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        border: '1px solid #e9ecef',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f0f0f0';
+                        e.currentTarget.style.borderColor = '#667eea';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#fff';
+                        e.currentTarget.style.borderColor = '#e9ecef';
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '4px'
+                      }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#333' }}>
+                          {pinnedMsg.senderName}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#999' }}>
+                          {formatTime(pinnedMsg.createdAt)}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: '13px',
+                        color: '#666',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {pinnedMsg.type === 'IMAGE' && '📷 Hình ảnh'}
+                        {pinnedMsg.type === 'FILE' && '📎 File'}
+                        {pinnedMsg.type === 'TEXT' && pinnedMsg.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="messages">
               {/* Loading State */}
               {isLoadingMessages && (
-                <div className="text-center py-5">
-                  <div className="spinner-border text-primary" role="status">
+                <div className="loading-state-container">
+                  <div className="spinner-border text-primary" role="status" style={{ 
+                    width: '48px', 
+                    height: '48px', 
+                    borderWidth: '4px',
+                    color: '#667eea'
+                  }}>
                     <span className="visually-hidden">Đang tải...</span>
-                            </div>
-                  <p className="text-muted mt-2">Đang tải tin nhắn...</p>
-                      </div>
+                  </div>
+                  <p style={{ marginTop: '16px', marginBottom: 0, fontSize: '14px', color: '#666' }}>
+                    Đang tải tin nhắn...
+                  </p>
+                </div>
               )}
               
               {/* Messages - Hiển thị theo thứ tự thời gian (cũ → mới) */}
               {!isLoadingMessages && filteredMessages.length > 0 && 
-                filteredMessages.map(renderMessage)
+                filteredMessages.map((message, index) => renderMessage(message, index))
               }
               
               {/* No search results */}
               {!isLoadingMessages && searchKeyword && filteredMessages.length === 0 && messages.length > 0 && (
-                <div className="text-center py-5">
-                  <i className="ti ti-search-off" style={{ fontSize: "48px", color: "#667eea" }} />
-                  <h5 className="mt-3">Không tìm thấy kết quả</h5>
-                  <p className="text-muted">Thử tìm với từ khóa khác</p>
-                    </div>
+                <div className="empty-state-container">
+                  <i className="ti ti-search-off" style={{ fontSize: "64px", color: "#667eea", display: 'block', marginBottom: '16px' }} />
+                  <h5 style={{ marginTop: 0, marginBottom: '8px', fontSize: '18px', fontWeight: '600', color: '#333' }}>
+                    Không tìm thấy kết quả
+                  </h5>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                    Thử tìm với từ khóa khác
+                  </p>
+                </div>
               )}
               
               {/* Empty State */}
               {!isLoadingMessages && messages.length === 0 && selectedConversation && !searchKeyword && (
-                <div className="text-center py-5">
-                  <i className="ti ti-message-off" style={{ fontSize: "64px", color: "#667eea" }} />
-                  <h5 className="mt-3">Chưa có tin nhắn nào</h5>
-                  <p className="text-muted">Hãy bắt đầu cuộc trò chuyện! 💬</p>
-                    </div>
+                <div className="empty-state-container">
+                  <i className="ti ti-message-off" style={{ fontSize: "64px", color: "#667eea", display: 'block', marginBottom: '16px' }} />
+                  <h5 style={{ marginTop: 0, marginBottom: '8px', fontSize: '18px', fontWeight: '600', color: '#333' }}>
+                    Chưa có tin nhắn nào
+                  </h5>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                    Hãy bắt đầu cuộc trò chuyện! 💬
+                  </p>
+                </div>
               )}
               
               {/* No conversation selected */}
               {!selectedConversation && (
-                <div className="text-center py-5">
-                  <i className="ti ti-message-circle" style={{ fontSize: "64px", color: "#667eea" }} />
-                  <h5 className="mt-3">Chọn một cuộc trò chuyện</h5>
-                  <p className="text-muted">Chọn một cuộc trò chuyện từ sidebar để bắt đầu</p>
-                  </div>
+                <div className="empty-state-container">
+                  <i className="ti ti-message-circle" style={{ fontSize: "64px", color: "#667eea", display: 'block', marginBottom: '16px' }} />
+                  <h5 style={{ marginTop: 0, marginBottom: '8px', fontSize: '18px', fontWeight: '600', color: '#333' }}>
+                    Chọn một cuộc trò chuyện
+                  </h5>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                    Chọn một cuộc trò chuyện từ sidebar để bắt đầu
+                  </p>
+                </div>
               )}
               
               {/* Scroll anchor - để scroll đến đây khi có tin nhắn mới */}
-              <div ref={messagesEndRef} />
-                </div>
+              {!isLoadingMessages && filteredMessages.length > 0 && (
+                <div 
+                  ref={messagesEndRef} 
+                  style={{ 
+                    height: '1px', 
+                    minHeight: '1px',
+                    paddingTop: '20px',
+                    marginTop: '10px',
+                    scrollMarginTop: '20px'
+                  }} 
+                />
+              )}
+            </div>
               </div>
           
           {/* Chat Footer */}
-        <div className="chat-footer">
+        <div className="chat-footer" ref={footerRef} style={{ '--footer-height': `${footerHeight}px` } as React.CSSProperties}>
             {/* Typing Indicator - Hiển thị dưới input như Zalo, Messenger */}
             {typingUsers.length > 0 && selectedConversation && (
               <div className="typing-indicator-footer">
@@ -1020,46 +1666,186 @@ const Chat = () => {
                   <span className="typing-dot"></span>
                   <span className="typing-dot"></span>
                   <span className="typing-dot"></span>
-                </span>
+                          </span>
                 <span>{typingUsers[0]} đang nhập...</span>
-              </div>
+                      </div>
             )}
             
             <form className="footer-form" onSubmit={handleSendMessage}>
             <div className="chat-footer-wrap">
-              <div className="form-wrap" style={{ position: 'relative' }}>
-                  {/* Message Input */}
+              {/* Hidden file inputs */}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+                disabled={isUploading || !selectedConversation}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+                disabled={isUploading || !selectedConversation}
+              />
+              
+              {/* Left side: Upload buttons */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Tooltip title="Gửi ảnh" placement="top">
+                  <button
+                    type="button"
+                    className="action-circle"
+                    onClick={triggerImageInput}
+                    disabled={isUploading || isSending || !selectedConversation}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: '#f5f5f5',
+                      color: '#666',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.background = '#667eea';
+                        e.currentTarget.style.color = '#fff';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.background = '#f5f5f5';
+                        e.currentTarget.style.color = '#666';
+                      }
+                    }}
+                  >
+                    {isUploading ? (
+                      <div className="spinner-border spinner-border-sm" role="status" style={{ width: '16px', height: '16px' }}>
+                        <span className="visually-hidden">Đang tải...</span>
+                      </div>
+                    ) : (
+                      <i className="ti ti-photo" style={{ fontSize: '18px' }} />
+                    )}
+                  </button>
+                </Tooltip>
+                
+                <Tooltip title="Gửi file" placement="top">
+                  <button
+                    type="button"
+                    className="action-circle"
+                    onClick={triggerFileInput}
+                    disabled={isUploading || isSending || !selectedConversation}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: '#f5f5f5',
+                      color: '#666',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.background = '#667eea';
+                        e.currentTarget.style.color = '#fff';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.background = '#f5f5f5';
+                        e.currentTarget.style.color = '#666';
+                      }
+                    }}
+                  >
+                    <i className="ti ti-paperclip" style={{ fontSize: '18px' }} />
+                  </button>
+                </Tooltip>
+              </div>
+              
+              {/* Center: Message Input */}
+              <div className="form-wrap" style={{ flex: 1, position: 'relative' }}>
                 <input
-                    ref={inputRef}
+                  ref={inputRef}
                   type="text"
                   className="form-control"
-                    placeholder="Nhập tin nhắn..."
-                    value={inputMessage}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    disabled={isSending || !selectedConversation}
-                    autoFocus
+                  placeholder="Nhập tin nhắn..."
+                  value={inputMessage}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  disabled={isSending || isUploading || !selectedConversation}
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    borderRadius: '21px',
+                    padding: '0 18px',
+                    border: '1px solid #d0d0d0',
+                    background: '#f8f9fa',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.2s ease'
+                  }}
                 />
               </div>
                 
-                {/* Send Button */}
+              {/* Right side: Send Button */}
               <div className="form-btn">
-                  <button 
-                    className="btn btn-primary" 
-                    type="submit"
-                    disabled={!inputMessage.trim() || isSending || !selectedConversation}
-                  >
-                    {isSending ? (
-                      <div className="spinner-border spinner-border-sm" role="status">
-                        <span className="visually-hidden">Đang gửi...</span>
-              </div>
-                    ) : (
-                      <i className="ti ti-send" />
-                    )}
-                  </button>
+                <button 
+                  className="btn btn-primary" 
+                  type="submit"
+                  disabled={(!inputMessage.trim() && !isUploading) || isSending || isUploading || !selectedConversation}
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: inputMessage.trim() || isUploading 
+                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                      : '#d0d0d0',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: (!inputMessage.trim() && !isUploading) || isSending || isUploading || !selectedConversation 
+                      ? 'not-allowed' 
+                      : 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: inputMessage.trim() || isUploading 
+                      ? '0 2px 8px rgba(102, 126, 234, 0.3)' 
+                      : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!e.currentTarget.disabled && (inputMessage.trim() || isUploading)) {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!e.currentTarget.disabled) {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }
+                  }}
+                >
+                  {isSending || isUploading ? (
+                    <div className="spinner-border spinner-border-sm" role="status" style={{ width: '16px', height: '16px', borderWidth: '2px' }}>
+                      <span className="visually-hidden">Đang gửi...</span>
+                    </div>
+                  ) : (
+                    <i className="ti ti-send" style={{ fontSize: '18px' }} />
+                  )}
+                </button>
               </div>
             </div>
-            </form>
+          </form>
           </div>
         </div>
       </div>

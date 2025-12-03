@@ -155,10 +155,21 @@ export const useChatMessages = ({
             chatApi.togglePinMessage(messageId, pinned),
         onSuccess: (response) => {
             console.log('✅ Message pin status updated:', response);
-            // Update message in local state
+            // Update message in local state - chỉ update pinned status
             setMessages((prev) =>
-                prev.map((m) => (m.id === response.data.id ? response.data : m))
+                prev.map((m) => {
+                    if (m.id === response.data?.id) {
+                        return {
+                            ...m,
+                            pinned: response.data.pinned ?? !m.pinned,
+                        };
+                    }
+                    return m;
+                })
             );
+            
+            // Invalidate query để refresh
+            queryClient.invalidateQueries({ queryKey });
         },
         onError: (error) => {
             console.error('❌ Failed to update pin status:', error);
@@ -175,28 +186,55 @@ export const useChatMessages = ({
 
     // Helper: Scroll to bottom - sử dụng scrollTop để đảm bảo scroll
     const scrollToBottom = useCallback((instant: boolean = false) => {
-        // Cách 1: Sử dụng scrollIntoView
+        // Cách 1: Sử dụng scrollIntoView với block: 'end' và inline: 'nearest'
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ 
                 behavior: instant ? 'instant' : 'smooth',
-                block: 'end'
+                block: 'end',
+                inline: 'nearest'
             });
         }
         
-        // Cách 2: Backup - scroll parent container trực tiếp
+        // Cách 2: Backup - scroll parent container trực tiếp với padding
         setTimeout(() => {
-            const chatBody = document.querySelector('.chat-body.chat-page-group');
+            const chatBody = document.querySelector('.chat-body.chat-page-group') as HTMLElement;
+            const footer = document.querySelector('.chat-footer') as HTMLElement;
             if (chatBody) {
+                // Tính toán scroll position với padding bottom để không bị che
+                const scrollHeight = chatBody.scrollHeight;
+                const clientHeight = chatBody.clientHeight;
+                // Lấy chiều cao footer thực tế + buffer
+                const footerHeight = footer ? footer.offsetHeight + 30 : 100;
+                // Scroll đến cuối cùng với đủ space để không bị che
+                const maxScroll = scrollHeight - clientHeight + footerHeight;
+                
+                // Scroll đến cuối cùng với padding
                 if (instant) {
-                    chatBody.scrollTop = chatBody.scrollHeight;
+                    chatBody.scrollTop = Math.max(0, maxScroll);
                 } else {
                     chatBody.scrollTo({
-                        top: chatBody.scrollHeight,
+                        top: Math.max(0, maxScroll),
                         behavior: 'smooth'
                     });
                 }
             }
-        }, 50);
+        }, 100);
+        
+        // Cách 3: Double check sau khi DOM đã render hoàn toàn
+        setTimeout(() => {
+            const chatBody = document.querySelector('.chat-body.chat-page-group') as HTMLElement;
+            const footer = document.querySelector('.chat-footer') as HTMLElement;
+            if (chatBody && messagesEndRef.current) {
+                const footerHeight = footer ? footer.offsetHeight + 30 : 100;
+                const scrollHeight = chatBody.scrollHeight;
+                const clientHeight = chatBody.clientHeight;
+                const maxScroll = scrollHeight - clientHeight + footerHeight;
+                
+                if (instant) {
+                    chatBody.scrollTop = Math.max(0, maxScroll);
+                }
+            }
+        }, 300);
     }, []);
 
     // Helper: Send message
