@@ -18,7 +18,7 @@ import {
     IPaginatedResponse
 } from './friend.type';
 
-const URI = '/api/v1';
+const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
 export const friendUri = {
     // New API: tìm kiếm người dùng để kết bạn

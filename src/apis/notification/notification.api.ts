@@ -8,7 +8,7 @@ import {
     IDeleteNotificationResponse
 } from './notification.type';
 
-const URI = '/api/v1';
+const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
 export const notificationUri = {
     getNotifications: `${URI}/notifications`,
