@@ -29,11 +29,8 @@ const WebSocketInitializer: React.FC = () => {
   useEffect(() => {
     // Chỉ connect khi có token và user
     if (!token || !user?.id) {
-      console.log('⚠️ WebSocket: No token or user, skipping connection');
       return;
     }
-
-    console.log('🔌 WebSocket: Initializing connection for user:', user.name);
 
     // Get base URL (remove /api/v1 suffix if exists)
     const baseUrl = environment.apiBaseUrl.replace(/\/api\/v1$/, '');
@@ -41,14 +38,12 @@ const WebSocketInitializer: React.FC = () => {
     try {
       // Connect WebSocket
       websocketService.connect(baseUrl, token, user.id);
-      console.log('✅ WebSocket: Connection initiated');
     } catch (error) {
       console.error('❌ WebSocket: Connection failed:', error);
     }
 
     // Cleanup: Disconnect khi component unmount hoặc user logout
     return () => {
-      console.log('👋 WebSocket: Disconnecting...');
       websocketService.disconnect();
     };
   }, [token, user]);

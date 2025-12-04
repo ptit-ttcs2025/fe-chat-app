@@ -84,41 +84,65 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         });
     }, []);
 
-    // Mark as read
-    const markAsRead = useCallback(async (notificationId: string) => {
-        try {
-            await notificationApis.markAsRead(notificationId);
-            setNotifications(prev =>
-                prev.map(n =>
-                    n.id === notificationId ? { ...n, isSeen: true } : n
-                )
-            );
-            setUnreadCount(prev => Math.max(0, prev - 1));
-            
-            // Invalidate queries
-            queryClient.invalidateQueries({ queryKey: ['notifications'] });
-            queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
-        } catch (error) {
-            console.error('Error marking notification as read:', error);
-        }
-    }, [queryClient]);
+    // Mark as read - optimistic update
+    const markAsRead = useCallback((notificationId: string) => {
+        // Check if already read
+        const notification = notifications.find(n => n.id === notificationId);
+        if (!notification || notification.isSeen) return;
+        
+        // Optimistic update
+        setNotifications(prev =>
+            prev.map(n =>
+                n.id === notificationId ? { ...n, isSeen: true } : n
+            )
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        
+        // API call in background
+        notificationApis.markAsRead(notificationId)
+            .then(() => {
+                queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
+            })
+            .catch(error => {
+                console.error('Error marking notification as read:', error);
+                // Revert optimistic update on error
+                setNotifications(prev =>
+                    prev.map(n =>
+                        n.id === notificationId ? { ...n, isSeen: false } : n
+                    )
+                );
+                setUnreadCount(prev => prev + 1);
+            });
+    }, [notifications, queryClient]);
 
-    // Mark all as read
-    const markAllAsRead = useCallback(async () => {
-        try {
-            await notificationApis.markAllAsRead();
-            setNotifications(prev =>
-                prev.map(n => ({ ...n, isSeen: true }))
-            );
-            setUnreadCount(0);
-            
-            // Invalidate queries
-            queryClient.invalidateQueries({ queryKey: ['notifications'] });
-            queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
-        } catch (error) {
-            console.error('Error marking all notifications as read:', error);
-        }
-    }, [queryClient]);
+    // Mark all as read - optimistic update
+    const markAllAsRead = useCallback(() => {
+        if (unreadCount === 0) return;
+        
+        // Store previous state for rollback
+        const prevNotifications = [...notifications];
+        const prevUnreadCount = unreadCount;
+        
+        // Optimistic update
+        setNotifications(prev =>
+            prev.map(n => ({ ...n, isSeen: true }))
+        );
+        setUnreadCount(0);
+        
+        // API call in background
+        notificationApis.markAllAsRead()
+            .then(() => {
+                queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
+            })
+            .catch(error => {
+                console.error('Error marking all notifications as read:', error);
+                // Revert on error
+                setNotifications(prevNotifications);
+                setUnreadCount(prevUnreadCount);
+            });
+    }, [notifications, unreadCount, queryClient]);
 
     // Clear notifications (UI only)
     const clearNotifications = useCallback(() => {

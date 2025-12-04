@@ -26,7 +26,37 @@ export const notificationApis = {
         const response = await http.get(notificationUri.getNotifications, {
             params: { page, size }
         }) as any;
-        return response.data?.results || [];
+
+        const rawResults = response?.data?.results || [];
+
+        // Chuẩn hóa dữ liệu theo INotification dựa trên API_DOCUMENTATION & ví dụ JSON
+        const mapped: INotification[] = rawResults.map((item: any) => {
+            const senderAvatarUrl =
+                item.senderAvatarUrl === 'null' ? null : item.senderAvatarUrl;
+
+            return {
+                id: item.id,
+                userId: item.recipientId ?? item.userId ?? '',
+                type: item.type,
+                title: item.title,
+                content: item.content,
+                isSeen: item.isSeen ?? item.isRead ?? false,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+
+                // Friend request specific mapping
+                requestId: item.requestId,
+                recipientId: item.recipientId,
+                senderId: item.senderId,
+                senderName: item.senderName,
+                senderDisplayName: item.senderName,
+                senderAvatarUrl,
+                relatedId: item.relatedId,
+                message: item.message,
+            };
+        });
+
+        return mapped;
     },
 
     /**

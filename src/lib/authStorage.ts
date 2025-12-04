@@ -17,7 +17,6 @@ export const authStorage = {
      * Lưu access token vào cookies
      */
     setAccessToken(token: string): void {
-        console.log('💾 Saving access token to cookies...');
         cookieManager.set(TOKEN_KEY, token, 7); // 7 days
     },
 
@@ -32,7 +31,6 @@ export const authStorage = {
      * Lưu refresh token vào cookies
      */
     setRefreshToken(token: string): void {
-        console.log('💾 Saving refresh token to cookies...');
         cookieManager.set(REFRESH_TOKEN_KEY, token, 30); // 30 days
     },
 
@@ -47,7 +45,6 @@ export const authStorage = {
      * Xóa tất cả tokens
      */
     clearTokens(): void {
-        console.log('🗑️ Clearing all auth tokens...');
         cookieManager.remove(TOKEN_KEY);
         cookieManager.remove(REFRESH_TOKEN_KEY);
     },
@@ -59,9 +56,7 @@ export const authStorage = {
      */
     setUser(user: IAuthUser): void {
         try {
-            console.log('💾 Saving user to localStorage...');
             localStorage.setItem(USER_KEY, JSON.stringify(user));
-            console.log('✅ User saved:', user.username);
         } catch (error) {
             console.error('❌ Error saving user:', error);
         }
@@ -87,7 +82,6 @@ export const authStorage = {
      * Xóa user info
      */
     clearUser(): void {
-        console.log('🗑️ Clearing user from localStorage...');
         localStorage.removeItem(USER_KEY);
     },
 
@@ -97,30 +91,9 @@ export const authStorage = {
      * Lưu toàn bộ auth data (login)
      */
     saveAuthData(accessToken: string, refreshToken: string, user: IAuthUser): void {
-        console.log('='.repeat(60));
-        console.log('💾 SAVING AUTH DATA...');
-        
         this.setAccessToken(accessToken);
         this.setRefreshToken(refreshToken);
         this.setUser(user);
-        
-        // Verify
-        const savedAccessToken = this.getAccessToken();
-        const savedRefreshToken = this.getRefreshToken();
-        const savedUser = this.getUser();
-        
-        console.log('🔍 Verification:', {
-            accessToken: savedAccessToken ? 'OK' : 'FAILED',
-            refreshToken: savedRefreshToken ? 'OK' : 'FAILED',
-            user: savedUser ? 'OK' : 'FAILED',
-        });
-        
-        if (!savedAccessToken || !savedRefreshToken || !savedUser) {
-            console.error('❌ SOME AUTH DATA FAILED TO SAVE!');
-        } else {
-            console.log('✅ All auth data saved successfully!');
-        }
-        console.log('='.repeat(60));
     },
 
     /**
@@ -131,22 +104,9 @@ export const authStorage = {
         refreshToken: string | null;
         user: IAuthUser | null;
     } {
-        console.log('='.repeat(60));
-        console.log('📂 LOADING AUTH DATA...');
-        console.log('📋 Current cookies:', document.cookie);
-        console.log('📋 LocalStorage has user:', !!localStorage.getItem(USER_KEY));
-        
         const accessToken = this.getAccessToken();
         const refreshToken = this.getRefreshToken();
         const user = this.getUser();
-        
-        console.log('🔍 Retrieved:', {
-            accessToken: accessToken ? `Found (${accessToken.length} chars)` : 'NOT FOUND',
-            refreshToken: refreshToken ? `Found (${refreshToken.length} chars)` : 'NOT FOUND',
-            user: user ? `Found (${user.username})` : 'NOT FOUND',
-        });
-        console.log('='.repeat(60));
-        
         return { accessToken, refreshToken, user };
     },
 
@@ -154,29 +114,8 @@ export const authStorage = {
      * Xóa toàn bộ auth data (logout)
      */
     clearAuthData(): void {
-        console.log('='.repeat(60));
-        console.log('🗑️ CLEARING ALL AUTH DATA...');
-        
         this.clearTokens();
         this.clearUser();
-        
-        // Verify
-        setTimeout(() => {
-            const accessToken = this.getAccessToken();
-            const refreshToken = this.getRefreshToken();
-            const user = this.getUser();
-            
-            if (accessToken || refreshToken || user) {
-                console.error('❌ FAILED TO CLEAR SOME AUTH DATA!', {
-                    accessToken,
-                    refreshToken,
-                    user,
-                });
-            } else {
-                console.log('✅ All auth data cleared successfully!');
-            }
-            console.log('='.repeat(60));
-        }, 100);
     },
 
     /**

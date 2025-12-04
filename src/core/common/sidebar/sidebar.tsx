@@ -6,6 +6,7 @@ import { all_routes } from "../../../feature-module/router/all_routes";
 import { Tooltip } from "antd";
 import { setDark } from "../../data/redux/commonSlice";
 import { useLogout } from '../../../hooks/useLogout';
+import { useTotalUnreadCount } from '@/hooks/useUnreadMessages';
 
 const Sidebar = () => {
   const routes = all_routes;
@@ -14,6 +15,7 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
+  const { data: totalUnreadCount } = useTotalUnreadCount();
   const LayoutDark = () => {
     if (darkMode === "enabled") {
       localStorage.setItem("darkMode", "enabled");
@@ -55,7 +57,22 @@ const Sidebar = () => {
                     data-bs-toggle="tab"
                     data-bs-target="#chat-menu"
                   >
-                    <i className="ti ti-message-2-heart" />
+                    <span className="position-relative d-inline-flex align-items-center justify-content-center">
+                      <i className="ti ti-message-2-heart" />
+                      {totalUnreadCount && totalUnreadCount > 0 && (
+                        <span
+                          className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #6338F6 0%, #764ba2 100%)",
+                            fontSize: "10px",
+                            minWidth: "18px",
+                          }}
+                        >
+                          {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
+                        </span>
+                      )}
+                    </span>
                   </Link>
                 </li>
               </Tooltip>

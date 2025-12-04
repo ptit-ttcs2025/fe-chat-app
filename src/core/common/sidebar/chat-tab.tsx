@@ -16,6 +16,7 @@ import "overlayscrollbars/overlayscrollbars.css";
 // Components
 import { all_routes } from '../../../feature-module/router/all_routes';
 import { isValidUrl, getInitial, getAvatarColor } from '@/lib/avatarHelper';
+import { useTotalUnreadCount, useUnreadSummary } from '@/hooks/useUnreadMessages';
 
 // API Hooks
 import { useChatConversations } from '@/hooks/useChatConversations';
@@ -49,6 +50,24 @@ const ChatTab = () => {
   // Local state
   const [activeTab, setActiveTab] = useState('All Chats');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Tổng số tin nhắn chưa đọc để hiển thị badge nhỏ bên cạnh tiêu đề "Chats"
+  const { data: totalUnreadCount } = useTotalUnreadCount();
+  // Tổng hợp unread theo conversation
+  const { data: unreadSummary } = useUnreadSummary();
+  const unreadMap = useMemo(() => {
+    const map: Record<string, { count: number; lastPreview?: string | null; lastTime?: string | null }> = {};
+    if (unreadSummary) {
+      unreadSummary.unreadConversations.forEach((conv) => {
+        map[conv.conversationId] = {
+          count: conv.unreadCount,
+          lastPreview: conv.lastMessagePreview,
+          lastTime: conv.lastMessageTimestamp,
+        };
+      });
+    }
+    return map;
+  }, [unreadSummary]);
   
   // API Hooks
   const {
@@ -93,13 +112,24 @@ const ChatTab = () => {
         result = result.filter(conv => !conv.archived && !conv.deleted);
     }
     
-    // Sort: Pinned first, then by last message time
+    // Sort: Pinned first, sau đó theo thời gian tin nhắn cuối (ưu tiên dữ liệu từ unread summary)
     result.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      
-      const timeA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
-      const timeB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+
+      const infoA = unreadMap[a.id];
+      const infoB = unreadMap[b.id];
+
+      const timeA = infoA?.lastTime
+        ? new Date(infoA.lastTime).getTime()
+        : a.lastMessage?.createdAt
+        ? new Date(a.lastMessage.createdAt).getTime()
+        : 0;
+      const timeB = infoB?.lastTime
+        ? new Date(infoB.lastTime).getTime()
+        : b.lastMessage?.createdAt
+        ? new Date(b.lastMessage.createdAt).getTime()
+        : 0;
       return timeB - timeA;
     });
     
@@ -211,6 +241,11 @@ const ChatTab = () => {
   };
   
   const getLastMessagePreview = (conv: IConversation) => {
+    const unreadInfo = unreadMap[conv.id];
+    if (unreadInfo?.lastPreview) {
+      return unreadInfo.lastPreview;
+    }
+
     if (!conv.lastMessage) return 'Chưa có tin nhắn';
     
     const { content, type, senderName, senderId } = conv.lastMessage;
@@ -269,18 +304,28 @@ const ChatTab = () => {
             </p>
           </div>
           <div className="chat-user-time">
-            <span className="time">{formatTime(conv.lastMessage?.createdAt)}</span>
+            <span className="time">
+              {unreadMap[conv.id]?.lastTime
+                ? formatTime(unreadMap[conv.id]!.lastTime || undefined)
+                : formatTime(conv.lastMessage?.createdAt)}
+            </span>
             <div className="chat-pin">
               {conv.pinned && <i className="ti ti-pin me-2" />}
-              {conv.unreadCount > 0 ? (
-                <span className="count-message fs-12 fw-semibold">
-                  {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-                </span>
-              ) : conv.lastMessage?.readCount ? (
-                <i className="ti ti-checks text-success" />
-              ) : (
-                <i className="ti ti-check text-muted" />
-              )}
+              {(() => {
+                const unread = unreadMap[conv.id]?.count ?? conv.unreadCount;
+                if (unread > 0) {
+                  return (
+                    <span className="count-message fs-12 fw-semibold">
+                      {unread > 99 ? '99+' : unread}
+                    </span>
+                  );
+                }
+                return conv.lastMessage?.readCount ? (
+                  <i className="ti ti-checks text-success" />
+                ) : (
+                  <i className="ti ti-check text-muted" />
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -354,7 +399,21 @@ const ChatTab = () => {
             {/* Header */}
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
-                <h4 className="mb-3">Chats</h4>
+                <h4 className="mb-3 d-flex align-items-center gap-2">
+                  <span>Chats</span>
+                  {totalUnreadCount && totalUnreadCount > 0 && (
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #6338F6 0%, #764ba2 100%)',
+                        fontSize: '11px',
+                      }}
+                    >
+                      {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                    </span>
+                  )}
+                </h4>
                 <div className="d-flex align-items-center mb-3">
                   <Link
                     to="#"

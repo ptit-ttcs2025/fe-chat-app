@@ -1,17 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { isValidUrl } from '@/lib/avatarHelper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { isValidUrl, getAvatarColor, getInitial } from '@/lib/avatarHelper';
 import ImageWithBasePath from '../common/imageWithBasePath';
 import type { INotification } from '@/apis/notification/notification.type';
-
-// Logo PTIT mặc định
-const DEFAULT_LOGO = '/src/assets/img/profiles/Logo_PTIT_University.png';
 
 interface ToastNotificationProps {
   notification: INotification;
   onAccept?: (requestId: string) => void;
   onReject?: (requestId: string) => void;
   onDismiss: (notificationId: string) => void;
-  autoHideDuration?: number; // milliseconds
+  autoHideDuration?: number;
 }
 
 const ToastNotification: React.FC<ToastNotificationProps> = ({
@@ -19,32 +16,42 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
   onAccept,
   onReject,
   onDismiss,
-  autoHideDuration = 10000, // 10 seconds default
+  autoHideDuration = 8000,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(autoHideDuration);
 
   useEffect(() => {
     // Trigger enter animation
-    const enterTimeout = setTimeout(() => setIsVisible(true), 10);
+    const enterTimeout = setTimeout(() => setIsVisible(true), 50);
+    return () => clearTimeout(enterTimeout);
+  }, []);
 
-    // Auto hide after duration
-    const hideTimeout = setTimeout(() => {
-      handleDismiss();
-    }, autoHideDuration);
+  useEffect(() => {
+    if (isPaused || isLeaving) return;
+    
+    const interval = setInterval(() => {
+      setRemainingTime(prev => {
+        if (prev <= 100) {
+          handleDismiss();
+          return 0;
+        }
+        return prev - 100;
+      });
+    }, 100);
 
-    return () => {
-      clearTimeout(enterTimeout);
-      clearTimeout(hideTimeout);
-    };
-  }, [autoHideDuration]);
+    return () => clearInterval(interval);
+  }, [isPaused, isLeaving]);
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
+    if (isLeaving) return;
     setIsLeaving(true);
     setTimeout(() => {
       onDismiss(notification.id);
-    }, 300); // Wait for exit animation
-  };
+    }, 300);
+  }, [isLeaving, notification.id, onDismiss]);
 
   const handleAcceptClick = () => {
     if (onAccept && notification.requestId) {
@@ -60,126 +67,118 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
     }
   };
 
-  // Get icon based on notification type
-  const getIcon = () => {
+  // Get notification type config
+  const getTypeConfig = () => {
     switch (notification.type) {
       case 'FRIEND_REQUEST':
-        return '👋';
+        return {
+          icon: 'ti-user-plus',
+          gradient: 'linear-gradient(135deg, #6338F6 0%, #8B5CF6 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Lời mời kết bạn mới',
+        };
       case 'FRIEND_REQUEST_ACCEPTED':
-        return '✅';
+        return {
+          icon: 'ti-user-check',
+          gradient: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Đã chấp nhận lời mời!',
+        };
       case 'FRIEND_REQUEST_REJECTED':
-        return '❌';
+        return {
+          icon: 'ti-user-x',
+          gradient: 'linear-gradient(135deg, #EF4444 0%, #F87171 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Lời mời bị từ chối',
+        };
       case 'NEW_MESSAGE':
-        return '💬';
+        return {
+          icon: 'ti-message',
+          gradient: 'linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Tin nhắn mới',
+        };
       default:
-        return '🔔';
+        return {
+          icon: 'ti-bell',
+          gradient: 'linear-gradient(135deg, #6338F6 0%, #8B5CF6 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Thông báo',
+        };
     }
   };
 
-  // Get background color based on notification type - PTIT Theme
-  const getBgColor = () => {
-    switch (notification.type) {
-      case 'FRIEND_REQUEST':
-        return 'linear-gradient(135deg, #6338F6 0%, #734CF7 100%)'; // PTIT purple
-      case 'FRIEND_REQUEST_ACCEPTED':
-        return 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; // Success green
-      case 'FRIEND_REQUEST_REJECTED':
-        return 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)'; // Danger red
-      case 'NEW_MESSAGE':
-        return 'linear-gradient(135deg, #17a2b8 0%, #20c997 100%)'; // Info blue
-      default:
-        return 'linear-gradient(135deg, #6338F6 0%, #734CF7 100%)'; // PTIT purple
-    }
+  const config = getTypeConfig();
+  const progress = (remainingTime / autoHideDuration) * 100;
+  
+  // Get avatar info
+  const getAvatarInfo = () => {
+    const name = notification.senderDisplayName || notification.senderName || 'User';
+    const avatarUrl = notification.senderAvatarUrl;
+    return { name, avatarUrl };
   };
+
+  const { name, avatarUrl } = getAvatarInfo();
 
   return (
     <div
-      className={`toast-notification ${isVisible ? 'show' : ''} ${isLeaving ? 'hide' : ''}`}
-      style={{
-        background: getBgColor(),
-      }}
+      className={`toast-notification-modern ${isVisible ? 'show' : ''} ${isLeaving ? 'hide' : ''}`}
+      style={{ background: config.gradient }}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
     >
       {/* Close button */}
       <button
-        className="toast-close-btn"
+        className="toast-close"
         onClick={handleDismiss}
-        aria-label="Close"
+        aria-label="Đóng"
       >
         <i className="ti ti-x"></i>
       </button>
 
-      <div className="toast-content">
-        {/* Avatar/Icon */}
-        <div className="toast-avatar">
-          {notification.type === 'FRIEND_REQUEST' ? (
-            // Hiển thị avatar người gửi hoặc logo PTIT
-            notification.senderAvatarUrl && isValidUrl(notification.senderAvatarUrl) ? (
-              <ImageWithBasePath
-                src={notification.senderAvatarUrl}
-                alt={notification.senderDisplayName || 'User'}
-                width={50}
-                height={50}
-              />
-            ) : (
-              // Logo PTIT mặc định với nền trắng
-              <ImageWithBasePath
-                src={DEFAULT_LOGO}
-                alt="PTIT Logo"
-                width={50}
-                height={50}
-              />
-            )
-          ) : notification.type === 'FRIEND_REQUEST_ACCEPTED' ? (
-            // Avatar người chấp nhận hoặc logo PTIT
-            notification.senderAvatarUrl && isValidUrl(notification.senderAvatarUrl) ? (
-              <ImageWithBasePath
-                src={notification.senderAvatarUrl}
-                alt={notification.acceptorDisplayName || 'User'}
-                width={50}
-                height={50}
-              />
-            ) : (
-              <ImageWithBasePath
-                src={DEFAULT_LOGO}
-                alt="PTIT Logo"
-                width={50}
-                height={50}
-              />
-            )
+      {/* Main content */}
+      <div className="toast-main">
+        {/* Avatar */}
+        <div className="toast-avatar-wrapper">
+          {isValidUrl(avatarUrl) && avatarUrl ? (
+            <img 
+              src={avatarUrl} 
+              alt={name}
+              className="toast-avatar-img"
+            />
           ) : (
-            // Icon cho các loại notification khác
-            <div className="toast-icon">
-              {getIcon()}
+            <div 
+              className="toast-avatar-placeholder"
+              style={{ backgroundColor: getAvatarColor(name) }}
+            >
+              {getInitial(name)}
             </div>
           )}
+          <span className="toast-avatar-badge" style={{ background: config.iconBg }}>
+            <i className={`ti ${config.icon}`}></i>
+          </span>
         </div>
 
         {/* Content */}
-        <div className="toast-body">
-          <div className="toast-title">
-            {notification.type === 'FRIEND_REQUEST' && 'Lời mời kết bạn mới'}
-            {notification.type === 'FRIEND_REQUEST_ACCEPTED' && 'Lời mời được chấp nhận'}
-            {notification.type === 'FRIEND_REQUEST_REJECTED' && 'Lời mời bị từ chối'}
-            {!['FRIEND_REQUEST', 'FRIEND_REQUEST_ACCEPTED', 'FRIEND_REQUEST_REJECTED'].includes(notification.type) && notification.title}
+        <div className="toast-content-wrapper">
+          <div className="toast-title-row">
+            <span className="toast-label">{config.title}</span>
           </div>
           
-          <div className="toast-message">
+          <div className="toast-body-text">
             {notification.type === 'FRIEND_REQUEST' && (
               <>
-                <strong>{notification.senderDisplayName}</strong> muốn kết bạn với bạn
-                {notification.message && (
-                  <div className="toast-submessage">"{notification.message}"</div>
-                )}
+                <strong>{notification.senderDisplayName || notification.senderName}</strong> muốn kết bạn với bạn
               </>
             )}
             {notification.type === 'FRIEND_REQUEST_ACCEPTED' && (
               <>
-                <strong>{notification.acceptorDisplayName}</strong> đã chấp nhận lời mời kết bạn! 🎉
+                <strong>{notification.senderDisplayName || notification.senderName}</strong> đã chấp nhận lời mời kết bạn!
               </>
             )}
             {notification.type === 'FRIEND_REQUEST_REJECTED' && (
               <>
-                <strong>{notification.rejectorName}</strong> đã từ chối lời mời kết bạn
+                <strong>{notification.senderDisplayName || notification.senderName}</strong> đã từ chối lời mời
               </>
             )}
             {!['FRIEND_REQUEST', 'FRIEND_REQUEST_ACCEPTED', 'FRIEND_REQUEST_REJECTED'].includes(notification.type) && 
@@ -187,22 +186,22 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
             }
           </div>
 
+          {notification.message && notification.type === 'FRIEND_REQUEST' && (
+            <div className="toast-message-quote">
+              "{notification.message}"
+            </div>
+          )}
+
           {/* Actions for friend request */}
           {notification.type === 'FRIEND_REQUEST' && (
             <div className="toast-actions">
-              <button
-                className="toast-btn toast-btn-accept"
-                onClick={handleAcceptClick}
-              >
-                <i className="ti ti-check me-1"></i>
-                Chấp nhận
+              <button className="toast-btn accept" onClick={handleAcceptClick}>
+                <i className="ti ti-check"></i>
+                Xác nhận
               </button>
-              <button
-                className="toast-btn toast-btn-reject"
-                onClick={handleRejectClick}
-              >
-                <i className="ti ti-x me-1"></i>
-                Từ chối
+              <button className="toast-btn reject" onClick={handleRejectClick}>
+                <i className="ti ti-x"></i>
+                Xóa
               </button>
             </div>
           )}
@@ -210,15 +209,17 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
       </div>
 
       {/* Progress bar */}
-      <div 
-        className="toast-progress" 
-        style={{ 
-          animationDuration: `${autoHideDuration}ms` 
-        }}
-      ></div>
+      <div className="toast-progress-track">
+        <div 
+          className="toast-progress-bar"
+          style={{ 
+            width: `${progress}%`,
+            transition: isPaused ? 'none' : 'width 0.1s linear'
+          }}
+        ></div>
+      </div>
     </div>
   );
 };
 
 export default ToastNotification;
-
