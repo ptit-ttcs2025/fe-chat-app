@@ -19,6 +19,7 @@ import type {
     CursorInfo,
 } from '@/apis/chat/chat.type';
 import { useConversationMessages } from './useWebSocketChat';
+import { UNREAD_KEYS } from './useUnreadMessages';
 
 interface UseChatMessagesOptions {
     conversationId: string | null;
@@ -45,6 +46,7 @@ export const useChatMessages = ({
     const [currentPage, setCurrentPage] = useState(0); // Dùng cho fallback pagination
     const [apiType, setApiType] = useState<'cursor' | 'pagination'>('cursor'); // Track API type being used
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const hasMarkedAsReadRef = useRef(false); // Track đã mark as read chưa
 
     // Query key
     const queryKey = ['chat', 'messages', conversationId];
@@ -56,6 +58,8 @@ export const useChatMessages = ({
         setCurrentPage(0);
         // Reset apiType để thử cursor API mới cho mỗi conversation
         setApiType('cursor');
+        // Reset mark as read flag
+        hasMarkedAsReadRef.current = false;
     }, [conversationId]);
 
     // Fetch messages từ API - LUÔN thử cursor API trước
@@ -195,9 +199,17 @@ export const useChatMessages = ({
     // Mutation: Mark as read
     const markAsReadMutation = useMutation({
         mutationFn: (data: MarkAsReadRequest) => chatApi.markMessagesAsRead(data),
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             // Update messages locally
             queryClient.invalidateQueries({ queryKey });
+            
+            // ✅ Invalidate unread queries theo UNREAD_MESSAGES_GUIDE.md
+            queryClient.invalidateQueries({ queryKey: UNREAD_KEYS.summary() });
+            queryClient.invalidateQueries({ queryKey: UNREAD_KEYS.totalCount() });
+            queryClient.invalidateQueries({ queryKey: UNREAD_KEYS.byConversation(variables.conversationId) });
+            
+            // Update conversations list để refresh unreadCount
+            queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
         },
         onError: (error) => {
             console.error('❌ Failed to mark as read:', error);
@@ -241,6 +253,39 @@ export const useChatMessages = ({
             console.error('❌ Failed to update pin status:', error);
         },
     });
+
+    // ✅ Auto mark as read khi VÀO conversation (theo UNREAD_MESSAGES_GUIDE.md section 5.5)
+    useEffect(() => {
+        if (
+            autoMarkAsRead &&
+            conversationId &&
+            currentUserId &&
+            messages.length > 0 &&
+            !isLoading &&
+            !hasMarkedAsReadRef.current
+        ) {
+            // Lọc tin nhắn chưa đọc (tin nhắn của người khác)
+            const unreadMessageIds = messages
+                .filter((msg) => msg.senderId !== currentUserId)
+                .map((msg) => msg.id);
+
+            if (unreadMessageIds.length > 0) {
+                // Delay 500ms để đảm bảo user đã "thấy" messages
+                const timer = setTimeout(() => {
+                    markAsReadMutation.mutate({
+                        conversationId,
+                        messageIds: unreadMessageIds,
+                    });
+                    hasMarkedAsReadRef.current = true;
+                }, 500);
+
+                return () => clearTimeout(timer);
+            } else {
+                // Không có tin nhắn chưa đọc, đánh dấu đã check
+                hasMarkedAsReadRef.current = true;
+            }
+        }
+    }, [conversationId, messages, isLoading, autoMarkAsRead, currentUserId, markAsReadMutation]);
 
     // Helper: Load more messages (supports both cursor and pagination APIs)
     const loadMoreMessages = useCallback(async () => {

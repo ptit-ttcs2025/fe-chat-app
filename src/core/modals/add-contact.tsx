@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useSearchUsers, useAddFriend } from '@/apis/friend/friend.api';
+import { useSearchUsers, useAddFriend, useRespondFriendRequest } from '@/apis/friend/friend.api';
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 import ImageWithBasePath from '../common/imageWithBasePath';
@@ -10,10 +10,12 @@ import { useModalCleanup } from '@/hooks/useModalCleanup';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Import SCSS
+import './add-contact.scss';
+
 const AddContact = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
 
   const MySwal = withReactContent(Swal);
   const queryClient = useQueryClient();
@@ -30,14 +32,17 @@ const AddContact = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Search users query
-  const { data: searchResults, isLoading, error } = useSearchUsers(
+  // Search users query (API /friends/search-users)
+  const { data: searchResultsData, isLoading, error } = useSearchUsers(
     debouncedQuery,
     debouncedQuery.length > 0
   );
+  const searchResults = searchResultsData?.results || [];
 
   // Add friend mutation
   const addFriendMutation = useAddFriend();
+  // Respond friend request mutation (accept / reject lời mời pending)
+  const respondFriendRequestMutation = useRespondFriendRequest();
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,18 +51,6 @@ const AddContact = () => {
 
   // Handle add friend with confirmation
   const handleAddFriend = async (userId: string, fullName: string) => {
-    // Check if already sent request
-    if (sentRequests.has(userId)) {
-      MySwal.fire({
-        icon: 'info',
-        title: 'Thông báo',
-        text: 'Bạn đã gửi lời mời kết bạn cho người dùng này rồi!',
-        confirmButtonText: 'Đóng',
-        confirmButtonColor: '#3085d6',
-      });
-      return;
-    }
-
     // Show confirmation dialog
     const result = await MySwal.fire({
       title: 'Xác nhận gửi lời mời',
@@ -81,12 +74,10 @@ const AddContact = () => {
         message: 'Xin chào! Kết bạn với mình nhé!'
       });
 
-      // Add to sent requests
-      setSentRequests(prev => new Set(prev).add(userId));
-
       // Invalidate queries để cập nhật UI
       queryClient.invalidateQueries({ queryKey: ['friendRequests', 'sent'] });
       queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
+      queryClient.invalidateQueries({ queryKey: ['searchUsers'] });
       
       // Backend sẽ tự động gửi WebSocket notification đến người nhận
       // NotificationContext sẽ tự động xử lý khi nhận được notification
@@ -116,27 +107,93 @@ const AddContact = () => {
     }
   };
 
-  // Truncate bio to 100 characters
-  const truncateBio = (bio?: string) => {
-    if (!bio || bio.length <= 100) return bio || 'Không có';
-    return bio.substring(0, 100) + '...';
-  };
+  // Render action button theo friendshipStatus
+  const renderActionButtons = (user: any) => {
+    const status = user.friendshipStatus as 'NONE' | 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED';
 
-  // Format date
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN');
-  };
-
-  // Get gender label
-  const getGenderLabel = (gender?: 'MALE' | 'FEMALE' | 'OTHER') => {
-    if (!gender) return 'Không rõ';
-    switch (gender) {
-      case 'MALE': return 'Nam';
-      case 'FEMALE': return 'Nữ';
-      case 'OTHER': return 'Khác';
-      default: return 'Không rõ';
+    switch (status) {
+      case 'FRIEND':
+        return (
+          <button type="button" className="btn-friend" disabled>
+            <i className="ti ti-user-check"></i>
+            Đã là bạn bè
+          </button>
+        );
+      case 'PENDING_SENT':
+        return (
+          <button type="button" className="btn-pending" disabled>
+            <i className="ti ti-clock"></i>
+            Đã gửi lời mời
+          </button>
+        );
+      case 'PENDING_RECEIVED':
+        return (
+          <>
+            <button
+              type="button"
+              className="btn-accept"
+              disabled={respondFriendRequestMutation.isPending}
+              onClick={() =>
+                respondFriendRequestMutation.mutate(
+                  { requestId: user.pendingRequestId, action: 'ACCEPT' },
+                  {
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['friends'] });
+                      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+                      queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
+                      queryClient.invalidateQueries({ queryKey: ['searchUsers'] });
+                    },
+                  }
+                )
+              }
+            >
+              <i className="ti ti-check"></i>
+              Chấp nhận
+            </button>
+            <button
+              type="button"
+              className="btn-reject"
+              disabled={respondFriendRequestMutation.isPending}
+              onClick={() =>
+                respondFriendRequestMutation.mutate(
+                  { requestId: user.pendingRequestId, action: 'REJECT' },
+                  {
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+                      queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
+                      queryClient.invalidateQueries({ queryKey: ['searchUsers'] });
+                    },
+                  }
+                )
+              }
+            >
+              <i className="ti ti-x"></i>
+              Từ chối
+            </button>
+          </>
+        );
+      case 'NONE':
+      default:
+        return (
+          <button
+            type="button"
+            className="btn-add-friend"
+            onClick={() => handleAddFriend(user.id, user.fullName)}
+            disabled={addFriendMutation.isPending}
+          >
+            {addFriendMutation.isPending ? (
+              <>
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Đang gửi...
+              </>
+            ) : (
+              <>
+                <i className="ti ti-user-plus"></i>
+                Thêm bạn bè
+              </>
+            )}
+          </button>
+        );
     }
   };
 
@@ -144,13 +201,17 @@ const AddContact = () => {
     <>
       {/* Add Contact */}
       <div className="modal fade" id="add-contact">
-        <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable add-contact-modal">
           <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Thêm Bạn Bè</h4>
+            {/* Header */}
+            <div className="modal-header add-contact-header">
+              <div className="header-left">
+                <i className="ti ti-user-plus header-icon"></i>
+                <h4 className="modal-title">Thêm Bạn Bè</h4>
+              </div>
               <button
                 type="button"
-                className="btn-close"
+                className="btn-close-modal"
                 data-bs-dismiss="modal"
                 aria-label="Close"
                 onClick={() => {
@@ -160,244 +221,181 @@ const AddContact = () => {
                 <i className="ti ti-x" />
               </button>
             </div>
-            <div className="modal-body" style={{ minHeight: '500px' }}>
-              {/* Search Bar */}
-              <div className="mb-4">
-                <label className="form-label fw-medium">
-                  <i className="ti ti-search me-2 text-primary"></i>
+
+            {/* Body */}
+            <div className="modal-body add-contact-body">
+              {/* Search Section */}
+              <div className="search-section">
+                <label className="search-label">
+                  <i className="ti ti-search"></i>
                   Tìm kiếm người dùng
                 </label>
-                <div className="input-icon position-relative">
+                <div className="search-input-wrapper">
+                  <i className="ti ti-search search-icon"></i>
                   <input
                     type="text"
-                    className="form-control form-control-lg"
                     placeholder="Nhập tên người dùng để tìm kiếm..."
                     value={searchQuery}
                     onChange={handleSearchChange}
                     autoFocus
                   />
-                  <span className="input-icon-addon">
-                    <i className="ti ti-search" />
-                  </span>
                 </div>
                 {searchQuery && (
-                  <small className="text-muted mt-1 d-block">
-                    <i className="ti ti-info-circle me-1"></i>
-                    Đang tìm kiếm: <strong>{searchQuery}</strong>
-                    {searchResults && searchResults.length > 0 && (
-                      <span className="badge bg-primary ms-2">{searchResults.length} kết quả</span>
+                  <div className="search-info">
+                    <i className="ti ti-info-circle"></i>
+                    <span>Đang tìm kiếm: <strong>{searchQuery}</strong></span>
+                    {searchResultsData && (
+                      <span className="result-badge">
+                        {searchResultsData.meta?.totalElements ?? searchResults.length} kết quả
+                      </span>
                     )}
-                  </small>
+                  </div>
                 )}
               </div>
 
               {/* Search Results */}
               {searchQuery && (
-                <div className="search-results-container" style={{ maxHeight: '400px' }}>
-                  <OverlayScrollbarsComponent
-                    options={{
-                      scrollbars: {
-                        autoHide: 'scroll',
-                        autoHideDelay: 1000,
-                      },
-                    }}
-                    style={{ maxHeight: '400px' }}
-                  >
-                    {isLoading && (
-                      <div className="text-center py-5">
-                        <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                          <span className="visually-hidden">Đang tải...</span>
-                        </div>
-                        <p className="text-muted">Đang tìm kiếm người dùng...</p>
+                <OverlayScrollbarsComponent
+                  options={{
+                    scrollbars: {
+                      autoHide: 'scroll',
+                      autoHideDelay: 800,
+                    },
+                  }}
+                  style={{ maxHeight: '55vh' }}
+                >
+                  {isLoading && (
+                    <div className="loading-state">
+                      <div className="spinner-border" role="status" style={{ width: '3rem', height: '3rem' }}>
+                        <span className="visually-hidden">Đang tải...</span>
                       </div>
-                    )}
+                      <p>Đang tìm kiếm người dùng...</p>
+                    </div>
+                  )}
 
-                    {error && (
-                      <div className="alert alert-danger d-flex align-items-center" role="alert">
-                        <i className="ti ti-alert-circle fs-24 me-3"></i>
-                        <div>
-                          <strong>Có lỗi xảy ra!</strong>
-                          <p className="mb-0">Không thể tìm kiếm người dùng. Vui lòng thử lại sau.</p>
-                        </div>
+                  {error && (
+                    <div className="error-alert">
+                      <i className="ti ti-alert-circle"></i>
+                      <div className="error-content">
+                        <strong>Có lỗi xảy ra!</strong>
+                        <p>Không thể tìm kiếm người dùng. Vui lòng thử lại sau.</p>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {!isLoading && !error && searchResults && searchResults.length === 0 && (
-                      <div className="text-center py-5">
-                        <div className="mb-3">
-                          <i className="ti ti-user-search" style={{ fontSize: '80px', color: '#dee2e6' }}></i>
-                        </div>
-                        <h5 className="text-muted mb-2">Không tìm thấy người dùng nào</h5>
-                        <p className="text-muted small">Thử tìm kiếm với từ khóa khác</p>
+                  {!isLoading && !error && searchResults && searchResults.length === 0 && (
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <i className="ti ti-user-search"></i>
                       </div>
-                    )}
+                      <h4>Không tìm thấy người dùng nào</h4>
+                      <p>Thử tìm kiếm với từ khóa khác</p>
+                    </div>
+                  )}
 
-                    {!isLoading && !error && searchResults && searchResults.length > 0 && (
-                      <div className="list-group">
-                        {searchResults.map((user, index) => (
-                          <div
-                            key={user.id}
-                            className="list-group-item list-group-item-action p-3 border rounded mb-3 shadow-sm hover-lift"
-                            style={{ 
-                              animation: `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
-                              transition: 'all 0.3s ease'
-                            }}
-                          >
-                            <div className="d-flex align-items-start">
-                              {/* Avatar */}
-                              <div className="flex-shrink-0 me-3">
-                                {isValidUrl(user.avatarUrl) && user.avatarUrl ? (
-                                  <div style={{ width: '60px', height: '60px' }}>
-                                    <ImageWithBasePath
-                                      src={user.avatarUrl}
-                                      className="rounded-circle"
-                                      alt={user.fullName}
-                                      width={60}
-                                      height={60}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                                    style={{
-                                      width: '60px',
-                                      height: '60px',
-                                      backgroundColor: getAvatarColor(user.fullName),
-                                      fontSize: '24px'
-                                    }}
-                                  >
-                                    {getInitial(user.fullName)}
-                                  </div>
+                  {!isLoading && !error && searchResults && searchResults.length > 0 && (
+                    <div className="users-list">
+                      {searchResults.map((user, index) => (
+                        <div
+                          key={user.id}
+                          className="user-card"
+                          style={{ animationDelay: `${index * 0.05}s` }}
+                        >
+                          {/* Avatar */}
+                          <div className="user-avatar">
+                            {isValidUrl(user.avatarUrl) && user.avatarUrl ? (
+                              <ImageWithBasePath
+                                src={user.avatarUrl}
+                                alt={user.fullName}
+                              />
+                            ) : (
+                              <div
+                                className="avatar-placeholder"
+                                style={{ backgroundColor: getAvatarColor(user.fullName) }}
+                              >
+                                {getInitial(user.fullName)}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* User Info */}
+                          <div className="user-info">
+                            <div className="user-header">
+                              <div>
+                                <h6 className="user-name">{user.fullName}</h6>
+                                <p className="user-email">
+                                  <i className="ti ti-mail"></i>
+                                  {user.email}
+                                </p>
+                                {user.bio && (
+                                  <p className="user-bio">{user.bio}</p>
                                 )}
                               </div>
+                              {user.status === 'ONLINE' && (
+                                <span className="user-status-badge">
+                                  <i className="ti ti-point-filled"></i>
+                                  Online
+                                </span>
+                              )}
+                            </div>
 
-                              {/* User Info */}
-                              <div className="flex-grow-1">
-                                <div className="d-flex justify-content-between align-items-start mb-2">
-                                  <div>
-                                    <h6 className="mb-1">{user.fullName}</h6>
-                                    <p className="mb-1 text-muted small">@{user.username}</p>
-                                    <p className="mb-0 text-muted small">
-                                      <i className="ti ti-mail me-1"></i>
-                                      {user.email}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Additional Info */}
-                                <div className="row g-2 mt-2">
-                                  {user.gender && (
-                                    <div className="col-6">
-                                      <small className="text-muted d-block">Giới tính:</small>
-                                      <small className="fw-medium">{getGenderLabel(user.gender)}</small>
-                                    </div>
-                                  )}
-                                  {user.dob && (
-                                    <div className={user.gender ? "col-6" : "col-12"}>
-                                      <small className="text-muted d-block">Ngày sinh:</small>
-                                      <small className="fw-medium">{formatDate(user.dob)}</small>
-                                    </div>
-                                  )}
-                                  {user.bio && (
-                                    <div className="col-12">
-                                      <small className="text-muted d-block">Tiểu sử:</small>
-                                      <small className="fw-medium">{truncateBio(user.bio)}</small>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Action Button */}
-                                <div className="mt-3 d-flex gap-2">
-                                  {sentRequests.has(user.id) ? (
-                                    <button
-                                      type="button"
-                                      className="btn btn-success btn-sm"
-                                      disabled
-                                    >
-                                      <i className="ti ti-check me-2"></i>
-                                      Đã gửi lời mời
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary btn-sm"
-                                      onClick={() => handleAddFriend(user.id, user.fullName)}
-                                      disabled={addFriendMutation.isPending}
-                                    >
-                                      {addFriendMutation.isPending ? (
-                                        <>
-                                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                          Đang gửi...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <i className="ti ti-user-plus me-2"></i>
-                                          Thêm bạn bè
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
+                            {/* Action Buttons */}
+                            <div className="user-actions">
+                              {renderActionButtons(user)}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </OverlayScrollbarsComponent>
-                </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </OverlayScrollbarsComponent>
               )}
 
               {/* Empty State */}
               {!searchQuery && (
-                <div className="text-center py-5">
-                  <div className="mb-4">
-                    <i className="ti ti-users" style={{ fontSize: '100px', color: '#e3e6f0' }}></i>
+                <div className="empty-state">
+                  <div className="empty-icon">
+                    <i className="ti ti-users"></i>
                   </div>
-                  <h4 className="text-muted mb-3">Tìm kiếm bạn bè mới</h4>
-                  <p className="text-muted mb-4">
-                    Nhập tên người dùng vào ô tìm kiếm ở trên để bắt đầu
-                  </p>
-                  <div className="d-flex justify-content-center gap-3 flex-wrap">
-                    <div className="text-center">
-                      <div className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                           style={{ width: '60px', height: '60px' }}>
-                        <i className="ti ti-search text-primary fs-24"></i>
+                  <h4>Tìm kiếm bạn bè mới</h4>
+                  <p>Nhập tên người dùng vào ô tìm kiếm ở trên để bắt đầu</p>
+                  <div className="empty-steps">
+                    <div className="step-item">
+                      <div className="step-icon">
+                        <i className="ti ti-search"></i>
                       </div>
-                      <p className="small mb-0">Tìm kiếm</p>
+                      <p>Tìm kiếm</p>
                     </div>
-                    <div className="text-center">
-                      <div className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                           style={{ width: '60px', height: '60px' }}>
-                        <i className="ti ti-user-check text-success fs-24"></i>
+                    <div className="step-item">
+                      <div className="step-icon success">
+                        <i className="ti ti-user-check"></i>
                       </div>
-                      <p className="small mb-0">Chọn người dùng</p>
+                      <p>Chọn người dùng</p>
                     </div>
-                    <div className="text-center">
-                      <div className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                           style={{ width: '60px', height: '60px' }}>
-                        <i className="ti ti-send text-info fs-24"></i>
+                    <div className="step-item">
+                      <div className="step-icon info">
+                        <i className="ti ti-send"></i>
                       </div>
-                      <p className="small mb-0">Gửi lời mời</p>
+                      <p>Gửi lời mời</p>
                     </div>
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Close Button */}
-              <div className="mt-4">
-                <Link
-                  to="#"
-                  className="btn btn-outline-primary w-100"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                  onClick={() => {
-                    setSearchQuery('');
-                  }}
-                >
-                  Đóng
-                </Link>
-              </div>
+            {/* Footer */}
+            <div className="modal-footer add-contact-footer">
+              <Link
+                to="#"
+                className="btn-close-footer"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+                onClick={() => {
+                  setSearchQuery('');
+                }}
+              >
+                Đóng
+              </Link>
             </div>
           </div>
         </div>
@@ -408,46 +406,3 @@ const AddContact = () => {
 }
 
 export default AddContact;
-
-// Add custom CSS styles
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .hover-lift {
-    transition: all 0.3s ease !important;
-  }
-
-  .hover-lift:hover {
-    transform: translateY(-5px) !important;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-  }
-
-  /* SweetAlert2 custom styles */
-  .swal2-popup {
-    border-radius: 15px !important;
-  }
-
-  .swal2-title {
-    font-size: 1.5rem !important;
-    font-weight: 600 !important;
-  }
-
-  .swal2-icon {
-    margin: 1.5rem auto !important;
-  }
-`;
-
-if (!document.head.querySelector('style[data-add-contact-styles]')) {
-  style.setAttribute('data-add-contact-styles', 'true');
-  document.head.appendChild(style);
-}

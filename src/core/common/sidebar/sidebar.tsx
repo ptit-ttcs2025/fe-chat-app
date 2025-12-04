@@ -59,7 +59,7 @@ const Sidebar = () => {
                   >
                     <span className="position-relative d-inline-flex align-items-center justify-content-center">
                       <i className="ti ti-message-2-heart" />
-                      {totalUnreadCount && totalUnreadCount > 0 && (
+                      {totalUnreadCount > 0 && (
                         <span
                           className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                           style={{

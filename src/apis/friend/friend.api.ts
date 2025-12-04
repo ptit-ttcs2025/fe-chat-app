@@ -2,7 +2,6 @@ import http from '@/lib/apiBase';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { 
-    IUser, 
     ISearchUserParams, 
     IAddFriendRequest, 
     IAddFriendResponse,
@@ -13,13 +12,17 @@ import {
     ISearchFriendsParams,
     IFriendRequestCountResponse,
     IDeleteFriendResponse,
-    IFriendDetail
+    IFriendDetail,
+    IUserForFriend,
+    ISearchUsersForFriendParams,
+    IPaginatedResponse
 } from './friend.type';
 
 const URI = '/api/v1';
 
 export const friendUri = {
-    searchUsers: `${URI}/users`,
+    // New API: tìm kiếm người dùng để kết bạn
+    searchUsers: `${URI}/friends/search-users`,
     addFriend: `${URI}/friends/requests`,
     searchFriends: `${URI}/friends/search`, // Dùng chung cho cả search và get all
     getReceivedRequests: `${URI}/friends/requests/received`,
@@ -32,14 +35,22 @@ export const friendUri = {
 
 export const friendApis = {
     /**
-     * Search users by name
+     * Search users by keyword (dùng cho flow kết bạn)
+     * Sử dụng API mới: GET /friends/search-users
      */
-    searchUsers: async (params: ISearchUserParams): Promise<IUser[]> => {
+    searchUsers: async (params: ISearchUserParams): Promise<IPaginatedResponse<IUserForFriend>> => {
+        const query: ISearchUsersForFriendParams = {
+            keyword: params.name,
+            pageNumber: 0,
+            pageSize: 20,
+        };
+
         const response = await http.get(friendUri.searchUsers, {
-            params: { name: params.name }
+            params: query
         }) as any;
-        // Response sau interceptor: { statusCode, message, timestamp, path, data: { meta, results } }
-        return response.data?.results || [];
+        // Sau interceptor, response.data chính là field "data" trong ApiResponse
+        // data: { meta, results }
+        return response.data as IPaginatedResponse<IUserForFriend>;
     },
 
     /**
@@ -131,10 +142,10 @@ export const friendApis = {
 // ==================== REACT QUERY HOOKS ====================
 
 /**
- * Hook search users
+ * Hook search users để kết bạn (sử dụng API /friends/search-users)
  */
 export const useSearchUsers = (name: string, enabled: boolean = false) => {
-    return useQuery<IUser[], AxiosError>({
+    return useQuery<IPaginatedResponse<IUserForFriend>, AxiosError>({
         queryKey: ['searchUsers', name],
         queryFn: () => friendApis.searchUsers({ name }),
         enabled: enabled && name.length > 0,

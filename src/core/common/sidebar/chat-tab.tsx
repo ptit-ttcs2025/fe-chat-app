@@ -401,7 +401,7 @@ const ChatTab = () => {
               <div className="header-title d-flex align-items-center justify-content-between">
                 <h4 className="mb-3 d-flex align-items-center gap-2">
                   <span>Chats</span>
-                  {totalUnreadCount && totalUnreadCount > 0 && (
+                  {totalUnreadCount > 0 && (
                     <span
                       className="badge rounded-pill"
                       style={{
