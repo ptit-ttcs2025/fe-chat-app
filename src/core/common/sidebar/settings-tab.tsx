@@ -1699,8 +1699,8 @@ const SettingsTab = () => {
                       data-bs-target="#delete-account"
                     >
                       <div className="profile-info">
-                        <h6>
-                          <i className="ti ti-trash-x text-gray me-2" />
+                        <h6 className="text-danger">
+                          <i className="ti ti-trash-x text-danger me-2" />
                           Xóa tài khoản
                         </h6>
                       </div>
@@ -1716,8 +1716,8 @@ const SettingsTab = () => {
                       onClick={()=>setShowModal(true)}
                     >
                     <div className="profile-info" onClick={handleLogout} style={{ cursor: 'pointer' }}>
-                        <h6>
-                          <i className="ti ti-logout text-gray me-2" />
+                        <h6 className="text-danger">
+                          <i className="ti ti-logout text-danger me-2" />
                           Đăng xuất
                         </h6>
                       </div>

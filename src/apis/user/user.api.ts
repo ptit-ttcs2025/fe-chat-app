@@ -12,6 +12,7 @@ export const userUri = {
     updateProfile: (id: string) =>  `${URI}/users/${id}`,
     changePassword: `${URI}/auth/change-password`,
     uploadImage: `${URI}/files/upload`,
+    deleteAccount: (id: string) => `${URI}/users/${id}`,
 };
 
 export const userApis = {
@@ -51,6 +52,14 @@ export const userApis = {
         const response = await http.post<IUploadAvatarResponse>(userUri.uploadImage, formData, {
         });
 
+        return response.data;
+    },
+
+    /**
+     * Xóa tài khoản
+     */
+    deleteAccount: async (id: string): Promise<{ message: string }> => {
+        const response = await http.delete<{ message: string }>(userUri.deleteAccount(id));
         return response.data;
     }   
 };
@@ -116,3 +125,24 @@ export const useUploadAvatar = () => {
         mutationFn: ({ file ,folder }) => userApis.uploadAvatar(file, folder),
     });
 }
+
+/**
+ * Hook xóa tài khoản
+ */
+export const useDeleteAccount = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation<
+        { message: string },
+        AxiosError<{ message: string }>,
+        string // userId
+    >({
+        mutationFn: (userId) => userApis.deleteAccount(userId),
+        onSuccess: () => {
+            // Xóa toàn bộ cache
+            queryClient.clear();
+            // Xóa token
+            authStorage.clearTokens();
+        },
+    });
+};
