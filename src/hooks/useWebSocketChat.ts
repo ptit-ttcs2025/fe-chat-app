@@ -30,8 +30,6 @@ export const useConversationMessages = (
     useEffect(() => {
         if (!conversationId || !enabled) return;
 
-        console.log(`🔌 Subscribing to conversation messages: ${conversationId}`);
-
         // Subscribe with stable callback reference
         const unsubscribe = websocketService.subscribeToConversation(
             conversationId,
@@ -39,7 +37,6 @@ export const useConversationMessages = (
         );
 
         return () => {
-            console.log(`🔌 Unsubscribing from conversation messages: ${conversationId}`);
             unsubscribe();
         };
     }, [conversationId, enabled]);
@@ -63,15 +60,12 @@ export const useTypingStatus = (
     useEffect(() => {
         if (!conversationId || !enabled) return;
 
-        console.log(`⌨️ Subscribing to typing status: ${conversationId}`);
-
         const unsubscribe = websocketService.subscribeToTyping(
             conversationId,
             (status) => onTypingRef.current(status)
         );
 
         return () => {
-            console.log(`⌨️ Unsubscribing from typing status: ${conversationId}`);
             unsubscribe();
         };
     }, [conversationId, enabled]);
@@ -95,15 +89,12 @@ export const useReadReceipts = (
     useEffect(() => {
         if (!conversationId || !enabled) return;
 
-        console.log(`📖 Subscribing to read receipts: ${conversationId}`);
-
         const unsubscribe = websocketService.subscribeToReadReceipts(
             conversationId,
             (read) => onReadRef.current(read)
         );
 
         return () => {
-            console.log(`📖 Unsubscribing from read receipts: ${conversationId}`);
             unsubscribe();
         };
     }, [conversationId, enabled]);
@@ -126,14 +117,11 @@ export const useUserStatus = (
     useEffect(() => {
         if (!enabled) return;
 
-        console.log('👤 Subscribing to user status');
-
         const unsubscribe = websocketService.subscribeToUserStatus(
             (status) => onStatusRef.current(status)
         );
 
         return () => {
-            console.log('👤 Unsubscribing from user status');
             unsubscribe();
         };
     }, [enabled]);
@@ -156,14 +144,11 @@ export const usePersonalNotifications = (
     useEffect(() => {
         if (!enabled) return;
 
-        console.log('📬 Subscribing to personal notifications');
-
         const unsubscribe = websocketService.subscribeToPersonalNotifications(
             (message) => onNotificationRef.current(message)
         );
 
         return () => {
-            console.log('📬 Unsubscribing from personal notifications');
             unsubscribe();
         };
     }, [enabled]);
@@ -186,14 +171,11 @@ export const useSystemMessages = (
     useEffect(() => {
         if (!enabled) return;
 
-        console.log('🔔 Subscribing to system messages');
-
         const unsubscribe = websocketService.subscribeToSystemMessages(
             (message) => onMessageRef.current(message)
         );
 
         return () => {
-            console.log('🔔 Unsubscribing from system messages');
             unsubscribe();
         };
     }, [enabled]);

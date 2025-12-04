@@ -63,7 +63,6 @@ export const useChatConversations = ({
         mutationFn: (data: CreateConversationRequest) =>
             chatApi.createConversation(data),
         onSuccess: (response) => {
-            console.log('✅ Conversation created:', response);
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
             
             // Auto select new conversation
@@ -81,7 +80,6 @@ export const useChatConversations = ({
         mutationFn: (conversationId: string) =>
             chatApi.deleteConversation(conversationId),
         onSuccess: (_, conversationId) => {
-            console.log('✅ Conversation deleted:', conversationId);
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
 
             // Clear selection if deleted conversation was selected
@@ -104,7 +102,6 @@ export const useChatConversations = ({
             muted: boolean;
         }) => chatApi.toggleMuteConversation(conversationId, muted),
         onSuccess: (response) => {
-            console.log('✅ Conversation mute status updated:', response);
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
             queryClient.invalidateQueries({
                 queryKey: ['chat', 'conversation', response.data?.id],
@@ -125,7 +122,6 @@ export const useChatConversations = ({
             pinned: boolean;
         }) => chatApi.togglePinConversation(conversationId, pinned),
         onSuccess: (response) => {
-            console.log('✅ Conversation pin status updated:', response);
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
             queryClient.invalidateQueries({
                 queryKey: ['chat', 'conversation', response.data?.id],
@@ -141,7 +137,6 @@ export const useChatConversations = ({
         mutationFn: (conversationId: string) =>
             chatApi.leaveConversation(conversationId),
         onSuccess: (_, conversationId) => {
-            console.log('✅ Left conversation:', conversationId);
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
 
             // Clear selection if left conversation was selected

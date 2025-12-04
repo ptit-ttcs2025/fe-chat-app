@@ -51,7 +51,6 @@ export const useChatMessages = ({
 
     // Reset states khi conversation thay đổi
     useEffect(() => {
-        console.log('🔄 Conversation changed to:', conversationId);
         setMessages([]);
         setCursor(null);
         setCurrentPage(0);
@@ -72,25 +71,18 @@ export const useChatMessages = ({
                 throw new Error('No conversation selected');
             }
             
-            console.log('📡 Fetching messages, apiType:', apiType, 'conversationId:', conversationId);
-            
             // Nếu đang dùng pagination API (đã fallback trước đó)
             if (apiType === 'pagination') {
-                console.log('📡 Using pagination API (fallback mode)');
                 const response = await chatApi.getMessages(conversationId, 0, pageSize);
                 return { type: 'pagination', data: response };
             }
             
             // Thử cursor API trước
             try {
-                console.log('📡 Calling cursor API: /messages/cursor?conversationId=' + conversationId);
                 const response = await chatApi.getMessagesCursor(conversationId, pageSize);
-                
-                console.log('📡 Cursor API raw response:', response);
                 
                 // Check nếu response có messages field (cursor API format)
                 if (response && 'messages' in response) {
-                    console.log('✅ Cursor API success:', response.messages?.length || 0, 'messages');
                     return { type: 'cursor', data: response };
                 }
                 
@@ -99,14 +91,12 @@ export const useChatMessages = ({
                 throw new Error('Invalid cursor API response format');
             } catch (error: any) {
                 console.error('❌ Cursor API error:', error);
-                console.log('📡 Switching to pagination API fallback');
                 
                 // Set apiType để lần sau dùng pagination
                 setApiType('pagination');
                 
                 // Fallback về pagination API
                 const response = await chatApi.getMessages(conversationId, 0, pageSize);
-                console.log('📡 Pagination API response:', response);
                 return { type: 'pagination', data: response };
             }
         },
@@ -116,45 +106,41 @@ export const useChatMessages = ({
     });
 
   // Update local messages khi data thay đổi
-  useEffect(() => {
-    if (!messagesData) return;
+    useEffect(() => {
+        if (!messagesData) return;
     
-    console.log('📦 Processing messages data:', messagesData.type);
-    
-    if (messagesData.type === 'cursor') {
-      // Cursor API response
-      const results = messagesData.data.messages || [];
-      if (Array.isArray(results)) {
-        // Reverse để có thứ tự cũ → mới (ASC) cho hiển thị
-        const orderedResults = [...results].reverse();
-        setMessages(orderedResults);
-        setCursor(messagesData.data.cursor);
-        console.log('✅ Loaded', orderedResults.length, 'messages from cursor API');
-      }
-    } else if (messagesData.type === 'pagination') {
-      // Pagination API response
-      const results = messagesData.data.results || [];
-      if (Array.isArray(results)) {
-        // Reverse để có thứ tự cũ → mới (ASC)
-        const orderedResults = [...results].reverse();
-        setMessages(orderedResults);
+        if (messagesData.type === 'cursor') {
+            // Cursor API response
+            const results = messagesData.data.messages || [];
+            if (Array.isArray(results)) {
+                // Reverse để có thứ tự cũ → mới (ASC) cho hiển thị
+                const orderedResults = [...results].reverse();
+                setMessages(orderedResults);
+                setCursor(messagesData.data.cursor);
+            }
+        } else if (messagesData.type === 'pagination') {
+            // Pagination API response
+            const results = messagesData.data.results || [];
+            if (Array.isArray(results)) {
+                // Reverse để có thứ tự cũ → mới (ASC)
+                const orderedResults = [...results].reverse();
+                setMessages(orderedResults);
         
-        // Tạo cursor info từ pagination meta
-        const meta = messagesData.data.meta;
-        if (meta) {
-          setCursor({
-            hasMore: meta.pageNumber < meta.totalPages - 1,
-            hasNewer: false,
-            oldestMessageId: orderedResults[0]?.id || null,
-            newestMessageId: orderedResults[orderedResults.length - 1]?.id || null,
-            count: results.length,
-            pageSize: meta.pageSize,
-          });
+                // Tạo cursor info từ pagination meta
+                const meta = messagesData.data.meta;
+                if (meta) {
+                    setCursor({
+                        hasMore: meta.pageNumber < meta.totalPages - 1,
+                        hasNewer: false,
+                        oldestMessageId: orderedResults[0]?.id || null,
+                        newestMessageId: orderedResults[orderedResults.length - 1]?.id || null,
+                        count: results.length,
+                        pageSize: meta.pageSize,
+                    });
+                }
+            }
         }
-        console.log('✅ Loaded', orderedResults.length, 'messages from pagination API');
-      }
-    }
-  }, [messagesData]);
+    }, [messagesData]);
 
     // Handle real-time messages từ WebSocket
     const handleNewMessage = useCallback(
@@ -197,9 +183,8 @@ export const useChatMessages = ({
     // Mutation: Send message
     const sendMessageMutation = useMutation({
         mutationFn: (data: SendMessageRequest) => chatApi.sendMessage(data),
-        onSuccess: (response) => {
-            console.log('✅ Message sent successfully:', response);
-            // Message will be added via WebSocket subscription
+        onSuccess: () => {
+            // Message sẽ được thêm qua WebSocket subscription
             scrollToBottom();
         },
         onError: (error) => {
@@ -211,7 +196,6 @@ export const useChatMessages = ({
     const markAsReadMutation = useMutation({
         mutationFn: (data: MarkAsReadRequest) => chatApi.markMessagesAsRead(data),
         onSuccess: () => {
-            console.log('✅ Messages marked as read');
             // Update messages locally
             queryClient.invalidateQueries({ queryKey });
         },
@@ -224,7 +208,6 @@ export const useChatMessages = ({
     const deleteMessageMutation = useMutation({
         mutationFn: (messageId: string) => chatApi.deleteMessage(messageId),
         onSuccess: (_, messageId) => {
-            console.log('✅ Message deleted:', messageId);
             // Remove message from local state
             setMessages((prev) => prev.filter((m) => m.id !== messageId));
         },
@@ -238,7 +221,6 @@ export const useChatMessages = ({
         mutationFn: ({ messageId, pinned }: { messageId: string; pinned: boolean }) =>
             chatApi.togglePinMessage(messageId, pinned),
         onSuccess: (response) => {
-            console.log('✅ Message pin status updated:', response);
             // Update message in local state - chỉ update pinned status
             setMessages((prev) =>
                 prev.map((m) => {
@@ -263,13 +245,11 @@ export const useChatMessages = ({
     // Helper: Load more messages (supports both cursor and pagination APIs)
     const loadMoreMessages = useCallback(async () => {
         if (!conversationId || !cursor?.hasMore || isLoadingMore) {
-            console.log('⏭️ Skip loadMore:', { conversationId: !!conversationId, hasMore: cursor?.hasMore, isLoadingMore });
             return;
         }
-
+        
         const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
         if (!chatBody) {
-            console.log('⏭️ Skip loadMore: chatBody not found');
             return;
         }
 
@@ -279,21 +259,14 @@ export const useChatMessages = ({
         const firstMessageElement = chatBody.querySelector('.chats, .chats-right') as HTMLElement;
         const firstMessageOffsetTop = firstMessageElement?.offsetTop || 0;
         const currentScrollTop = chatBody.scrollTop;
-        
-        console.log('📍 Saved scroll context:', { 
-            currentScrollTop, 
-            firstMessageOffsetTop,
-            scrollHeight: chatBody.scrollHeight 
-        });
 
         try {
             let olderMessages: IMessage[] = [];
             let newCursor: CursorInfo | null = null;
 
-            if (apiType === 'pagination') {
+                if (apiType === 'pagination') {
                 // Fallback: Sử dụng pagination API
                 const nextPage = currentPage + 1;
-                console.log('📡 Loading more with pagination API, page:', nextPage);
                 
                 const response = await chatApi.getMessages(conversationId, nextPage, pageSize);
                 const results = response.results || [];
@@ -318,12 +291,10 @@ export const useChatMessages = ({
             } else {
                 // Cursor API
                 if (!cursor?.oldestMessageId) {
-                    console.log('⏭️ No oldestMessageId for cursor API');
                     setIsLoadingMore(false);
                     return;
                 }
                 
-                console.log('📡 Loading more with cursor API, before:', cursor.oldestMessageId);
                 const response = await chatApi.getMessagesCursor(
                     conversationId,
                     pageSize,
@@ -342,7 +313,6 @@ export const useChatMessages = ({
                 if (newCursor) {
                     setCursor(newCursor);
                 }
-                console.log('✅ Loaded', olderMessages.length, 'more messages');
 
                 // Maintain scroll position - đợi React render xong rồi restore
                 // QUAN TRỌNG: Giữ isLoadingMore = true cho đến khi scroll được restore
@@ -361,18 +331,11 @@ export const useChatMessages = ({
                                 const newOffsetTop = newFirstOldMessage.offsetTop;
                                 const offsetDiff = currentScrollTop - firstMessageOffsetTop;
                                 chatBody.scrollTop = newOffsetTop + offsetDiff;
-                                
-                                console.log('📍 Restored scroll position:', { 
-                                    newOffsetTop, 
-                                    offsetDiff, 
-                                    newScrollTop: newOffsetTop + offsetDiff 
-                                });
                             } else {
                                 // Fallback: scroll đến vị trí tương đối
                                 const newScrollHeight = chatBody.scrollHeight;
                                 const heightAdded = newScrollHeight - (chatBody.scrollHeight || 0);
                                 chatBody.scrollTop = currentScrollTop + heightAdded;
-                                console.log('📍 Fallback scroll restore');
                             }
                             resolve();
                         });

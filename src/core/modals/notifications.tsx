@@ -8,6 +8,11 @@ import { useRespondFriendRequest } from '@/apis/friend/friend.api';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { useQueryClient } from '@tanstack/react-query';
+import type { INotification } from '@/apis/notification/notification.type';
+import { useState } from 'react';
+
+// Import SCSS
+import './notifications.scss';
 
 const Notifications = () => {
   const { 
@@ -22,85 +27,116 @@ const Notifications = () => {
   const respondMutation = useRespondFriendRequest();
   const queryClient = useQueryClient();
   const MySwal = withReactContent(Swal);
+  
+  // Tab state: 'all' | 'unread' | 'friend_requests'
+  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'friend_requests'>('all');
+  
+  // Processing states for optimistic UI
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // Format time
+  // Filtered notifications based on tab
+  const filteredNotifications = notifications.filter(notification => {
+    switch (activeTab) {
+      case 'unread':
+        return !notification.isSeen;
+      case 'friend_requests':
+        return notification.type === 'FRIEND_REQUEST';
+      default:
+        return true;
+    }
+  });
+
+  // Format time relative
   const formatTime = (isoString: string) => {
-    if (!isoString) return 'N/A';
+    if (!isoString) return '';
     const date = new Date(isoString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
     if (diffInSeconds < 60) return 'Vừa xong';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} ngày trước`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} ngày`;
     
-    return date.toLocaleDateString('vi-VN');
-  };
-
-  // Get notification icon
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'FRIEND_REQUEST':
-        return '📨';
-      case 'FRIEND_REQUEST_ACCEPTED':
-        return '✅';
-      case 'FRIEND_REQUEST_REJECTED':
-        return '🚫';
-      case 'NEW_MESSAGE':
-        return '💬';
-      default:
-        return '🔔';
-    }
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   };
 
   // Handle accept friend request
-  const handleAccept = async (requestId: string, senderName: string) => {
+  const handleAccept = async (notification: INotification) => {
+    if (!notification.requestId) return;
+    
+    setProcessingIds(prev => new Set(prev).add(notification.id));
+    
     try {
       await respondMutation.mutateAsync({
-        requestId,
+        requestId: notification.requestId,
         action: 'ACCEPT'
       });
 
+      // Remove this notification after success
+      removeNotification(notification.id);
+
       MySwal.fire({
         icon: 'success',
-        title: 'Đã chấp nhận!',
-        text: `Bạn và ${senderName} giờ là bạn bè!`,
+        title: 'Đã kết bạn!',
+        html: `<p>Bạn và <strong>${notification.senderDisplayName}</strong> đã trở thành bạn bè!</p>`,
         confirmButtonText: 'Tuyệt vời!',
-        confirmButtonColor: '#28a745',
+        confirmButtonColor: '#6338F6',
         timer: 3000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInUp animate__faster'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutDown animate__faster'
+        }
       });
 
       // Refresh data
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
       queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.invalidateQueries({ queryKey: ['searchFriends'] });
       queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
       refreshNotifications();
     } catch (error: any) {
       MySwal.fire({
         icon: 'error',
-        title: 'Lỗi!',
-        text: error?.response?.data?.message || 'Không thể chấp nhận lời mời',
-        confirmButtonColor: '#dc3545',
+        title: 'Có lỗi xảy ra',
+        text: error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn',
+        confirmButtonColor: '#6338F6',
+      });
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(notification.id);
+        return next;
       });
     }
   };
 
   // Handle reject friend request
-  const handleReject = async (requestId: string) => {
+  const handleReject = async (notification: INotification) => {
+    if (!notification.requestId) return;
+    
+    setProcessingIds(prev => new Set(prev).add(notification.id));
+    
     try {
       await respondMutation.mutateAsync({
-        requestId,
+        requestId: notification.requestId,
         action: 'REJECT'
       });
 
+      // Remove this notification after success
+      removeNotification(notification.id);
+
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'info',
-        title: 'Đã từ chối',
-        text: 'Đã từ chối lời mời kết bạn',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#6c757d',
+        title: 'Đã từ chối lời mời',
+        showConfirmButton: false,
         timer: 2000,
+        timerProgressBar: true,
       });
 
       // Refresh data
@@ -110,307 +146,337 @@ const Notifications = () => {
     } catch (error: any) {
       MySwal.fire({
         icon: 'error',
-        title: 'Lỗi!',
+        title: 'Có lỗi xảy ra',
         text: error?.response?.data?.message || 'Không thể từ chối lời mời',
-        confirmButtonColor: '#dc3545',
+        confirmButtonColor: '#6338F6',
+      });
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(notification.id);
+        return next;
       });
     }
   };
 
   // Handle mark as read
-  const handleMarkAsRead = async (notificationId: string) => {
-    await markAsRead(notificationId);
+  const handleMarkAsRead = (notification: INotification) => {
+    if (notification.isSeen) return;
+    markAsRead(notification.id);
   };
 
   // Handle mark all as read
-  const handleMarkAllAsRead = async () => {
-    const result = await MySwal.fire({
-      title: 'Đánh dấu tất cả đã đọc?',
-      text: 'Tất cả thông báo sẽ được đánh dấu là đã đọc',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Đồng ý',
-      cancelButtonText: 'Hủy',
+  const handleMarkAllAsRead = () => {
+    if (unreadCount === 0) return;
+    markAllAsRead();
+    MySwal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Đã đánh dấu tất cả đã đọc',
+      showConfirmButton: false,
+      timer: 2000,
     });
+  };
 
-    if (result.isConfirmed) {
-      await markAllAsRead();
+  // Render avatar
+  const renderAvatar = (notification: INotification) => {
+    const name = notification.senderDisplayName || notification.senderName || 'U';
+    const avatarUrl = notification.senderAvatarUrl;
+    
+    if (isValidUrl(avatarUrl) && avatarUrl) {
+      return (
+        <div className="notification-avatar">
+          <ImageWithBasePath
+            src={avatarUrl}
+            className="rounded-circle"
+            alt={name}
+            width={48}
+            height={48}
+          />
+          {getNotificationBadge(notification.type)}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="notification-avatar">
+        <div
+          className="avatar-placeholder"
+          style={{ backgroundColor: getAvatarColor(name) }}
+        >
+          {getInitial(name)}
+        </div>
+        {getNotificationBadge(notification.type)}
+      </div>
+    );
+  };
+
+  // Get notification badge icon
+  const getNotificationBadge = (type: string) => {
+    switch (type) {
+      case 'FRIEND_REQUEST':
+        return (
+          <span className="notification-badge badge-primary">
+            <i className="ti ti-user-plus"></i>
+          </span>
+        );
+      case 'FRIEND_REQUEST_ACCEPTED':
+        return (
+          <span className="notification-badge badge-success">
+            <i className="ti ti-check"></i>
+          </span>
+        );
+      case 'FRIEND_REQUEST_REJECTED':
+        return (
+          <span className="notification-badge badge-danger">
+            <i className="ti ti-x"></i>
+          </span>
+        );
+      case 'NEW_MESSAGE':
+        return (
+          <span className="notification-badge badge-info">
+            <i className="ti ti-message"></i>
+          </span>
+        );
+      default:
+        return (
+          <span className="notification-badge badge-secondary">
+            <i className="ti ti-bell"></i>
+          </span>
+        );
     }
   };
 
-  // Render notification content based on type
-  const renderNotificationContent = (notification: any) => {
+  // Render notification content
+  const renderNotificationContent = (notification: INotification) => {
+    const isProcessing = processingIds.has(notification.id);
+    
     switch (notification.type) {
       case 'FRIEND_REQUEST':
         return (
-          <div className="notification-item friend-request" data-id={notification.id}>
-            <div className="d-flex align-items-start">
-              {/* Avatar */}
-              <div className="flex-shrink-0 me-3">
-                {isValidUrl(notification.senderAvatarUrl) && notification.senderAvatarUrl ? (
-                  <div style={{ width: '50px', height: '50px' }}>
-                    <ImageWithBasePath
-                      src={notification.senderAvatarUrl}
-                      className="rounded-circle"
-                      alt={notification.senderDisplayName}
-                      width={50}
-                      height={50}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                    style={{
-                      width: '50px',
-                      height: '50px',
-                      backgroundColor: getAvatarColor(notification.senderDisplayName || 'U'),
-                      fontSize: '20px'
-                    }}
-                  >
-                    {getInitial(notification.senderDisplayName || 'Unknown')}
-                  </div>
-                )}
+          <div className={`notification-card ${!notification.isSeen ? 'unread' : ''}`}>
+            {renderAvatar(notification)}
+            
+            <div className="notification-content">
+              <div className="notification-header">
+                <div className="notification-text">
+                  <strong>{notification.senderDisplayName || 'Người dùng'}</strong>
+                  <span className="notification-action-text"> đã gửi cho bạn lời mời kết bạn</span>
+                </div>
+                <span className="notification-time">{formatTime(notification.createdAt)}</span>
               </div>
-
-              {/* Content */}
-              <div className="flex-grow-1">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <div>
-                    <h6 className="mb-1">
-                      <span className="me-2">{getNotificationIcon(notification.type)}</span>
-                      Lời mời kết bạn
-                    </h6>
-                    <p className="mb-1">
-                      <strong>{notification.senderDisplayName}</strong> muốn kết bạn với bạn
-                    </p>
-                    {notification.message && (
-                      <p className="mb-2 text-muted small fst-italic">
-                        "{notification.message}"
-                      </p>
-                    )}
-                    <small className="text-muted">{formatTime(notification.createdAt)}</small>
-                  </div>
-                  {!notification.isSeen && (
-                    <span className="badge bg-primary">Mới</span>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="d-flex gap-2 mt-2">
-                  <button
-                    className="btn btn-sm btn-success"
-                    onClick={() => handleAccept(notification.requestId!, notification.senderDisplayName!)}
-                    disabled={respondMutation.isPending}
-                  >
+              
+              {notification.message && (
+                <p className="notification-message">"{notification.message}"</p>
+              )}
+              
+              <div className="notification-actions">
+                <button
+                  className="btn-accept"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAccept(notification);
+                  }}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <span className="spinner-border spinner-border-sm me-1"></span>
+                  ) : (
                     <i className="ti ti-check me-1"></i>
-                    Chấp nhận
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => handleReject(notification.requestId!)}
-                    disabled={respondMutation.isPending}
-                  >
-                    <i className="ti ti-x me-1"></i>
-                    Từ chối
-                  </button>
-                  {!notification.isSeen && (
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => handleMarkAsRead(notification.id)}
-                    >
-                      <i className="ti ti-check me-1"></i>
-                      Đánh dấu đã đọc
-                    </button>
                   )}
-                </div>
+                  Xác nhận
+                </button>
+                <button
+                  className="btn-reject"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReject(notification);
+                  }}
+                  disabled={isProcessing}
+                >
+                  <i className="ti ti-x me-1"></i>
+                  Xóa
+                </button>
               </div>
             </div>
+            
+            {notification.isSeen ? null : <span className="unread-dot"></span>}
           </div>
         );
 
       case 'FRIEND_REQUEST_ACCEPTED':
         return (
-          <div className="notification-item friend-accepted" data-id={notification.id}>
-            <div className="d-flex align-items-start">
-              <div className="flex-shrink-0 me-3">
-                <div className="notification-icon bg-success text-white rounded-circle d-flex align-items-center justify-content-center"
-                     style={{ width: '50px', height: '50px', fontSize: '24px' }}>
-                  {getNotificationIcon(notification.type)}
+          <div 
+            className={`notification-card clickable ${notification.isSeen ? '' : 'unread'}`}
+            onClick={() => handleMarkAsRead(notification)}
+            onKeyDown={(e) => e.key === 'Enter' && handleMarkAsRead(notification)}
+            role="button"
+            tabIndex={0}
+          >
+            {renderAvatar(notification)}
+            
+            <div className="notification-content">
+              <div className="notification-header">
+                <div className="notification-text">
+                  <strong>{notification.senderDisplayName || 'Người dùng'}</strong>
+                  <span className="notification-action-text"> đã chấp nhận lời mời kết bạn của bạn</span>
                 </div>
+                <span className="notification-time">{formatTime(notification.createdAt)}</span>
               </div>
-              <div className="flex-grow-1">
-                <div className="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h6 className="mb-1">Lời mời được chấp nhận</h6>
-                    <p className="mb-1">
-                      <strong>{notification.acceptorDisplayName}</strong> đã chấp nhận lời mời kết bạn của bạn! 🎉
-                    </p>
-                    <small className="text-muted">{formatTime(notification.acceptedAt || notification.createdAt)}</small>
-                  </div>
-                  {!notification.isSeen && (
-                    <span className="badge bg-primary">Mới</span>
-                  )}
-                </div>
-                {!notification.isSeen && (
-                  <button
-                    className="btn btn-sm btn-outline-secondary mt-2"
-                    onClick={() => handleMarkAsRead(notification.id)}
-                  >
-                    <i className="ti ti-check me-1"></i>
-                    Đánh dấu đã đọc
-                  </button>
-                )}
-              </div>
+              
+              <p className="notification-subtitle success">Các bạn đã là bạn bè!</p>
             </div>
+            
+            {notification.isSeen ? null : <span className="unread-dot"></span>}
           </div>
         );
 
       case 'FRIEND_REQUEST_REJECTED':
         return (
-          <div className="notification-item friend-rejected" data-id={notification.id}>
-            <div className="d-flex align-items-start">
-              <div className="flex-shrink-0 me-3">
-                <div className="notification-icon bg-danger text-white rounded-circle d-flex align-items-center justify-content-center"
-                     style={{ width: '50px', height: '50px', fontSize: '24px' }}>
-                  {getNotificationIcon(notification.type)}
+          <div 
+            className={`notification-card clickable ${notification.isSeen ? '' : 'unread'}`}
+            onClick={() => handleMarkAsRead(notification)}
+            onKeyDown={(e) => e.key === 'Enter' && handleMarkAsRead(notification)}
+            role="button"
+            tabIndex={0}
+          >
+            {renderAvatar(notification)}
+            
+            <div className="notification-content">
+              <div className="notification-header">
+                <div className="notification-text">
+                  <strong>{notification.senderDisplayName || 'Người dùng'}</strong>
+                  <span className="notification-action-text"> đã từ chối lời mời kết bạn của bạn</span>
                 </div>
-              </div>
-              <div className="flex-grow-1">
-                <div className="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h6 className="mb-1">Lời mời bị từ chối</h6>
-                    <p className="mb-1">
-                      <strong>{notification.rejectorName}</strong> đã từ chối lời mời kết bạn
-                    </p>
-                    <small className="text-muted">{formatTime(notification.rejectedAt || notification.createdAt)}</small>
-                  </div>
-                  {!notification.isSeen && (
-                    <span className="badge bg-primary">Mới</span>
-                  )}
-                </div>
-                {!notification.isSeen && (
-                  <button
-                    className="btn btn-sm btn-outline-secondary mt-2"
-                    onClick={() => handleMarkAsRead(notification.id)}
-                  >
-                    <i className="ti ti-check me-1"></i>
-                    Đánh dấu đã đọc
-                  </button>
-                )}
+                <span className="notification-time">{formatTime(notification.createdAt)}</span>
               </div>
             </div>
+            
+            {notification.isSeen ? null : <span className="unread-dot"></span>}
           </div>
         );
 
       default:
         return (
-          <div className="notification-item" data-id={notification.id}>
-            <div className="d-flex align-items-start">
-              <div className="flex-shrink-0 me-3">
-                <div className="notification-icon bg-info text-white rounded-circle d-flex align-items-center justify-content-center"
-                     style={{ width: '50px', height: '50px', fontSize: '24px' }}>
-                  {getNotificationIcon(notification.type)}
+          <div 
+            className={`notification-card clickable ${notification.isSeen ? '' : 'unread'}`}
+            onClick={() => handleMarkAsRead(notification)}
+            onKeyDown={(e) => e.key === 'Enter' && handleMarkAsRead(notification)}
+            role="button"
+            tabIndex={0}
+          >
+            {renderAvatar(notification)}
+            
+            <div className="notification-content">
+              <div className="notification-header">
+                <div className="notification-text">
+                  {notification.title || notification.content}
                 </div>
+                <span className="notification-time">{formatTime(notification.createdAt)}</span>
               </div>
-              <div className="flex-grow-1">
-                <div className="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h6 className="mb-1">{notification.title}</h6>
-                    <p className="mb-1">{notification.content}</p>
-                    <small className="text-muted">{formatTime(notification.createdAt)}</small>
-                  </div>
-                  {!notification.isSeen && (
-                    <span className="badge bg-primary">Mới</span>
-                  )}
-                </div>
-                {!notification.isSeen && (
-                  <button
-                    className="btn btn-sm btn-outline-secondary mt-2"
-                    onClick={() => handleMarkAsRead(notification.id)}
-                  >
-                    <i className="ti ti-check me-1"></i>
-                    Đánh dấu đã đọc
-                  </button>
-                )}
-              </div>
+              
+              {notification.content && notification.title && (
+                <p className="notification-subtitle">{notification.content}</p>
+              )}
             </div>
+            
+            {notification.isSeen ? null : <span className="unread-dot"></span>}
           </div>
         );
     }
   };
 
+  // Count for each tab
+  const friendRequestCount = notifications.filter(n => n.type === 'FRIEND_REQUEST').length;
+
   return (
     <>
       {/* Notifications Modal */}
       <div className="modal fade" id="notifications-modal">
-        <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable notifications-modal">
           <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">
-                <i className="ti ti-bell me-2"></i>
-                Thông Báo
+            {/* Header */}
+            <div className="modal-header notifications-header">
+              <div className="header-left">
+                <i className="ti ti-bell header-icon"></i>
+                <h4 className="modal-title">Thông Báo</h4>
                 {unreadCount > 0 && (
-                  <span className="badge bg-danger ms-2">{unreadCount}</span>
-                )}
-              </h4>
-              <button
-                type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              >
-                <i className="ti ti-x" />
-              </button>
-            </div>
-            <div className="modal-body" style={{ minHeight: '400px', maxHeight: '600px' }}>
-              {/* Actions */}
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <span className="text-muted">
-                    {notifications.length} thông báo
-                    {unreadCount > 0 && ` (${unreadCount} chưa đọc)`}
-                  </span>
-                </div>
-                {unreadCount > 0 && (
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={handleMarkAllAsRead}
-                  >
-                    <i className="ti ti-checks me-1"></i>
-                    Đánh dấu tất cả đã đọc
-                  </button>
+                  <span className="badge-count">{unreadCount}</span>
                 )}
               </div>
+              <div className="header-actions">
+                {unreadCount > 0 && (
+                  <button
+                    className="btn-mark-all"
+                    onClick={handleMarkAllAsRead}
+                    title="Đánh dấu tất cả đã đọc"
+                  >
+                    <i className="ti ti-checks"></i>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-close-modal"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                >
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+            </div>
 
-              {/* Notifications List */}
+            {/* Tabs */}
+            <div className="notifications-tabs">
+              <button
+                className={`tab-item ${activeTab === 'all' ? 'active' : ''}`}
+                onClick={() => setActiveTab('all')}
+              >
+                Tất cả
+              </button>
+              <button
+                className={`tab-item ${activeTab === 'unread' ? 'active' : ''}`}
+                onClick={() => setActiveTab('unread')}
+              >
+                Chưa đọc
+                {unreadCount > 0 && <span className="tab-badge">{unreadCount}</span>}
+              </button>
+              <button
+                className={`tab-item ${activeTab === 'friend_requests' ? 'active' : ''}`}
+                onClick={() => setActiveTab('friend_requests')}
+              >
+                Lời mời
+                {friendRequestCount > 0 && <span className="tab-badge">{friendRequestCount}</span>}
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="modal-body notifications-body">
               <OverlayScrollbarsComponent
                 options={{
                   scrollbars: {
                     autoHide: 'scroll',
-                    autoHideDelay: 1000,
+                    autoHideDelay: 800,
                   },
                 }}
-                style={{ maxHeight: '500px' }}
+                style={{ maxHeight: '60vh' }}
               >
-                {notifications.length === 0 ? (
-                  <div className="text-center py-5">
-                    <i className="ti ti-bell-off" style={{ fontSize: '80px', color: '#dee2e6' }}></i>
-                    <h5 className="text-muted mt-3 mb-2">Chưa có thông báo nào</h5>
-                    <p className="text-muted small">Bạn sẽ nhận được thông báo khi có hoạt động mới</p>
+                {filteredNotifications.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <i className="ti ti-bell-off"></i>
+                    </div>
+                    <h5>Không có thông báo</h5>
+                    <p>
+                      {activeTab === 'unread' && 'Bạn đã đọc hết tất cả thông báo!'}
+                      {activeTab === 'friend_requests' && 'Không có lời mời kết bạn nào'}
+                      {activeTab === 'all' && 'Bạn sẽ nhận được thông báo khi có hoạt động mới'}
+                    </p>
                   </div>
                 ) : (
                   <div className="notifications-list">
-                    {notifications.map((notification) => (
-                      <div 
-                        key={notification.id}
-                        className={`mb-3 p-3 border rounded ${!notification.isSeen ? 'bg-light' : ''}`}
-                        style={{ 
-                          transition: 'all 0.3s ease',
-                          cursor: 'pointer'
-                        }}
-                      >
+                    {filteredNotifications.map((notification) => (
+                      <div key={notification.id} className="notification-item-wrapper">
                         {renderNotificationContent(notification)}
                       </div>
                     ))}
@@ -418,12 +484,16 @@ const Notifications = () => {
                 )}
               </OverlayScrollbarsComponent>
             </div>
-            <div className="modal-footer">
+
+            {/* Footer */}
+            <div className="modal-footer notifications-footer">
+              <span className="notification-count">
+                {notifications.length} thông báo
+              </span>
               <Link
                 to="#"
-                className="btn btn-outline-primary w-100"
+                className="btn-close-footer"
                 data-bs-dismiss="modal"
-                aria-label="Close"
               >
                 Đóng
               </Link>
@@ -437,4 +507,3 @@ const Notifications = () => {
 };
 
 export default Notifications;
-

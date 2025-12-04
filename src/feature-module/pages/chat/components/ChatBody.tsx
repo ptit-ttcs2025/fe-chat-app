@@ -122,10 +122,7 @@ const ChatBody = ({
       }, 300);
     }
     
-    // Log for debugging
-    if (isLoadMoreCompleted) {
-      console.log('📜 Load more completed - NOT auto-scrolling');
-    }
+    // Không auto scroll khi load more; chỉ xử lý initial load
   }, [isLoadingMessages, displayMessages.length, selectedConversation?.id]);
   
   return (

@@ -13,17 +13,16 @@ export interface INotification {
     content: string;
     isSeen: boolean;
     createdAt: string;
+    updatedAt?: string;
     // Friend request specific fields
     requestId?: string;
+    recipientId?: string;
+    senderId?: string;
+    senderName?: string;
     senderDisplayName?: string;
     senderAvatarUrl?: string | null;
-    senderId?: string;
+    relatedId?: string;
     message?: string;
-    // Accepted/Rejected specific fields
-    acceptorDisplayName?: string;
-    acceptedAt?: string;
-    rejectorName?: string;
-    rejectedAt?: string;
 }
 
 export interface INotificationMeta {

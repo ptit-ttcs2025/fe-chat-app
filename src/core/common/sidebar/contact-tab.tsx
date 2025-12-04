@@ -8,6 +8,7 @@ import { useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
+import { useTotalUnreadCount } from '@/hooks/useUnreadMessages';
 
 const ContactTab = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +37,9 @@ const ContactTab = () => {
   
   // Get notification count
   const { unreadCount: notificationCount } = useNotifications();
+
+  // Tổng số tin nhắn chưa đọc (để user luôn thấy dù đang ở tab Bạn bè)
+  const { data: totalUnreadCount } = useTotalUnreadCount();
 
   // Group friends by first letter
   const groupedFriends = useMemo(() => {
@@ -71,7 +75,21 @@ const ContactTab = () => {
           <div className="slimscroll">
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
-                <h4 className="mb-3">Bạn bè</h4>
+                <h4 className="mb-3 d-flex align-items-center gap-2">
+                  <span>Bạn bè</span>
+                  {totalUnreadCount && totalUnreadCount > 0 && (
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #6338F6 0%, #764ba2 100%)',
+                        fontSize: '11px',
+                      }}
+                    >
+                      {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                    </span>
+                  )}
+                </h4>
                 <div className="d-flex align-items-center mb-3">
                   <Link
                     to="#"
