@@ -144,7 +144,7 @@ http.interceptors.response.use(
             try {
                 // Gọi API refresh token
                 const response = await axios.post(
-                    `${environment.apiBaseUrl}/api/v1/auth/refresh`,
+                    `${environment.apiBaseUrl}/auth/refresh`,
                     { 
                         refreshToken,
                         accessToken: tokenManager.getAccessToken()

@@ -20,8 +20,8 @@ import {
   ConversationFilter,
 } from './chat.type';
 
-// API Base URI
-const URI = '/api/v1';
+// API Base URI (baseURL đã có /api/v1 rồi)
+const URI = '';
 
 // ===========================
 // MESSAGE APIs

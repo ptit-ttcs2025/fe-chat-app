@@ -1,7 +1,7 @@
 import http from '@/lib/apiBase';
 import type { UnreadSummary, UnreadConversation } from '@/types/unread';
 
-const URI = '/api/v1';
+const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
 export const unreadApis = {
   /**

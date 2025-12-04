@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import {IAuth, IAuthResponse, IAuthUser, ILoginResponse, ISignupRequest} from './auth.type';
 
-const URI = '/api/v1/auth';
+const URI = '/auth'; // ✅ Fix: Bỏ /api/v1 vì baseURL đã có rồi
 
 export const authUri = {
     login: `${URI}/login`,

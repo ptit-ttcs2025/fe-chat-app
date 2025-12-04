@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/slices/auth/reducer';
@@ -6,12 +6,19 @@ import { useLogin } from '@/apis/auth/auth.api';
 import type { IAuth } from '@/apis/auth/auth.type';
 import { all_routes } from '@/feature-module/router/all_routes';
 import ImageWithBasePath from '@/core/common/imageWithBasePath';
+import authStorage from '@/lib/authStorage';
 
 const Signin: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const dispatch = useDispatch();
     const { mutate: login, isPending } = useLogin();
+
+    // ✅ Clear tokens/cookies khi vào trang login
+    useEffect(() => {
+        console.log('🧹 Clearing old tokens on login page...');
+        authStorage.clearAuthData();
+    }, []);
 
     // Form state
     const [formData, setFormData] = useState<IAuth>({
