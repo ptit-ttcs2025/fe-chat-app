@@ -94,7 +94,7 @@ const SettingsTab = () => {
         URL.revokeObjectURL(avatarPreview);
       }
     };
-  }, []);
+  }, [avatarPreview]);
 
   const togglePasswordVisibility = (field: PasswordField) => {
     setPasswordVisibility((prevState) => ({
