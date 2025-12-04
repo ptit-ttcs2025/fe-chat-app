@@ -35,6 +35,54 @@ export interface ISearchUserResponse {
     data: ISearchUserData;
 }
 
+// ===================== NEW SEARCH USERS FOR FRIEND TYPES =====================
+// Áp dụng theo SEARCH_USERS_FOR_FRIEND_GUIDE.md
+
+/**
+ * Trạng thái mối quan hệ bạn bè
+ */
+export type FriendshipStatus = 'NONE' | 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED';
+
+/**
+ * Trạng thái online/offline
+ */
+export type UserStatus = 'ONLINE' | 'OFFLINE' | 'AWAY' | 'BUSY';
+
+/**
+ * Thông tin người dùng dùng cho flow kết bạn
+ * (mapping với API GET /friends/search-users)
+ */
+export interface IUserForFriend {
+    id: string;
+    fullName: string;
+    email: string;
+    avatarUrl: string | null;
+    status: UserStatus;
+    bio: string | null;
+    friendshipStatus: FriendshipStatus;
+    pendingRequestId: string | null;
+}
+
+export interface ISearchUsersForFriendParams {
+    keyword?: string;
+    pageNumber?: number;
+    pageSize?: number;
+    sortBy?: string;
+    isDescending?: boolean;
+}
+
+export interface IPaginationMeta {
+    pageNumber: number;
+    pageSize: number;
+    totalPages: number;
+    totalElements: number;
+}
+
+export interface IPaginatedResponse<T> {
+    meta: IPaginationMeta;
+    results: T[];
+}
+
 export interface IAddFriendRequest {
     receiverId: string;
     message?: string;
