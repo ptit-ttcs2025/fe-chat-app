@@ -14,8 +14,8 @@ import '../../../../node_modules/swiper/swiper.css';
 import "overlayscrollbars/overlayscrollbars.css";
 
 // Components
-import ImageWithBasePath from '../imageWithBasePath';
 import { all_routes } from '../../../feature-module/router/all_routes';
+import { isValidUrl, getInitial, getAvatarColor } from '@/lib/avatarHelper';
 
 // API Hooks
 import { useChatConversations } from '@/hooks/useChatConversations';
@@ -169,6 +169,46 @@ const ChatTab = () => {
   const getConversationAvatar = (conv: IConversation) => {
     return conv.avatarUrl || 'assets/img/profiles/avatar-default.jpg';
   };
+
+  // Avatar Component với fallback
+  const Avatar = ({ src, name, className = "" }: { src?: string; name?: string; className?: string }) => {
+    const [imgError, setImgError] = useState(false);
+    const avatarName = name || "User";
+    const initial = getInitial(avatarName);
+    const bgColor = getAvatarColor(avatarName);
+    const hasValidUrl = isValidUrl(src) && !imgError;
+
+    if (hasValidUrl && src) {
+      const fullSrc = src.startsWith('http') ? src : `${import.meta.env.VITE_IMG_PATH || ''}${src}`;
+      return (
+        <img
+          src={fullSrc}
+          className={className}
+          alt={avatarName}
+          onError={() => setImgError(true)}
+          style={{ objectFit: 'cover' }}
+        />
+      );
+    }
+
+    // Fallback: Avatar với chữ cái đầu
+    return (
+      <div
+        className={`${className} d-inline-flex align-items-center justify-content-center`}
+        style={{
+          width: "40px",
+          height: "40px",
+          borderRadius: "50%",
+          backgroundColor: bgColor,
+          color: "#fff",
+          fontWeight: "600",
+          fontSize: "16px",
+        }}
+      >
+        {initial}
+      </div>
+    );
+  };
   
   const getLastMessagePreview = (conv: IConversation) => {
     if (!conv.lastMessage) return 'Chưa có tin nhắn';
@@ -203,10 +243,10 @@ const ChatTab = () => {
         }}
       >
         <div className={`avatar avatar-lg ${conv.isOnline ? 'online' : ''} me-2`}>
-          <ImageWithBasePath
+          <Avatar
             src={getConversationAvatar(conv)}
+            name={getConversationName(conv)}
             className={`rounded-circle ${conv.pinned ? 'border border-warning border-2' : ''}`}
-            alt={getConversationName(conv)}
           />
         </div>
         <div className="chat-user-info">
@@ -426,9 +466,9 @@ const ChatTab = () => {
                             }}
                           >
                             <div className="avatar avatar-lg online d-block">
-                              <ImageWithBasePath
+                              <Avatar
                                 src={getConversationAvatar(conv)}
-                                alt={getConversationName(conv)}
+                                name={getConversationName(conv)}
                                 className="rounded-circle"
                               />
                             </div>

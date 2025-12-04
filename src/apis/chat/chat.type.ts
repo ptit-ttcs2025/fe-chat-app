@@ -177,6 +177,24 @@ export interface PaginatedResponse<T> {
   results: T[];             // Array of items
 }
 
+// ===========================
+// CURSOR PAGINATION (Optimized for chat scroll)
+// ===========================
+
+export interface CursorInfo {
+  hasMore: boolean;           // Còn tin nhắn cũ hơn để load
+  hasNewer: boolean;          // Còn tin nhắn mới hơn
+  oldestMessageId: string | null;    // ID tin nhắn cũ nhất (dùng cho scroll up)
+  newestMessageId: string | null;    // ID tin nhắn mới nhất (dùng cho load newer)
+  count: number;              // Số tin nhắn trong response hiện tại
+  pageSize: number;           // Page size được request
+}
+
+export interface CursorPaginatedResponse<T> {
+  messages: T[];              // Messages (sorted DESC - mới nhất trước)
+  cursor: CursorInfo;         // Cursor metadata
+}
+
 // API Response (theo API_DOCUMENTATION.md)
 export interface ApiResponse<T> {
   statusCode: number;        // HTTP status code
