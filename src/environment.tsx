@@ -282,21 +282,4 @@ export const log = {
     },
 };
 
-// ===========================
-// ENVIRONMENT INFO LOG
-// ===========================
-if (!environment.production && environment.development.enableLogging) {
-    console.group('🔧 Environment Configuration');
-    console.log('Mode:', environment.production ? 'Production' : 'Development');
-    console.log('API Base URL:', environment.apiBaseUrl);
-    console.log('WebSocket URL:', environment.wsUrl);
-    console.log('Image URL:', environment.imageURL);
-    console.log('Enabled Features:',
-        Object.entries(environment.features)
-            .filter(([_, enabled]) => enabled)
-            .map(([feature]) => feature)
-    );
-    console.groupEnd();
-}
-
 export default environment;

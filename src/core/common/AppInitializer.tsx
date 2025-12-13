@@ -5,6 +5,7 @@ import authStorage from '@/lib/authStorage';
 import { authApis } from '@/apis/auth/auth.api';
 import websocketService from '@/core/services/websocket.service';
 import { RootState } from '@/store/store';
+import { environment } from '../../environment';
 
 /**
  * Component này chạy khi app khởi động
@@ -60,8 +61,8 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
     // ✅ Kết nối WebSocket khi user đã đăng nhập
     useEffect(() => {
         if (user && accessToken) {
-            const baseUrl = 'http://localhost:8080/api/v1'; // Hoặc lấy từ environment
-            console.log('🔌 Connecting WebSocket for user:', user.username);
+            const baseUrl = environment.apiBaseUrl;
+            console.log('🔌 Connecting WebSocket for user:', user.username, 'to:', baseUrl);
             websocketService.connect(baseUrl, accessToken, user.id);
         } else {
             // Disconnect nếu user đăng xuất
