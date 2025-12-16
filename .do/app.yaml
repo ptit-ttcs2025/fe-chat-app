@@ -1,0 +1,56 @@
+name: ptit-chat-frontend
+region: sin
+
+services:
+  - name: web
+    # GitHub repository configuration
+    github:
+      repo: YOUR_USERNAME/YOUR_REPO  # ⚠️ Thay bằng repository thực tế
+      branch: main
+      deploy_on_push: true
+
+    # Build configuration
+    build_command: npm run build
+    output_dir: dist
+
+    # Environment
+    environment_slug: node-js
+
+    # Instance configuration
+    instance_count: 1
+    instance_size_slug: basic-xxs  # $5/month - 512MB RAM
+
+    # Environment variables
+    envs:
+      - key: VITE_API_BASE_URL
+        value: https://ttcs-chat-app-z86ml.ondigitalocean.app/api/v1
+      - key: VITE_WS_URL
+        value: wss://ttcs-chat-app-z86ml.ondigitalocean.app/api/v1/ws
+      - key: VITE_IMAGE_URL
+        value: /assets/img/
+      - key: VITE_APP_VERSION
+        value: "1.0.0"
+      - key: NODE_ENV
+        value: production
+
+    # Routes
+    routes:
+      - path: /
+
+    # Health check
+    health_check:
+      http_path: /
+
+# Optional: Static site configuration (nếu không cần server-side)
+# static_sites:
+#   - name: frontend
+#     github:
+#       repo: YOUR_USERNAME/YOUR_REPO
+#       branch: main
+#       deploy_on_push: true
+#     build_command: npm run build
+#     output_dir: dist
+#     environment_slug: node-js
+#     routes:
+#       - path: /
+
