@@ -1,12 +1,36 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path';
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        viteStaticCopy({
+            targets: [
+                {
+                    src: 'src/assets',
+                    dest: './'
+                }
+            ]
+        })
+    ],
     base: '/',
+    publicDir: 'public',
     define: {
         global: 'window',
+    },
+    build: {
+        outDir: 'dist',
+        assetsDir: 'assets',
+        copyPublicDir: true,
+        rollupOptions: {
+            output: {
+                assetFileNames: 'assets/[name]-[hash][extname]',
+                chunkFileNames: 'assets/[name]-[hash].js',
+                entryFileNames: 'assets/[name]-[hash].js',
+            }
+        }
     },
     resolve: {
         alias: {

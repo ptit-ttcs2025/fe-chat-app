@@ -8,7 +8,8 @@
 // PATH CONFIGURATION (từ template cũ)
 // ===========================
 export const base_path = '/'; // Ví dụ: '/react/template/'
-export const img_path = '/src/';
+// Fix: Use /assets/ for production (Vite build output) and /src/ for development
+export const img_path = import.meta.env.PROD ? '/assets/' : '/src/';
 
 // ===========================
 // MAIN ENVIRONMENT OBJECT
