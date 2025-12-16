@@ -4,7 +4,43 @@ Thư mục này chứa tất cả scripts và config files cần thiết để d
 
 ## 📁 Nội dung
 
-### 1. `server-setup.sh`
+### 1. **App Platform Deploy (Khuyến nghị)** ⭐
+
+#### `app-spec.yaml`
+**Mục đích**: Deploy lên Digital Ocean App Platform (Static Site)  
+**Ưu điểm:**
+- ⚡ Tự động build & deploy khi push code
+- 🚀 CDN global distribution
+- 💰 Chi phí thấp ($5/tháng)
+- 🔧 Zero DevOps required
+- ✅ Auto SSL/HTTPS
+
+**Quick Start:**
+```bash
+# 1. Commit changes
+git add .
+git commit -m "fix: WebSocket configuration"
+git push origin main
+
+# 2. Vào Digital Ocean Dashboard
+# - App Platform → Create App
+# - Import từ GitHub repo
+# - Copy nội dung từ deploy/app-spec.yaml
+# - Paste vào App Spec Editor
+# - Click "Create Resources"
+
+# 3. Configure Environment Variables (trên DO Dashboard):
+VITE_API_BASE_URL=https://your-backend.ondigitalocean.app/api/v1
+VITE_WS_URL=https://your-backend.ondigitalocean.app/api/v1/ws
+VITE_IMAGE_URL=/assets/img/
+NODE_ENV=production
+```
+
+**📖 Chi tiết:** Xem [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md)
+
+---
+
+### 2. `server-setup.sh`
 **Mục đích**: Tự động cài đặt và cấu hình server Ubuntu 22.04  
 **Chạy trên**: Digital Ocean Droplet (lần đầu tiên)
 

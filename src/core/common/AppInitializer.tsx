@@ -61,9 +61,9 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
     // ✅ Kết nối WebSocket khi user đã đăng nhập
     useEffect(() => {
         if (user && accessToken) {
-            const baseUrl = environment.apiBaseUrl;
-            console.log('🔌 Connecting WebSocket for user:', user.username, 'to:', baseUrl);
-            websocketService.connect(baseUrl, accessToken, user.id);
+            const wsUrl = environment.wsUrl;
+            console.log('🔌 Connecting WebSocket for user:', user.username, 'to:', wsUrl);
+            websocketService.connect(wsUrl, accessToken, user.id);
         } else {
             // Disconnect nếu user đăng xuất
             if (websocketService.getConnectionStatus()) {

@@ -32,16 +32,15 @@ const WebSocketInitializer: React.FC = () => {
       return;
     }
 
-    // ✅ Sử dụng environment.wsUrl thay vì tính toán từ apiBaseUrl
+    // ✅ Sử dụng environment.wsUrl trực tiếp
     // wsUrl đã có đầy đủ protocol và path: ws://... hoặc wss://...
-    // Cần bỏ /ws suffix vì websocket.service.ts sẽ tự thêm /ws
-    const baseUrl = environment.wsUrl.replace(/\/ws$/, '');
+    const wsUrl = environment.wsUrl;
 
-    console.log('🔗 WebSocket connecting to:', baseUrl);
+    console.log('🔌 Initializing WebSocket connection for user:', user.id, 'to:', wsUrl);
 
     try {
       // Connect WebSocket
-      websocketService.connect(baseUrl, token, user.id);
+      websocketService.connect(wsUrl, token, user.id);
     } catch (error) {
       console.error('❌ WebSocket: Connection failed:', error);
     }

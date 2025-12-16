@@ -6,10 +6,10 @@ Real-time chat application for PTIT students built with React + TypeScript + Red
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **State Management**: Redux Toolkit + RTK Query
-- **Real-time**: Socket.IO Client / WebSocket
+- **Real-time**: SockJS + STOMP over WebSocket
 - **Styling**: SCSS + CSS Modules
 - **Build Tool**: Vite
-- **Deployment**: Digital Ocean + Nginx
+- **Deployment**: Digital Ocean App Platform
 
 ## 📦 Quick Start
 
@@ -36,7 +36,33 @@ npm run preview:prod
 
 ## 🌐 Deployment
 
-### Quick Deploy to Digital Ocean
+### ⭐ Quick Deploy to Digital Ocean App Platform (Recommended)
+
+**5-minute deployment:**
+
+```bash
+# 1. Commit and push
+git add .
+git commit -m "deploy: ready for production"
+git push origin main
+
+# 2. Digital Ocean Dashboard:
+# → App Platform → Create App
+# → Import GitHub repository
+# → Copy content from deploy/app-spec.yaml
+# → Paste into App Spec Editor
+# → Click "Create Resources"
+
+# 3. Done! ✅
+```
+
+**📖 Detailed Guides:**
+- [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) - Quick reference guide
+- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - Complete deployment guide
+- [WEBSOCKET_CONFIG.md](./WEBSOCKET_CONFIG.md) - WebSocket configuration explained
+- [PRE_DEPLOY_CHECKLIST.md](./PRE_DEPLOY_CHECKLIST.md) - Pre-deployment checklist
+
+### Alternative: Manual Server Deploy
 
 1. **Setup server** (one-time):
    ```bash

@@ -43,7 +43,7 @@ class WebSocketService {
         return WebSocketService.instance;
     }
 
-    connect(baseUrl: string, token: string, userId: string): void {
+    connect(wsUrl: string, token: string, userId: string): void {
         if (this.isConnected && this.currentUserId === userId) {
             console.log('WebSocket already connected for user:', userId);
             return;
@@ -57,11 +57,11 @@ class WebSocketService {
 
         this.currentUserId = userId;
 
-        console.log('🔗 Connecting WebSocket...', { baseUrl, userId });
+        console.log('🔌 Connecting WebSocket for user:', userId, 'to:', wsUrl);
 
         // Create STOMP client
         this.stompClient = new Client({
-            webSocketFactory: () => new SockJS(`${baseUrl}/ws`) as any,
+            webSocketFactory: () => new SockJS(wsUrl) as any,
             connectHeaders: {
                 'Authorization': `Bearer ${token}`
             },
@@ -87,7 +87,7 @@ class WebSocketService {
             onDisconnect: () => {
                 console.log('👋 WebSocket disconnected');
                 this.isConnected = false;
-                this.handleReconnect(baseUrl, token, userId);
+                this.handleReconnect(wsUrl, token, userId);
             },
         });
 
@@ -133,7 +133,7 @@ class WebSocketService {
         }
     }
 
-    private handleReconnect(baseUrl: string, token: string, userId: string): void {
+    private handleReconnect(wsUrl: string, token: string, userId: string): void {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.error('❌ Max reconnection attempts reached');
             return;
@@ -144,7 +144,7 @@ class WebSocketService {
 
         setTimeout(() => {
             if (!this.isConnected) {
-                this.connect(baseUrl, token, userId);
+                this.connect(wsUrl, token, userId);
             }
         }, this.reconnectDelay);
     }

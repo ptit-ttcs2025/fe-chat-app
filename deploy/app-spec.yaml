@@ -1,0 +1,83 @@
+# Digital Ocean App Platform - App Spec
+# Copy toàn bộ nội dung này và paste vào App Spec Editor
+
+alerts:
+- rule: DEPLOYMENT_FAILED
+- rule: DOMAIN_FAILED
+
+features:
+- buildpack-stack=ubuntu-22
+
+name: fe-ttcs-chat-app
+region: sgp
+
+# ===========================
+# STATIC SITE (Khuyến nghị)
+# ===========================
+static_sites:
+- name: fe-chat-app
+
+  # GitHub Configuration
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: ptit-ttcs2025/fe-chat-app
+
+  # Build Configuration
+  source_dir: /
+  output_dir: /dist
+  environment_slug: node-js
+  build_command: npm install && npm run build
+
+  # Environment Variables (BUILD_TIME)
+  envs:
+  - key: NODE_ENV
+    scope: BUILD_TIME
+    value: production
+    type: SECRET
+
+  - key: VITE_API_BASE_URL
+    scope: BUILD_TIME
+    value: https://ttcs-chat-app-z86ml.ondigitalocean.app/api/v1
+    type: SECRET
+
+  - key: VITE_WS_URL
+    scope: BUILD_TIME
+    value: https://ttcs-chat-app-z86ml.ondigitalocean.app/api/v1/ws
+    type: SECRET
+
+  - key: VITE_IMAGE_URL
+    scope: BUILD_TIME
+    value: /assets/img/
+    type: SECRET
+
+  # Routing
+  routes:
+  - path: /
+
+  # Error Document (cho React SPA routing)
+  error_document: /index.html
+
+# ===========================
+# LƯU Ý QUAN TRỌNG
+# ===========================
+#
+# 1. SỬ DỤNG STATIC SITE:
+#    - Chi phí thấp hơn
+#    - Tốc độ nhanh hơn (CDN)
+#    - Phù hợp cho React SPA
+#
+# 2. ENVIRONMENT VARIABLES:
+#    - Tất cả phải có scope: BUILD_TIME
+#    - VITE_WS_URL sử dụng https:// (KHÔNG dùng wss://)
+#    - SockJS tự động upgrade lên WebSocket
+#
+# 3. ERROR DOCUMENT:
+#    - error_document: /index.html
+#    - Cho phép React Router hoạt động (SPA routing)
+#
+# 4. OUTPUT DIR:
+#    - output_dir: /dist (Vite build output)
+#
+# ===========================
+
