@@ -10,7 +10,9 @@
     "build:dev": "tsc -b && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "preview:prod": "vite preview --mode production"
+    "preview:prod": "vite preview --mode production",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy/quick-deploy.ps1",
+    "deploy:bash": "bash ./deploy/quick-deploy.sh"
   },
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",

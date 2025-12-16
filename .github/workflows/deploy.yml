@@ -1,0 +1,176 @@
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches:
+      - main
+      - production
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  NODE_VERSION: '20'
+  APP_DIR: '/var/www/ptit-chat'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      #########################################
+      # 1. Checkout Code
+      #########################################
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      #########################################
+      # 2. Setup Node.js
+      #########################################
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      #########################################
+      # 3. Install Dependencies
+      #########################################
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      #########################################
+      # 4. Run Linter (Optional)
+      #########################################
+      - name: 🔍 Lint code
+        run: npm run lint
+        continue-on-error: true  # Don't fail deployment on lint errors
+
+      #########################################
+      # 5. Build Production
+      #########################################
+      - name: 🏗️ Build production
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
+          VITE_IMAGE_URL: ${{ secrets.VITE_IMAGE_URL }}
+          VITE_APP_VERSION: ${{ github.sha }}
+
+      #########################################
+      # 6. Create deployment package
+      #########################################
+      - name: 📦 Create deployment package
+        run: |
+          cd dist
+          tar -czf ../deploy.tar.gz .
+          cd ..
+
+      #########################################
+      # 7. Upload to Server
+      #########################################
+      - name: 🚀 Upload to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "deploy.tar.gz"
+          target: "/tmp/"
+
+      #########################################
+      # 8. Deploy on Server
+      #########################################
+      - name: 🔄 Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Create backup
+            if [ -d "${{ env.APP_DIR }}/dist" ]; then
+              echo "Creating backup..."
+              sudo cp -r ${{ env.APP_DIR }}/dist ${{ env.APP_DIR }}/dist.backup.$(date +%Y%m%d_%H%M%S)
+            fi
+            
+            # Extract new build
+            echo "Extracting new build..."
+            sudo mkdir -p ${{ env.APP_DIR }}/dist
+            sudo tar -xzf /tmp/deploy.tar.gz -C ${{ env.APP_DIR }}/dist
+            
+            # Set permissions
+            echo "Setting permissions..."
+            sudo chown -R www-data:www-data ${{ env.APP_DIR }}/dist
+            sudo chmod -R 755 ${{ env.APP_DIR }}/dist
+            
+            # Reload Nginx
+            echo "Reloading Nginx..."
+            sudo nginx -t && sudo systemctl reload nginx
+            
+            # Cleanup
+            echo "Cleaning up..."
+            rm -f /tmp/deploy.tar.gz
+            
+            # Keep only last 3 backups
+            cd ${{ env.APP_DIR }}
+            ls -t dist.backup.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
+            
+            echo "Deployment completed successfully! 🎉"
+
+      #########################################
+      # 9. Health Check
+      #########################################
+      - name: 🏥 Health check
+        run: |
+          sleep 5
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DROPLET_IP }}/health)
+          if [ $response -eq 200 ]; then
+            echo "✅ Health check passed!"
+          else
+            echo "❌ Health check failed with status: $response"
+            exit 1
+          fi
+
+      #########################################
+      # 10. Notify Success (Optional)
+      #########################################
+      - name: 📢 Notify success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "🌐 Site: http://${{ secrets.DROPLET_IP }}"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 By: ${{ github.actor }}"
+
+  #########################################
+  # Rollback Job (Manual only)
+  #########################################
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    needs: build-and-deploy
+    environment: production
+
+    steps:
+      - name: 🔙 Rollback to previous version
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ env.APP_DIR }}
+            latest_backup=$(ls -t dist.backup.* 2>/dev/null | head -n1)
+            if [ -n "$latest_backup" ]; then
+              echo "Rolling back to: $latest_backup"
+              sudo rm -rf dist
+              sudo cp -r $latest_backup dist
+              sudo chown -R www-data:www-data dist
+              sudo nginx -t && sudo systemctl reload nginx
+              echo "Rollback completed!"
+            else
+              echo "No backup found for rollback!"
+              exit 1
+            fi
+
