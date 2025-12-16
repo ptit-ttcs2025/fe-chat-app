@@ -1,24 +1,17 @@
 name: ptit-chat-frontend
 region: sin
 
-services:
-  - name: web
+static_sites:
+  - name: frontend
     # GitHub repository configuration
     github:
-      repo: YOUR_USERNAME/YOUR_REPO  # ⚠️ Thay bằng repository thực tế
+      repo: ptit-ttcs2025/fe-chat-app
       branch: main
       deploy_on_push: true
 
     # Build configuration
     build_command: npm run build
     output_dir: dist
-
-    # Environment
-    environment_slug: node-js
-
-    # Instance configuration
-    instance_count: 1
-    instance_size_slug: basic-xxs  # $5/month - 512MB RAM
 
     # Environment variables
     envs:
@@ -37,18 +30,8 @@ services:
     routes:
       - path: /
 
-    # Health check
-    health_check:
-      http_path: /
-
-# Optional: Static site configuration (nếu không cần server-side)
-# static_sites:
-#   - name: frontend
-#     github:
-#       repo: YOUR_USERNAME/YOUR_REPO
-#       branch: main
-#       deploy_on_push: true
-#     build_command: npm run build
+    # Catchall route for React Router
+    catchall_document: index.html
 #     output_dir: dist
 #     environment_slug: node-js
 #     routes:
