@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite --mode development",
     "dev:prod": "vite --mode production",
+    "prebuild": "node scripts/copy-assets.js",
     "build": "vite build --mode production",
     "build:strict": "tsc -b && vite build --mode production",
     "build:dev": "tsc -b && vite build --mode development",

@@ -15,9 +15,12 @@ lerna-debug.log*
 .env.*.local
 
 node_modules
-# dist
+dist
 dist-ssr
 *.local
+
+# Copied assets (generated from src/assets)
+public/assets/
 
 # Editor directories and files
 .vscode/*

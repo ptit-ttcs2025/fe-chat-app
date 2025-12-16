@@ -27,6 +27,20 @@ const resolveSrc = (src: string): string => {
     return src;
   }
 
+  // FIX: Nếu src bắt đầu bằng 'assets/', xử lý đặc biệt
+  // VD: 'assets/img/logo.png' → '/assets/img/logo.png' (production)
+  // hoặc '/src/assets/img/logo.png' (development)
+  if (src.startsWith('assets/')) {
+    // Production: img_path = '/assets/', src = 'assets/img/logo.png'
+    // → Bỏ 'assets/' từ src để tránh duplicate: '/assets/' + 'img/logo.png'
+    // Development: img_path = '/src/', src = 'assets/img/logo.png'
+    // → Giữ nguyên: '/src/' + 'assets/img/logo.png'
+    if (import.meta.env.PROD) {
+      // Production: remove 'assets/' prefix
+      return img_path + src.replace(/^assets\//, '');
+    }
+  }
+
   // Ngược lại ghép với img_path mặc định
   return `${img_path}${src}`;
 };
