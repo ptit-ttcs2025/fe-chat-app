@@ -56,12 +56,6 @@ git push origin main
 # 3. Done! ✅
 ```
 
-**📖 Detailed Guides:**
-- [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) - Quick reference guide
-- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - Complete deployment guide
-- [WEBSOCKET_CONFIG.md](./WEBSOCKET_CONFIG.md) - WebSocket configuration explained
-- [PRE_DEPLOY_CHECKLIST.md](./PRE_DEPLOY_CHECKLIST.md) - Pre-deployment checklist
-
 ### Alternative: Manual Server Deploy
 
 1. **Setup server** (one-time):

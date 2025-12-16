@@ -12,6 +12,9 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { base_path } from './environment.tsx';
 import '@ant-design/v5-patch-for-react-19';
 
+// Import WebSocket test utilities (available in console)
+import '@/utils/testWebSocket';
+
 // CSS imports
 import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
 import '../node_modules/@fortawesome/fontawesome-free/css/all.min.css'
