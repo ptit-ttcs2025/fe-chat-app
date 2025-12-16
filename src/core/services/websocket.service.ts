@@ -57,11 +57,15 @@ class WebSocketService {
 
         this.currentUserId = userId;
 
-        console.log('🔌 Connecting WebSocket for user:', userId, 'to:', wsUrl);
+        // ✅ SockJS yêu cầu URL HTTP/HTTPS, không phải ws:// hay wss://
+        // Convert wss:// -> https:// và ws:// -> http:// nếu cần
+        const httpUrl = wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+        
+        console.log('🔌 Connecting WebSocket for user:', userId, 'to:', httpUrl);
 
         // Create STOMP client
         this.stompClient = new Client({
-            webSocketFactory: () => new SockJS(wsUrl) as any,
+            webSocketFactory: () => new SockJS(httpUrl) as any,
             connectHeaders: {
                 'Authorization': `Bearer ${token}`
             },

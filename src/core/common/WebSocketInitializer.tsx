@@ -33,7 +33,7 @@ const WebSocketInitializer: React.FC = () => {
     }
 
     // ✅ Sử dụng environment.wsUrl trực tiếp
-    // wsUrl đã có đầy đủ protocol và path: ws://... hoặc wss://...
+    // wsUrl với HTTP/HTTPS protocol (SockJS sẽ tự động nâng cấp lên WebSocket)
     const wsUrl = environment.wsUrl;
 
     console.log('🔌 Initializing WebSocket connection for user:', user.id, 'to:', wsUrl);

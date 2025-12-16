@@ -22,7 +22,8 @@ export const environment = {
     // API & WebSocket URLs
     // ===========================
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
-    wsUrl: import.meta.env.VITE_WS_URL || 'ws://localhost:8080/api/v1/ws',
+    // ⚠️ Lưu ý: Với SockJS, sử dụng HTTP/HTTPS URL, không phải ws:// hay wss://
+    wsUrl: import.meta.env.VITE_WS_URL || 'http://localhost:8080/api/v1/ws',
 
     // Image serving URL (có thể từ CDN hoặc local)
     imageURL: import.meta.env.VITE_IMAGE_URL || '/assets/img/',
