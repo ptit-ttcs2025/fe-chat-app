@@ -24,10 +24,10 @@ const ForgotPassword = () => {
                 <div className="card">
                   <div className="card-body">
                     <div className=" mb-4">
-                      <h2 className="mb-2">Forgot Password?</h2>
+                      <h2 className="mb-2">Quên mật khẩu?</h2>
                       <p className="mb-0 fs-16">
-                        Enter your email, we will send you a otp to reset your
-                        password.
+                        Nhập email của bạn, chúng tôi sẽ gửi mã OTP để đặt lại
+                        mật khẩu.
                       </p>
                     </div>
                     <div className="row">
@@ -51,16 +51,16 @@ const ForgotPassword = () => {
                       to={routes.otp}
                       className="btn btn-primary w-100 justify-content-center"
                     >
-                      Send OTP
+                      Gửi mã OTP
                     </Link>
                   </div>
                 </div>
                 <div className="mt-5 text-center">
                   <p className="mb-0 text-gray-9">
                     {" "}
-                    <i className="ti ti-circle-arrow-left" /> Back to{" "}
+                    <i className="ti ti-circle-arrow-left" /> Quay lại{" "}
                     <Link to={routes.signin} className="link-primary">
-                      Sign In
+                      Đăng nhập
                     </Link>
                   </p>
                 </div>
@@ -83,16 +83,16 @@ const ForgotPassword = () => {
           </div>
           <div className="floating-avatar ">
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-12.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-03.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-05.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
           </div>
           <div className="text-center">

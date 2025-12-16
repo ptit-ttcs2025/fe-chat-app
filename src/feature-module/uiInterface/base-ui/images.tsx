@@ -60,7 +60,7 @@ const Images = () => {
                       </div>
                       <div className="col-sm-3">
                         <ImageWithBasePath
-                          src="assets/admin/img/profiles/avatar-02.jpg"
+                          src="assets/admin/img/profiles/avatar-02.png"
                           alt="image"
                           className="img-thumbnail rounded-pill"
                           width={133}

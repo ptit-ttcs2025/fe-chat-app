@@ -28,7 +28,7 @@ const LogoutModal: React.FC<props> = ({
             {/* Logout */}
             <Modal centered show={showModal}>
                 <div className="modal-header">
-                    <h4 className="modal-title">Logout</h4>
+                    <h4 className="modal-title">Đăng xuất</h4>
                     <button
                         type="button"
                         className="btn-close"

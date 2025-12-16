@@ -5,6 +5,7 @@ import ImageWithBasePath from '../../core/common/imageWithBasePath';
 import { ISignupRequest } from "src/apis/auth/auth.type";
 import { useSignup } from "@/apis/auth/auth.api.ts";
 import { message } from "antd";
+// import { signupSchema } from 'src/apis/auth/auth.schema';
 
 
 const Signup = () => {
@@ -55,7 +56,7 @@ const Signup = () => {
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return false;
     }, [formData]);
 
     const handleChange = useCallback( (field: keyof ISignupRequest, value: string) => {
@@ -76,11 +77,10 @@ const Signup = () => {
         if (!validateForm()) return; // Validate form
 
         signup(formData, {
-            onSuccess: (response) => {
+            onSuccess: () => {
                 message.success('Đăng ký thành công!');
-                //TODO: Có thể thêm xác thực email ở đây
-                // TODO: Có thể tự động login sau khi đăng ký thành công
-                navigate(routes.signin, {replace: true});
+                //TODO: Có thể thêm xác thực OTP hoặc tự động login ở đây
+                navigate(routes.signin, {replace: true}); // Chuyển hướng đến trang đăng nhập
             },
             onError: (error: any) => {
                 const errorMsg = error?.response?.data?.message ||
@@ -294,16 +294,16 @@ const Signup = () => {
                             {/* Floating Avatars */}
                             <div className="floating-avatar">
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-12.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-03.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-05.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                             </div>
 

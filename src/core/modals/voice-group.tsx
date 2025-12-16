@@ -250,7 +250,7 @@ const VoiceGroup = () => {
                       <div className="d-flex justify-content-center align-items-center">
                         <span className="avatar avatar-xxxl bg-soft-primary rounded-circle p-2">
                           <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
+                            src="assets/img/profiles/avatar-02.png"
                             className="rounded-circle"
                             alt="user"
                           />

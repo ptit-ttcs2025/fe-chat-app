@@ -17,7 +17,7 @@ const StartChat = () => {
           />
         </span>
         <h6>
-          Welcome! Salom
+          Chào mừng trở lại!
           <ImageWithBasePath
             src="assets/img/icons/emoji-01.svg"
             alt="Image"
@@ -25,7 +25,7 @@ const StartChat = () => {
           />
         </h6>
       </div>
-      <p>Choose a person or group to start chat with them.</p>
+      <p>Chọn một người hoặc nhóm để bắt đầu trò chuyện với họ.</p>
       <Link
         to="#"
         className="btn btn-primary"
@@ -33,7 +33,7 @@ const StartChat = () => {
         data-bs-target="#new-chat"
       >
         <i className="ti ti-location me-2" />
-        Invite Contacts
+        Mời Liên Hệ
       </Link>
     </div>
   </div>

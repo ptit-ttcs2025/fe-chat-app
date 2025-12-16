@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import {IAuth, IAuthResponse, IAuthUser, ILoginResponse, ISignupRequest} from './auth.type';
 
-const URI = '/api/v1/auth';
+const URI = '/auth'; // ✅ Fix: Bỏ /api/v1 vì baseURL đã có rồi
 
 export const authUri = {
     login: `${URI}/login`,
@@ -53,21 +53,32 @@ export const authApis = {
         refreshToken: string;
     }> => {
         const refreshToken = authStorage.getRefreshToken();
+        const accessToken = authStorage.getAccessToken();
 
         if (!refreshToken) {
             throw new Error('No refresh token available');
         }
 
-        const response = await http.post<{
-            accessToken: string;
-            refreshToken: string;
-        }>(authUri.refresh, { refreshToken });
+        const response = await http.post(authUri.refresh, { 
+            refreshToken,
+            accessToken 
+        }) as any;
 
-        // ✅ Cập nhật tokens mới vào cookies
-        authStorage.setAccessToken(response.data.accessToken);
-        authStorage.setRefreshToken(response.data.refreshToken);
+        // ✅ Parse response theo cấu trúc backend: { statusCode, message, timestamp, path, data: { accessToken, ... } }
+        const responseData = response.data || response;
+        const newAccessToken = responseData.accessToken;
 
-        return response.data;
+        if (!newAccessToken) {
+            throw new Error('No access token in refresh response');
+        }
+
+        // ✅ Cập nhật accessToken mới vào cookies (giữ nguyên refreshToken cũ)
+        authStorage.setAccessToken(newAccessToken);
+
+        return {
+            accessToken: newAccessToken,
+            refreshToken: refreshToken, // Backend không trả về refreshToken mới, giữ nguyên cũ
+        };
     },
 
     signup: async (payload: ISignupRequest): Promise<IAuthResponse>=> {

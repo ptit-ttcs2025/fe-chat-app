@@ -113,16 +113,16 @@ const ResetPassword = () => {
           </div>
           <div className="floating-avatar ">
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-12.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-03.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
             <span className="avatar avatar-xl avatar-rounded border border-white">
-              <ImageWithBasePath src="assets/img/profiles/avatar-05.jpg" alt="img" />
+              <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
             </span>
           </div>
           <div className="text-center">

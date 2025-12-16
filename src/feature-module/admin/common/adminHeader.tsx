@@ -10,8 +10,8 @@ const AdminHeader = () => {
   const [themeSetting , setThemeSetting] = useState(false)
   const [layoutBs, setLayoutBs]= useState(localStorage.getItem("layoutThemeColors") || "light");
   const dispatch = useDispatch();
-  const mobileSidebar = useSelector((state: any) => state.mobileSidebar);
-  const miniSidebar = useSelector((state: any) => state.miniSidebar);
+  const mobileSidebar = useSelector((state: any) => state.common.mobileSidebar);
+  const miniSidebar = useSelector((state: any) => state.common.miniSidebar);
 
   const toggleMobileSidebar = () => {
     dispatch(setMobileSidebar(!mobileSidebar));
@@ -314,7 +314,7 @@ const AdminHeader = () => {
                       <div className="d-flex">
                         <span className="avatar avatar-lg me-2 flex-shrink-0">
                           <ImageWithBasePath
-                            src="assets/admin/img/profiles/avatar-02.jpg"
+                            src="assets/admin/img/profiles/avatar-02.png"
                             alt="Profile"
                             className="rounded-circle"
                           />

@@ -62,7 +62,7 @@ const ForwardMessage = () => {
                 <div className="d-flex align-items-center">
                   <div className="avatar avatar-lg">
                     <ImageWithBasePath
-                      src="assets/img/profiles/avatar-02.jpg"
+                      src="assets/img/profiles/avatar-02.png"
                       className="rounded-circle"
                       alt="image"
                     />

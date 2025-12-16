@@ -1,7 +1,10 @@
-
 import ImageWithBasePath from '../common/imageWithBasePath'
+import { mockUsers } from '@/mockData/usersData'
 
 const ViewStatus = () => {
+  // Lấy 8-10 người đầu tiên làm danh sách người đã xem status
+  const viewedByUsers = mockUsers.slice(0, 10);
+
   return (
     <>
         {/* view-status */}
@@ -9,7 +12,7 @@ const ViewStatus = () => {
             <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
                 <div className="modal-header">
-                <h4 className="modal-title">Status Viewed</h4>
+                <h4 className="modal-title">Đã xem trạng thái</h4>
                 <button
                     type="button"
                     className="btn-close"
@@ -22,66 +25,23 @@ const ViewStatus = () => {
                 <div className="modal-body">
                 <form >
                     <div className="contact-scroll contact-select">
-                    <div className="contact-user d-flex align-items-center justify-content-between">
+                    {viewedByUsers.map((user) => (
+                      <div key={user.id} className="contact-user d-flex align-items-center justify-content-between">
                         <div className="d-flex align-items-center">
-                        <div className="avatar avatar-lg">
+                          <div className="avatar avatar-lg">
                             <ImageWithBasePath
-                            src="assets/img/profiles/avatar-06.jpg"
-                            className="rounded-circle"
-                            alt="image"
+                              src={user.avatar}
+                              className="rounded-circle"
+                              alt={user.name}
                             />
+                          </div>
+                          <div className="ms-2">
+                            <h6>{user.name}</h6>
+                            {user.job && <p>{user.job}</p>}
+                          </div>
                         </div>
-                        <div className="ms-2">
-                            <h6>Edward Lietz</h6>
-                            <p>App Developer</p>
-                        </div>
-                        </div>
-                    </div>
-                    <div className="contact-user d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <div className="avatar avatar-lg">
-                            <ImageWithBasePath
-                            src="assets/img/profiles/avatar-02.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                            />
-                        </div>
-                        <div className="ms-2">
-                            <h6>Sarika Jain</h6>
-                            <p>UI/UX Designer</p>
-                        </div>
-                        </div>
-                    </div>
-                    <div className="contact-user d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <div className="avatar avatar-lg">
-                            <ImageWithBasePath
-                            src="assets/img/profiles/avatar-03.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                            />
-                        </div>
-                        <div className="ms-2">
-                            <h6>Clyde Smith</h6>
-                            <p>Web Developer</p>
-                        </div>
-                        </div>
-                    </div>
-                    <div className="contact-user d-flex align-items-center justify-content-between">
-                        <div className="d-flex align-items-center">
-                        <div className="avatar avatar-lg">
-                            <ImageWithBasePath
-                            src="assets/img/profiles/avatar-04.jpg"
-                            className="rounded-circle"
-                            alt="image"
-                            />
-                        </div>
-                        <div className="ms-2">
-                            <h6>Carla Jenkins</h6>
-                            <p>Business Analyst</p>
-                        </div>
-                        </div>
-                    </div>
+                      </div>
+                    ))}
                     </div>
                 </form>
                 </div>

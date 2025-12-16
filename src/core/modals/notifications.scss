@@ -1,0 +1,632 @@
+// Notifications Modal Styles - PTIT Theme
+// Beautiful, modern notification design inspired by Facebook/LinkedIn
+@use "sass:color";
+
+// Theme Colors
+$primary: #6338F6;
+$primary-light: #E3DBFD;
+$primary-dark: #5028E5;
+$success: #10B981;
+$danger: #EF4444;
+$info: #3B82F6;
+$warning: #F59E0B;
+$text-dark: #1F2937;
+$text-muted: #6B7280;
+$text-light: #9CA3AF;
+$border-color: #E5E7EB;
+$bg-hover: #F9FAFB;
+$bg-unread: #F0EDFF;
+
+// Modal Container
+.notifications-modal {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+
+  .modal-content {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+  }
+}
+
+// Header
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid $border-color;
+  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-icon {
+    font-size: 24px;
+    color: white;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    margin: 0;
+  }
+
+  .badge-count {
+    background: white;
+    color: $primary;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    min-width: 24px;
+    text-align: center;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-mark-all {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    i {
+      font-size: 18px;
+    }
+  }
+
+  .btn-close-modal {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: rotate(90deg);
+    }
+
+    i {
+      font-size: 18px;
+    }
+  }
+}
+
+// Tabs
+.notifications-tabs {
+  display: flex;
+  padding: 0 16px;
+  background: white;
+  border-bottom: 1px solid $border-color;
+
+  .tab-item {
+    flex: 1;
+    padding: 14px 12px;
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-muted;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    &:hover {
+      color: $primary;
+    }
+
+    &.active {
+      color: $primary;
+      font-weight: 600;
+
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: $primary;
+        border-radius: 3px 3px 0 0;
+      }
+    }
+
+    .tab-badge {
+      background: $primary;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+      min-width: 18px;
+    }
+  }
+}
+
+// Body
+.notifications-body {
+  padding: 0 !important;
+  background: white;
+}
+
+// Notifications List
+.notifications-list {
+  padding: 8px 0;
+}
+
+.notification-item-wrapper {
+  padding: 0 12px;
+  
+  &:not(:last-child) {
+    margin-bottom: 4px;
+  }
+}
+
+// Notification Card
+.notification-card {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &.clickable {
+    cursor: pointer;
+  }
+
+  &:hover {
+    background: $bg-hover;
+  }
+
+  &.unread {
+    background: $bg-unread;
+
+    &:hover {
+      background: color.adjust($bg-unread, $lightness: -2%);
+    }
+  }
+}
+
+// Avatar
+.notification-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+
+  img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 18px;
+  }
+
+  .notification-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+    i {
+      font-size: 11px;
+      color: white;
+    }
+
+    &.badge-primary {
+      background: $primary;
+    }
+
+    &.badge-success {
+      background: $success;
+    }
+
+    &.badge-danger {
+      background: $danger;
+    }
+
+    &.badge-info {
+      background: $info;
+    }
+
+    &.badge-secondary {
+      background: $text-muted;
+    }
+  }
+}
+
+// Content
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.notification-text {
+  font-size: 14px;
+  line-height: 1.4;
+  color: $text-dark;
+  
+  strong {
+    font-weight: 600;
+    color: $text-dark;
+  }
+
+  .notification-action-text {
+    color: $text-muted;
+  }
+}
+
+.notification-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: $text-light;
+  white-space: nowrap;
+}
+
+.notification-message {
+  font-size: 13px;
+  color: $text-muted;
+  font-style: italic;
+  margin: 6px 0;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+.notification-subtitle {
+  font-size: 13px;
+  color: $text-muted;
+  margin: 4px 0 0;
+
+  &.success {
+    color: $success;
+    font-weight: 500;
+  }
+}
+
+// Actions
+.notification-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+
+  button {
+    flex: 1;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    i {
+      font-size: 14px;
+    }
+  }
+
+  .btn-accept {
+    background: $primary;
+    color: white;
+    border: none;
+
+    &:hover:not(:disabled) {
+      background: $primary-dark;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba($primary, 0.3);
+    }
+  }
+
+  .btn-reject {
+    background: transparent;
+    color: $text-muted;
+    border: 1px solid $border-color;
+
+    &:hover:not(:disabled) {
+      background: #FEE2E2;
+      color: $danger;
+      border-color: #FECACA;
+    }
+  }
+}
+
+// Unread Dot
+.unread-dot {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background: $primary;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba($primary, 0.2);
+}
+
+// Empty State
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+
+  .empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: $border-color;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+
+    i {
+      font-size: 36px;
+      color: $text-light;
+    }
+  }
+
+  h5 {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text-dark;
+    margin: 0 0 8px;
+  }
+
+  p {
+    font-size: 14px;
+    color: $text-muted;
+    margin: 0;
+    max-width: 240px;
+  }
+}
+
+// Footer
+.notifications-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px !important;
+  border-top: 1px solid $border-color;
+  background: $bg-hover;
+
+  .notification-count {
+    font-size: 13px;
+    color: $text-muted;
+  }
+
+  .btn-close-footer {
+    background: $primary;
+    color: white;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: $primary-dark;
+      color: white;
+      transform: translateY(-1px);
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 576px) {
+  .notifications-modal {
+    max-width: 100%;
+    margin: 0;
+    
+    .modal-content {
+      border-radius: 0;
+      min-height: 100vh;
+    }
+  }
+
+  .notifications-header {
+    padding: 14px 16px;
+
+    .modal-title {
+      font-size: 16px;
+    }
+  }
+
+  .notification-card {
+    padding: 10px;
+  }
+
+  .notification-avatar {
+    width: 44px;
+    height: 44px;
+
+    img,
+    .avatar-placeholder {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
+  .notification-actions {
+    button {
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+  }
+}
+
+// Animation
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notification-item-wrapper {
+  animation: slideIn 0.3s ease forwards;
+  
+  @for $i from 1 through 10 {
+    &:nth-child(#{$i}) {
+      animation-delay: #{$i * 0.05}s;
+    }
+  }
+}
+
+// Dark mode support
+@media (prefers-color-scheme: dark) {
+  .notifications-modal .modal-content {
+    background: #1F2937;
+  }
+
+  .notifications-tabs {
+    background: #1F2937;
+    border-color: #374151;
+
+    .tab-item {
+      color: #9CA3AF;
+
+      &:hover,
+      &.active {
+        color: white;
+      }
+    }
+  }
+
+  .notifications-body {
+    background: #1F2937;
+  }
+
+  .notification-card {
+    &:hover {
+      background: #374151;
+    }
+
+    &.unread {
+      background: rgba($primary, 0.15);
+    }
+  }
+
+  .notification-text {
+    color: white;
+
+    strong {
+      color: white;
+    }
+
+    .notification-action-text {
+      color: #9CA3AF;
+    }
+  }
+
+  .notification-message {
+    background: rgba(255, 255, 255, 0.05);
+    color: #9CA3AF;
+  }
+
+  .empty-state {
+    .empty-icon {
+      background: #374151;
+
+      i {
+        color: #6B7280;
+      }
+    }
+
+    h5 {
+      color: white;
+    }
+
+    p {
+      color: #9CA3AF;
+    }
+  }
+
+  .notifications-footer {
+    background: #111827;
+    border-color: #374151;
+
+    .notification-count {
+      color: #9CA3AF;
+    }
+  }
+}
+

@@ -1,3447 +1,690 @@
-import  { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
+/**
+ * Chat Component - Tích hợp API đầy đủ với theme gốc
+ * Giữ nguyên giao diện nhưng thêm logic real-time và modern features
+ * Refactored: Tách thành các component nhỏ hơn để dễ quản lý
+ */
+
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useSelector } from "react-redux";
+
+// Theme Components
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
-import ContactFavourite from "../../../core/modals/contact-favourite-canva";
-import {Tooltip} from "antd";
-import ForwardMessage from "../../../core/modals/forward-message";
-import MessageDelete from "../../../core/modals/message-delete";
-import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
-import "overlayscrollbars/overlayscrollbars.css";
-import { all_routes } from "../../router/all_routes";
+
+// API & Hooks - Tích hợp real-time
+import { useChatMessages } from "@/hooks/useChatMessages";
+import { useChatConversations } from "@/hooks/useChatConversations";
+import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
+import websocketService from "@/core/services/websocket.service";
+import type { IMessage, IConversation } from "@/apis/chat/chat.type";
+import { uploadImage, uploadFile, chatApi } from "@/apis/chat/chat.api";
+
+// Components
+import ChatHeader from "./components/ChatHeader";
+import ChatSearch from "./components/ChatSearch";
+import ChatBody from "./components/ChatBody";
+import ChatFooter from "./components/ChatFooter";
+import { chatStyles } from "./styles/chatStyles";
+
+// Redux State Interface
+interface RootState {
+  auth: {
+    user: {
+      id: string;
+      username: string;
+      fullName: string;
+      avatarUrl?: string;
+    } | null;
+    token: string | null;
+  };
+  common: {
+    selectedConversationId: string | null;
+  };
+}
 
 const Chat = () => {
-  const [open1, setOpen1] = useState(false);
-  const [showReply, setShowReply] = useState(false);
+  // ==================== Redux State ====================
+  const user = useSelector((state: RootState) => state.auth?.user);
+  const selectedConversationId = useSelector((state: RootState) => state.common?.selectedConversationId);
+  
+  // ==================== Local State (UI) ====================
   const [showSearch, setShowSearch] = useState(false);
-  const [showEmoji, setShowEmoji] = useState<Record<number, boolean>>({});
-  const toggleEmoji = (groupId: number) => {
-    setShowEmoji((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId], // Toggle the state for this specific group
-    }));
-  };
-  const toggleSearch = () => {
-    setShowSearch(!showSearch);
-  };
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [inputMessage, setInputMessage] = useState("");
+  const [selectedConversation, setSelectedConversation] = useState<IConversation | null>(null);
+  const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // ==================== Refs ====================
+  const inputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(100);
+  
+  // ==================== API Hooks ====================
+  
+  // WebSocket connection
+  const isWsConnected = useWebSocketStatus();
+  
+  // Conversations list
+  const {
+    conversations,
+  } = useChatConversations({
+    pageSize: 50,
+    autoRefresh: true,
+  });
+  
+  // Sync conversation from Redux
   useEffect(() => {
-    document.querySelectorAll(".chat-user-list").forEach(function (element) {
-      element.addEventListener("click", function () {
+    if (selectedConversationId && conversations.length > 0) {
+      const conv = conversations.find(c => c.id === selectedConversationId);
+      if (conv) {
+        setSelectedConversation(conv);
+      }
+    }
+  }, [selectedConversationId, conversations]);
+  
+  // Messages cho conversation đã chọn (Cursor-based pagination)
+  const {
+    messages,
+    isLoading: isLoadingMessages,
+    isSending,
+    sendMessage: sendMessageHook,
+    deleteMessage,
+    togglePin,
+    scrollToBottom,
+    // Cursor pagination
+    hasMore,
+    isLoadingMore,
+    loadMoreMessages,
+  } = useChatMessages({
+    conversationId: selectedConversation?.id || null,
+    pageSize: 50,
+    autoMarkAsRead: true,
+    currentUserId: user?.id,
+  });
+  
+  // Pinned messages state
+  const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
+  
+  // Get sendMessageMutation để gửi message với attachment
+  const sendMessageWithAttachment = useCallback(
+    async (content: string, type: 'TEXT' | 'IMAGE' | 'FILE', attachmentId?: string) => {
+      if (!selectedConversation) return;
+      
+      await chatApi.sendMessage({
+        conversationId: selectedConversation.id,
+        content,
+        type,
+        attachmentId,
+      });
+    },
+    [selectedConversation]
+  );
+  
+  // Chat actions (typing, etc)
+  const { sendTypingStatus } = useChatActions();
+  
+  // Typing users state
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  
+  // ==================== Effects ====================
+  
+  // Auto-select first conversation
+  useEffect(() => {
+    if (!selectedConversation && conversations.length > 0) {
+      setSelectedConversation(conversations[0]);
+    }
+  }, [conversations, selectedConversation]);
+  
+  // Subscribe to typing status
+  useEffect(() => {
+    if (selectedConversation?.id && isWsConnected) {
+      const unsubscribe = websocketService.subscribeToTyping(
+        selectedConversation.id,
+        (status) => {
+          if (status.userId !== user?.id) {
+            setTypingUsers((prev) => {
+              if (status.isTyping) {
+                return [...prev.filter(u => u !== status.userName), status.userName];
+              } else {
+                return prev.filter(u => u !== status.userName);
+              }
+            });
+            
+            // Auto clear after 2s
+            setTimeout(() => {
+              setTypingUsers((prev) => prev.filter(u => u !== status.userName));
+            }, 2000);
+          }
+        }
+      );
+      
+      return () => unsubscribe();
+    }
+  }, [selectedConversation?.id, isWsConnected, user?.id]);
+  
+  // Mobile responsive handlers
+  useEffect(() => {
+    const handleChatUserClick = () => {
         if (window.innerWidth <= 992) {
           const showChat = document.querySelector(".chat-messages");
           if (showChat) {
             showChat.classList.add("show");
           }
         }
-      });
-    });
-    document.querySelectorAll(".chat-close").forEach(function (element) {
-      element.addEventListener("click", function () {
+    };
+    
+    const handleChatClose = () => {
         if (window.innerWidth <= 992) {
           const hideChat = document.querySelector(".chat-messages");
           if (hideChat) {
             hideChat.classList.remove("show");
           }
         }
-      });
+    };
+    
+    document.querySelectorAll(".chat-user-list").forEach((element) => {
+      element.addEventListener("click", handleChatUserClick);
     });
+    
+    document.querySelectorAll(".chat-close").forEach((element) => {
+      element.addEventListener("click", handleChatClose);
+    });
+    
+    return () => {
+      document.querySelectorAll(".chat-user-list").forEach((element) => {
+        element.removeEventListener("click", handleChatUserClick);
+      });
+      document.querySelectorAll(".chat-close").forEach((element) => {
+        element.removeEventListener("click", handleChatClose);
+      });
+    };
   }, []);
+  
+  // NOTE: Đã chuyển logic auto-scroll sang ChatBody component
+  // để tránh scroll khi load more messages
+  
+  // Filter messages when search keyword changes
+  useEffect(() => {
+    if (searchKeyword.trim()) {
+      const filtered = messages.filter(msg => 
+        msg.content?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        msg.senderName?.toLowerCase().includes(searchKeyword.toLowerCase())
+      );
+      setFilteredMessages(filtered);
+    } else {
+      // Luôn cập nhật filteredMessages với messages khi không có search keyword
+      setFilteredMessages(messages);
+    }
+  }, [searchKeyword, messages]);
+  
+  // Đảm bảo filteredMessages được khởi tạo ngay khi messages thay đổi
+  useEffect(() => {
+    if (messages.length > 0) {
+      if (!searchKeyword.trim()) {
+      setFilteredMessages(messages);
+      }
+    } else {
+      setFilteredMessages([]);
+    }
+  }, [messages.length, searchKeyword]);
+  
+  // Focus input when conversation changes
+  // NOTE: Scroll to bottom được xử lý trong ChatBody component
+  useEffect(() => {
+    if (selectedConversation) {
+      inputRef.current?.focus();
+    }
+  }, [selectedConversation?.id]);
+  
+  // Tính toán chiều cao footer động
+  useEffect(() => {
+    const updateFooterHeight = () => {
+      if (footerRef.current) {
+        // Chỉ tính chiều cao thực tế của footer, không thêm buffer quá lớn
+        const height = footerRef.current.offsetHeight;
+        // Giới hạn footer height tối đa 150px để tránh tính sai
+        const maxHeight = Math.min(height, 150);
+        setFooterHeight(maxHeight);
+      }
+    };
+    
+    // Delay một chút để đảm bảo DOM đã render
+    const timeoutId = setTimeout(updateFooterHeight, 100);
+    
+    // Update khi typing indicator xuất hiện/ẩn
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        // Giới hạn footer height tối đa 150px
+        const maxHeight = Math.min(height, 150);
+        setFooterHeight(maxHeight);
+      }
+    });
+    
+    if (footerRef.current) {
+      resizeObserver.observe(footerRef.current);
+    }
+    
+    // Update khi window resize
+    window.addEventListener('resize', updateFooterHeight);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateFooterHeight);
+    };
+  }, [typingUsers.length, selectedConversation]);
+  
+  // Fetch pinned messages when conversation changes
+  useEffect(() => {
+    const fetchPinnedMessages = async () => {
+      if (!selectedConversation?.id) {
+        setPinnedMessages([]);
+        return;
+      }
+      
+      try {
+        const response = await chatApi.getPinnedMessages(selectedConversation.id);
+        
+        if (response.data) {
+          const pinnedData = Array.isArray(response.data) ? response.data : [];
+          setPinnedMessages(pinnedData);
+        } else if (response && Array.isArray(response)) {
+          // Trường hợp response trực tiếp là array
+          setPinnedMessages(response);
+        } else {
+          // Fallback: Lọc từ messages nếu API không trả về đúng
+          const pinnedFromMessages = messages.filter(m => m.pinned);
+          setPinnedMessages(pinnedFromMessages);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching pinned messages:", error);
+        // Fallback: Lọc từ messages
+        const pinnedFromMessages = messages.filter(m => m.pinned);
+        setPinnedMessages(pinnedFromMessages);
+      }
+    };
+    
+    fetchPinnedMessages();
+  }, [selectedConversation?.id, messages]);
+  
+  // Sync pinned messages từ messages array khi messages thay đổi
+  // Merge với existing pinned messages từ API (để hiển thị cả tin nhắn ghim của người khác)
+  useEffect(() => {
+    if (messages.length > 0) {
+      const pinnedFromMessages = messages.filter(m => m.pinned);
+      
+      setPinnedMessages(prev => {
+        // Tạo Map từ existing pinned messages (từ API)
+        const existingMap = new Map(prev.map(p => [p.id, p]));
+        
+        // Cập nhật với pinned messages từ local messages
+        pinnedFromMessages.forEach(msg => {
+          existingMap.set(msg.id, msg);
+        });
+        
+        // Xóa những message không còn pinned nữa (dựa trên local messages)
+        messages.forEach(msg => {
+          if (!msg.pinned && existingMap.has(msg.id)) {
+            existingMap.delete(msg.id);
+          }
+        });
+        
+        const merged = Array.from(existingMap.values());
+        
+        // Sort theo thời gian mới nhất
+        merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        return merged;
+      });
+    }
+  }, [messages]);
+  
+  // ==================== Handlers ====================
+  
+  const toggleSearch = useCallback(() => {
+    setShowSearch((prev) => !prev);
+  }, []);
+  
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setInputMessage(value);
+      
+      // Send typing indicator
+      if (selectedConversation && value.length > 0) {
+        sendTypingStatus(
+          selectedConversation.id,
+          true,
+          user?.fullName || "User"
+        );
+        
+        // Clear previous timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        
+        // Stop typing after 1s of inactivity
+        typingTimeoutRef.current = setTimeout(() => {
+          sendTypingStatus(
+            selectedConversation.id,
+            false,
+            user?.fullName || "User"
+          );
+        }, 1000);
+      }
+    },
+    [selectedConversation, sendTypingStatus, user]
+  );
+  
+  const handleSendMessage = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+      
+      if (!inputMessage.trim() || !selectedConversation || isSending) return;
+      
+      const messageToSend = inputMessage.trim();
+      
+      try {
+        // Clear input trước để UI phản hồi nhanh
+        setInputMessage("");
+        
+        // Focus input ngay lập tức trước khi gửi để đảm bảo không mất focus
+        inputRef.current?.focus();
+        
+        sendMessageHook(messageToSend, "TEXT");
+        
+        // Stop typing indicator
+        if (selectedConversation) {
+          sendTypingStatus(
+            selectedConversation.id,
+            false,
+            user?.fullName || "User"
+          );
+        }
+        
+        // Clear timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        
+        // Auto scroll to bottom và đảm bảo focus
+        requestAnimationFrame(() => {
+          const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
+          if (chatBody) {
+            // Scroll đến cuối cùng
+            const scrollHeight = chatBody.scrollHeight;
+            const clientHeight = chatBody.clientHeight;
+            const maxScroll = scrollHeight - clientHeight;
+            chatBody.scrollTop = Math.max(0, maxScroll);
+          }
+          // Focus input sau khi DOM đã cập nhật
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+        });
+      } catch (error) {
+        console.error("❌ Error sending message:", error);
+        // Vẫn focus input ngay cả khi có lỗi
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      }
+    },
+    [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user, scrollToBottom]
+  );
+  
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    [handleSendMessage]
+  );
+  
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      // eslint-disable-next-line no-alert
+      if (globalThis.confirm("Bạn có chắc muốn xóa tin nhắn này?")) {
+        deleteMessage(messageId);
+      }
+    },
+    [deleteMessage]
+  );
+  
+  const handleTogglePin = useCallback(
+    (messageId: string, currentlyPinned: boolean) => {
+      if (!selectedConversation?.id) return;
+      
+      // Optimistic UI Update - Cập nhật ngay lập tức
+      if (currentlyPinned) {
+        // Bỏ ghim - xóa khỏi danh sách
+        setPinnedMessages(prev => prev.filter(msg => msg.id !== messageId));
+      } else {
+        // Ghim - tìm message và thêm vào đầu danh sách
+        const messageToPin = messages.find(msg => msg.id === messageId);
+        if (messageToPin) {
+          setPinnedMessages(prev => [{ ...messageToPin, pinned: true }, ...prev]);
+        }
+      }
+      
+      // Gọi API toggle pin (không await vì là mutation)
+        togglePin(messageId, !currentlyPinned);
+        
+      // Refresh từ server để đồng bộ
+          setTimeout(async () => {
+            try {
+              const response = await chatApi.getPinnedMessages(selectedConversation.id);
+              if (response.data) {
+                setPinnedMessages(Array.isArray(response.data) ? response.data : []);
+          } else if (response && Array.isArray(response)) {
+            setPinnedMessages(response);
+              }
+            } catch (error) {
+              console.error("❌ Error refreshing pinned messages:", error);
+            }
+      }, 150);
+    },
+    [togglePin, selectedConversation?.id, messages]
+  );
+  
+  const handlePinnedMessageClick = useCallback(() => {
+    // Logic đã được xử lý trong PinnedMessages component
+  }, []);
+  
+  // Handle file upload
+  const handleFileUpload = useCallback(
+    async (file: File, type: 'IMAGE' | 'FILE') => {
+      if (!selectedConversation || isUploading) return;
+      
+      setIsUploading(true);
+      try {
+        const uploadResponse = await (type === 'IMAGE' 
+          ? uploadImage(file, selectedConversation.id)
+          : uploadFile({ file, conversationId: selectedConversation.id, type: 'FILE' }));
+        
+        if (uploadResponse.data) {
+          // Gửi tin nhắn với attachment
+          await sendMessageWithAttachment(
+            uploadResponse.data.fileName || (type === 'IMAGE' ? 'Ảnh' : 'File'),
+            type,
+            uploadResponse.data.id
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error uploading file:", error);
+        alert("Không thể tải file lên. Vui lòng thử lại.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [selectedConversation, isUploading, sendMessageWithAttachment]
+  );
+  
+  // Handle image selection
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && file.type.startsWith('image/')) {
+        handleFileUpload(file, 'IMAGE');
+      }
+      // Reset input
+      imageInputRef.current && (imageInputRef.current.value = '');
+    },
+    [handleFileUpload]
+  );
+  
+  // Handle file selection
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        handleFileUpload(file, 'FILE');
+      }
+      // Reset input
+      fileInputRef.current && (fileInputRef.current.value = '');
+    },
+    [handleFileUpload]
+  );
+  
+  // Trigger file input
+  const triggerFileInput = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+  
+  // Trigger image input
+  const triggerImageInput = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+  
+  // ==================== Render ====================
+  
+  if (!user) {
+    return (
+      <div className="content main_content">
+        <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
+          <div className="text-center">
+            <i className="ti ti-user-off" style={{ fontSize: "64px", color: "#667eea" }} />
+            <h4 className="mt-3">Bạn chưa đăng nhập</h4>
+            <p className="text-muted">Vui lòng đăng nhập để sử dụng chat</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <>
-      {/* Chat */}
-      <div className={`chat chat-messages show`} id="middle">
-        <div>
-          <div className="chat-header">
-            <div className="user-details">
-              <div className="d-xl-none">
-                <Link className="text-muted chat-close me-2" to="#">
-                  <i className="fas fa-arrow-left" />
-                </Link>
-              </div>
-              <div className="avatar avatar-lg online flex-shrink-0">
-                <ImageWithBasePath
-                  src="assets/img/profiles/avatar-06.jpg"
-                  className="rounded-circle"
-                  alt="image"
-                />
-              </div>
-              <div className="ms-2 overflow-hidden">
-                <h6>Edward Lietz</h6>
-                <span className="last-seen">Online</span>
-              </div>
-            </div>
-            <div className="chat-options">
-            <ul>
-                <li>
-                  <Tooltip title="Search" placement="bottom">
-                    <Link
-                      to="#"
-                      className="btn chat-search-btn"
-                      onClick={() => toggleSearch()}
-                    >
-                      <i className="ti ti-search" />
-                    </Link>
-                  </Tooltip>
-                </li>
-                <li>
-                  <Tooltip title="Video Call" placement="bottom">
-                    <Link
-                      to="#"
-                      className="btn"
-                      data-bs-toggle="modal"
-                      data-bs-target="#video-call"
-                    >
-                      <i className="ti ti-video" />
-                    </Link>
-                  </Tooltip>
-                </li>
-                <li>
-                  <Tooltip title="Voice Call" placement="bottom">
-                    <Link
-                      to="#"
-                      className="btn"
-                      data-bs-toggle="modal"
-                      data-bs-target="#voice_call"
-                    >
-                      <i className="ti ti-phone" />
-                    </Link>
-                  </Tooltip>
-                </li>
-                <li>
-                  <Tooltip title="Contact Info" placement="bottom">
-                    <Link
-                      to="#"
-                      className="btn"
-                      data-bs-toggle="offcanvas"
-                      data-bs-target="#contact-profile"
-                    >
-                      <i className="ti ti-info-circle" />
-                    </Link>
-                  </Tooltip>
-                </li>
-                <li>
-                  <Link className="btn no-bg" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link to={all_routes.dashboard} className="dropdown-item">
-                        <i className="ti ti-x me-2" />
-                        Close Chat
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#mute-notification"
-                      >
-                        <i className="ti ti-volume-off me-2" />
-                        Mute Notification
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#disappearing-messages"
-                      >
-                        <i className="ti ti-clock-hour-4 me-2" />
-                        Disappearing Message
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#clear-chat"
-                      >
-                        <i className="ti ti-clear-all me-2" />
-                        Clear Message
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#delete-chat"
-                      >
-                        <i className="ti ti-trash me-2" />
-                        Delete Chat
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#report-user"
-                      >
-                        <i className="ti ti-thumb-down me-2" />
-                        Report
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="#"
-                        className="dropdown-item"
-                        data-bs-toggle="modal"
-                        data-bs-target="#block-user"
-                      >
-                        <i className="ti ti-ban me-2" />
-                        Block
-                      </Link>
-                    </li>
-                  </ul>
-                </li>
-              </ul>
-            </div>
-            {/* Chat Search */}
-            <div className={`chat-search search-wrap contact-search ${showSearch?'visible-chat':''}` }>
-              <form>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Search Contacts"
-                  />
-                  <span className="input-group-text">
-                    <i className="ti ti-search" />
-                  </span>
-                </div>
-              </form>
-            </div>
-            {/* /Chat Search */}
-          </div>
-          <OverlayScrollbarsComponent
-            options={{
-              scrollbars: {
-                autoHide: 'scroll',
-                autoHideDelay: 1000,
-              },
-            }}
-            style={{ maxHeight: '88vh' }}
-          >
-          <div className="chat-body chat-page-group ">
-            <div className="messages">
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      Hi there! I'm interested in your services.
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(1)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(1)} style={{ display: showEmoji[1] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      Can you tell me more about what you offer?, Can you
-                      explain it breifly...
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(2)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(2)} style={{ display: showEmoji[2] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name text-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="message-content">
-                      Hello! Absolutely, we provide a range of services tailored
-                      to meet various business needs. Could you specify what
-                      you're looking for?
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(3)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(3)} style={{ display: showEmoji[3] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="emonji-wrap">
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-02.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      24
-                    </Link>
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-03.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      15
-                    </Link>
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-04.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      15
-                    </Link>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chat-line">
-                <span className="chat-date">Today, July 24</span>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="message-content bg-transparent p-0">
-                    <div className="message-audio">
-                      <audio controls>
-                        <source
-                          src="assets/img/audio/audio.mp3"
-                          type="audio/mpeg"
-                        />
-                        Your browser does not support the audio element.
-                      </audio>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name justify-content-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="message-content">
-                    <div className="file-attach">
-                      <span className="file-icon">
-                        <i className="ti ti-files" />
-                      </span>
-                      <div className="ms-2 overflow-hidden">
-                        <h6 className="mb-1">Ecommerce.zip</h6>
-                        <p>14.23 KB</p>
-                      </div>
-                      <Link to="#" className="download-icon">
-                        <i className="ti ti-download" />
-                      </Link>
-                    </div>
-                    <div className="emoj-group wrap-emoji-group ">
-                      <ul>
-                        <li className="emoj-action" onClick={() => toggleEmoji(4)}>
-                          <Link to="#">
-                            <i className="ti ti-mood-smile" />
-                          </Link>
-                          <div className="emoj-group-list" onClick={() => toggleEmoji(4)} style={{ display: showEmoji[4] ? 'block' : 'none' }}>
-                            <ul>
-                              <li>
-                                <Link to="#">
-                                  <ImageWithBasePath
-                                    src="assets/img/icons/emonji-02.svg"
-                                    alt="Icon"
-                                  />
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="#">
-                                  <ImageWithBasePath
-                                    src="assets/img/icons/emonji-05.svg"
-                                    alt="Icon"
-                                  />
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="#">
-                                  <ImageWithBasePath
-                                    src="assets/img/icons/emonji-06.svg"
-                                    alt="Icon"
-                                  />
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="#">
-                                  <ImageWithBasePath
-                                    src="assets/img/icons/emonji-07.svg"
-                                    alt="Icon"
-                                  />
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="#">
-                                  <ImageWithBasePath
-                                    src="assets/img/icons/emonji-08.svg"
-                                    alt="Icon"
-                                  />
-                                </Link>
-                              </li>
-                              <li className="add-emoj">
-                                <Link to="#">
-                                  <i className="ti ti-plus" />
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
-                        </li>
-                        <li>
-                          <Link
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#forward-message"
-                          >
-                            <i className="ti ti-arrow-forward-up" />
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      Hi there! I'm interested in learning more
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(5)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(5)} style={{ display: showEmoji[5] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="emonji-wrap">
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-02.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      24
-                    </Link>
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-03.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      15
-                    </Link>
-                    <Link to="#">
-                      <ImageWithBasePath
-                        src="assets/img/icons/emonji-04.svg"
-                        className="me-2"
-                        alt="icon"
-                      />
-                      15
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="chat-img">
-                        <Lightbox
-                          open={open1}
-                          close={() => setOpen1(false)}
-                          slides={[
-                            {
-                              src: "/react/template/assets/img/gallery/gallery-02.jpg",
-                            },
-                            {
-                              src: "/react/template/assets/img/gallery/gallery-03.jpg",
-                            },
-                            {
-                              src: "/react/template/assets/img/gallery/gallery-01.jpg",
-                            },
-                            {
-                              src: "/react/template/assets/img/gallery/gallery-04.jpg",
-                            },
-                            {
-                              src: "/react/template/assets/img/gallery/gallery-05.jpg",
-                            },
-                          ]}
-                        />
-                        <div className="img-wrap">
-                          <ImageWithBasePath
-                            src="assets/img/gallery/gallery-01.jpg"
-                            alt="img"
-                          />
-                          <div className="img-overlay">
-                            <Link
-                              onClick={() => setOpen1(true)}
-                              className="gallery-img"
-                              data-fancybox="gallery-img"
-                              to="#"
-                              title="Demo 01"
-                            >
-                              <i className="ti ti-eye" />
-                            </Link>
-                            <Link to="#">
-                              <i className="ti ti-download" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="img-wrap">
-                          <ImageWithBasePath
-                            src="assets/img/gallery/gallery-02.jpg"
-                            alt="img"
-                          />
-                          <div className="img-overlay">
-                            <Link
-                            onClick={() => setOpen1(true)}
-                              className="gallery-img"
-                              data-fancybox="gallery-img"
-                              to="#"
-                              title="Demo 02"
-                            >
-                              <i className="ti ti-eye" />
-                            </Link>
-                            <Link to="#">
-                              <i className="ti ti-download" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="img-wrap">
-                          <ImageWithBasePath
-                            src="assets/img/gallery/gallery-03.jpg"
-                            alt="img"
-                          />
-                          <div className="img-overlay">
-                            <Link
-                            onClick={() => setOpen1(true)}
-                              className="gallery-img"
-                              data-fancybox="gallery-img"
-                              to="#"
-                              title="Demo 03"
-                            >
-                              <i className="ti ti-eye" />
-                            </Link>
-                            <Link to="#">
-                              <i className="ti ti-download" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="img-wrap">
-                          <ImageWithBasePath
-                            src="assets/img/gallery/gallery-04.jpg"
-                            alt="img"
-                          />
-                          <div className="img-overlay">
-                            <Link
-                            onClick={() => setOpen1(true)}
-                              className="gallery-img"
-                              data-fancybox="gallery-img"
-                              to="#"
-                              title="Demo 04"
-                            >
-                              <i className="ti ti-eye" />
-                            </Link>
-                            <Link to="#">
-                              <i className="ti ti-download" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="img-wrap">
-                          <ImageWithBasePath
-                            src="assets/img/gallery/gallery-05.jpg"
-                            alt="img"
-                          />
-                          <div className="img-overlay">
-                            <Link
-                            onClick={() => setOpen1(true)}
-                              className="gallery-img"
-                              data-fancybox="gallery-img"
-                              to="#"
-                              title="Demo     04"
-                            >
-                              <i className="ti ti-eye" />
-                            </Link>
-                            <Link to="#">
-                              <i className="ti ti-download" />
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                      <Link
-                        className="gallery-img view-all d-flex align-items-center justify-content-center mt-3"
-                        to="#"
-                        onClick={() => setOpen1(true)}
-                        data-fancybox="gallery-img"
-                      >
-                        View All Images
-                        <i className="ti ti-arrow-right ms-2" />
-                      </Link>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(6)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(6)} style={{ display: showEmoji[6] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name text-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="message-content">
-                      Send me your Profile Video if Any??
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(7)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(7)} style={{ display: showEmoji[7] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="message-link">
-                        <div className="link-img">
-                          <ImageWithBasePath
-                            src="assets/img/icons/github.svg"
-                            alt="Icon"
-                          />
-                        </div>
-                        <Link to="#" className="link-primary mt-2">
-                          https://segmentfault.com/u/guanguans/articles
-                        </Link>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(8)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(8)} style={{ display: showEmoji[8] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="chat-forward">
-                        <div className="forward-text text-primary">
-                          <i className="ti ti-arrow-forward me-2" />
-                          Forward
-                        </div>
-                      </div>
-                      <div className="file-attach">
-                        <span className="file-icon">
-                          <i className="ti ti-files" />
-                        </span>
-                        <div className="ms-2 overflow-hidden">
-                          <h6 className="mb-1">Ecommerce.zip</h6>
-                          <p>14.23 KB</p>
-                        </div>
-                        <Link to="#" className="download-icon">
-                          <i className="ti ti-download" />
-                        </Link>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(9)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(9)} style={{ display: showEmoji[9] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name text-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="message-content">
-                      Send me your Profile Video if Any??
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(10)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(10)} style={{ display: showEmoji[10] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="message-video">
-                        <video width={400} controls>
-                          <source
-                            src="assets/img/video/video.mp4"
-                            type="video/mp4"
-                          />
-                          Your browser does not support HTML5 video.
-                        </video>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(11)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(11)} style={{ display: showEmoji[11] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name text-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="message-content">
-                      Thanks for Sharing!!! Can we have a call
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(12)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(12)} style={{ display: showEmoji[12] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="chat-profile-name">
-                        <h6>You</h6>
-                      </div>
-                      <div className="message-reply">
-                        Thanks for Sharing!!! Can we have a call??
-                      </div>
-                      Yes Please
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(13)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(13)} style={{ display: showEmoji[13] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="file-attach">
-                        <div className="d-flex align-items-center">
-                          <span className="file-icon bg-danger text-white">
-                            <i className="ti ti-phone-call" />
-                          </span>
-                          <div className="ms-2 overflow-hidden">
-                            <h6 className="mb-1 text-truncate">
-                              Missed Audio Call
-                            </h6>
-                            <p>10 Min 23 Sec</p>
-                          </div>
-                        </div>
-                        <Link to="#" className="download-icon">
-                          <i className="ti ti-download" />
-                        </Link>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(14)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(14)} style={{ display: showEmoji[14] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chats chats-right">
-                <div className="chat-content">
-                  <div className="chat-profile-name text-end">
-                    <h6>
-                      You
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="message-content">
-                      <div className="file-attach">
-                        <span className="file-icon bg-success text-white">
-                          <i className="ti ti-phone-incoming" />
-                        </span>
-                        <div className="ms-2 overflow-hidden">
-                          <h6 className="mb-1">Audio Call Ended</h6>
-                          <p>07 Min 34 Sec</p>
-                        </div>
-                        <Link to="#" className="download-icon">
-                          <i className="ti ti-download" />
-                        </Link>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(15)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(15)} style={{ display: showEmoji[15] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
-                    className="rounded-circle dreams_chat"
-                    alt="image"
-                  />
-                </div>
-              </div>
-              <div className="chats">
-                <div className="chat-avatar">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-content">
-                  <div className="chat-profile-name">
-                    <h6>
-                      Edward Lietz
-                      <i className="ti ti-circle-filled fs-7 mx-2" />
-                      <span className="chat-time">02:39 PM</span>
-                      <span className="msg-read success">
-                        <i className="ti ti-checks" />
-                      </span>
-                    </h6>
-                  </div>
-                  <div className="chat-info">
-                    <div className="message-content">
-                      <div className="message-link">
-                        <div className="link-img">
-                          <ImageWithBasePath
-                            src="assets/img/icons/github.svg"
-                            alt="Icon"
-                          />
-                        </div>
-                        <Link to="#" className="link-primary mt-2">
-                          https://segmentfault.com/u/guanguans/articles
-                        </Link>
-                      </div>
-                      <div className="emoj-group">
-                        <ul>
-                          <li className="emoj-action">
-                            <Link to="#" onClick={() => toggleEmoji(16)}>
-                              <i className="ti ti-mood-smile" />
-                            </Link>
-                            <div className="emoj-group-list" onClick={() => toggleEmoji(16)} style={{ display: showEmoji[16] ? 'block' : 'none' }}>
-                              <ul>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-02.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-05.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-06.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-07.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-08.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-03.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-10.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li>
-                                  <Link to="#">
-                                    <ImageWithBasePath
-                                      src="assets/img/icons/emonji-09.svg"
-                                      alt="Icon"
-                                    />
-                                  </Link>
-                                </li>
-                                <li className="add-emoj">
-                                  <Link to="#">
-                                    <i className="ti ti-plus" />
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#forward-message"
-                            >
-                              <i className="ti ti-arrow-forward-up" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="chat-actions">
-                      <Link className="#" to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <ul className="dropdown-menu dropdown-menu-end p-3">
-                        <li>
-                          <Link className="dropdown-item"  onClick={() => setShowReply(true)} to="#">
-                            <i className="ti ti-arrow-back-up me-2" />
-                            Reply
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-arrow-forward-up-double me-2" />
-                            Forward
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-file-export me-2" />
-                            Copy
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-heart me-2" />
-                            Mark as Favourite
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            className="dropdown-item"
-                            to="#"
-                            data-bs-toggle="modal"
-                            data-bs-target="#message-delete"
-                          >
-                            <i className="ti ti-trash me-2" />
-                            Delete
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-check me-2" />
-                            Mark as Unread
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-box-align-right me-2" />
-                            Archeive Chat
-                          </Link>
-                        </li>
-                        <li>
-                          <Link className="dropdown-item" to="#">
-                            <i className="ti ti-pinned me-2" />
-                            Pin Chat
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          </OverlayScrollbarsComponent>
+      {/* Modern Styles */}
+      <style>{chatStyles}</style>
+      
+      {/* Chat Container - Professional Layout Structure */}
+      <div 
+        className={`chat chat-messages show`} 
+        id="middle"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          maxHeight: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
+          '--footer-height': `${footerHeight}px`,
+        } as React.CSSProperties}
+      >
+        {/* Header Section - Fixed at top */}
+        <div style={{ 
+          flexShrink: 0,
+          zIndex: 10,
+          position: 'relative',
+        }}>
+          <ChatHeader 
+            selectedConversation={selectedConversation}
+            onToggleSearch={toggleSearch}
+          />
+          
+          <ChatSearch
+            showSearch={showSearch}
+            searchKeyword={searchKeyword}
+            onSearchChange={setSearchKeyword}
+          />
         </div>
-        <div className="chat-footer">
-          <form className="footer-form">
-            <div className="chat-footer-wrap">
-              <div className="form-item">
-                <Link to="#" className="action-circle">
-                  <i className="ti ti-microphone" />
-                </Link>
-              </div>
-              <div className="form-wrap">
-              <div
-                    className={`chats reply-chat ${
-                      showReply ? "d-flex" : "d-none"
-                    }`}
-                  >
-                    <div className="chat-avatar">
-                      <ImageWithBasePath
-                        src="assets/img/profiles/avatar-06.jpg"
-                        className="rounded-circle"
-                        alt="image"
-                      />
-                    </div>
-                    <div className="chat-content">
-                      <div className="chat-profile-name">
-                        <h6>
-                          Edward Lietz
-                          <i className="ti ti-circle-filled fs-7 mx-2" />
-                          <span className="chat-time">02:39 PM</span>
-                          <span className="msg-read success">
-                            <i className="ti ti-checks" />
-                          </span>
-                        </h6>
-                      </div>
-                      <div className="chat-info">
-                        <div className="message-content">
-                          <div className="message-reply reply-content">
-                            Thank you for your support
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <Link
-                      to="#"
-                      className="close-replay"
-                      onClick={() => setShowReply(false)}
-                    >
-                      <i className="ti ti-x" />
-                    </Link>
-                  </div>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Type Your Message"
-                />
-              </div>
-              <div className="form-item emoj-action-foot">
-                <Link to="#" className="action-circle" onClick={() => toggleEmoji(17)}>
-                  <i className="ti ti-mood-smile" />
-                </Link>
-                <div className="emoj-group-list-foot down-emoji-circle" onClick={() => toggleEmoji(17)} style={{ display: showEmoji[17] ? 'block' : 'none' }}>
-                  <ul>
-                    <li>
-                      <Link to="#">
-                        <ImageWithBasePath
-                          src="assets/img/icons/emonji-02.svg"
-                          alt="Icon"
-                        />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#">
-                        <ImageWithBasePath
-                          src="assets/img/icons/emonji-05.svg"
-                          alt="Icon"
-                        />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#">
-                        <ImageWithBasePath
-                          src="assets/img/icons/emonji-06.svg"
-                          alt="Icon"
-                        />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#">
-                        <ImageWithBasePath
-                          src="assets/img/icons/emonji-07.svg"
-                          alt="Icon"
-                        />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#">
-                        <ImageWithBasePath
-                          src="assets/img/icons/emonji-08.svg"
-                          alt="Icon"
-                        />
-                      </Link>
-                    </li>
-                    <li className="add-emoj">
-                      <Link to="#">
-                        <i className="ti ti-plus" />
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="form-item position-relative d-flex align-items-center justify-content-center ">
-                <Link
-                  to="#"
-                  className="action-circle file-action position-absolute"
-                >
-                  <i className="ti ti-folder" />
-                </Link>
-                <input
-                  type="file"
-                  className="open-file position-relative"
-                  name="files"
-                  id="files"
-                />
-              </div>
-              <div className="form-item">
-                <Link to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <div className="dropdown-menu dropdown-menu-end p-3">
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-camera-selfie me-2" />
-                    Camera
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-photo-up me-2" />
-                    Gallery
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-music me-2" />
-                    Audio
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-map-pin-share me-2" />
-                    Location
-                  </Link>
-                  <Link to="#" className="dropdown-item">
-                    <i className="ti ti-user-check me-2" />
-                    Contact
-                  </Link>
-                </div>
-              </div>
-              <div className="form-btn">
-                <button className="btn btn-primary" type="submit">
-                  <i className="ti ti-send" />
-                </button>
-              </div>
-            </div>
-          </form>
+          
+        {/* Body Section - Scrollable, takes remaining space */}
+        <div style={{ 
+          flex: '1 1 auto',
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <ChatBody
+            messages={messages}
+            filteredMessages={filteredMessages}
+            pinnedMessages={pinnedMessages}
+            isLoadingMessages={isLoadingMessages}
+            searchKeyword={searchKeyword}
+            selectedConversation={selectedConversation}
+            currentUserId={user?.id}
+            userAvatarUrl={user?.avatarUrl}
+            userFullName={user?.fullName}
+            userUsername={user?.username}
+            footerHeight={footerHeight}
+            messagesEndRef={messagesEndRef}
+            onTogglePin={handleTogglePin}
+            onDeleteMessage={handleDeleteMessage}
+            onPinnedMessageClick={handlePinnedMessageClick}
+            onUnpin={(messageId) => handleTogglePin(messageId, true)}
+            // Cursor pagination props
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={loadMoreMessages}
+          />
+        </div>
+        
+        {/* Footer Section - Fixed at bottom */}
+        <div style={{ 
+          flexShrink: 0,
+          zIndex: 100,
+          position: 'relative',
+        }}>
+        <ChatFooter
+          footerRef={footerRef}
+          typingUsers={typingUsers}
+          selectedConversation={selectedConversation}
+          inputMessage={inputMessage}
+          inputRef={inputRef}
+          imageInputRef={imageInputRef}
+          fileInputRef={fileInputRef}
+          isUploading={isUploading}
+          isSending={isSending}
+          onInputChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onSendMessage={handleSendMessage}
+          onImageSelect={handleImageSelect}
+          onFileSelect={handleFileSelect}
+          onTriggerImageInput={triggerImageInput}
+          onTriggerFileInput={triggerFileInput}
+          footerHeight={footerHeight}
+          onEmojiSelect={(emoji) => setInputMessage(prev => prev + emoji)}
+        />
         </div>
       </div>
       {/* /Chat */}
-      <ContactInfo/>
-      <ContactFavourite/>
-      <ForwardMessage/>
-      <MessageDelete/>
+      
+      {/* Modals */}
+      <ContactInfo />
     </>
   );
 };

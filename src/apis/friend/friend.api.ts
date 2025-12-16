@@ -2,26 +2,28 @@ import http from '@/lib/apiBase';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { 
-    IUser, 
     ISearchUserParams, 
     IAddFriendRequest, 
-    IAddFriendResponse, 
-    ISearchUserResponse,
+    IAddFriendResponse,
     IFriend,
-    IFriendsResponse,
     IFriendRequest,
-    IFriendRequestsResponse,
     IRespondFriendRequestPayload,
     IRespondFriendRequestResponse,
     ISearchFriendsParams,
     IFriendRequestCountResponse,
-    IDeleteFriendResponse
+    IDeleteFriendResponse,
+    IFriendDetail,
+    IUserForFriend,
+    ISearchUsersForFriendParams,
+    IPaginatedResponse
 } from './friend.type';
+import authStorage from '@/lib/authStorage';
 
-const URI = '/api/v1';
+const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
 export const friendUri = {
-    searchUsers: `${URI}/users`,
+    // New API: tìm kiếm người dùng để kết bạn
+    searchUsers: `${URI}/friends/search-users`,
     addFriend: `${URI}/friends/requests`,
     searchFriends: `${URI}/friends/search`, // Dùng chung cho cả search và get all
     getReceivedRequests: `${URI}/friends/requests/received`,
@@ -29,17 +31,27 @@ export const friendUri = {
     getRequestCount: `${URI}/friends/requests/count`,
     respondRequest: (requestId: string, action: string) => `${URI}/friends/requests/${requestId}/${action.toLowerCase()}`,
     deleteFriend: (friendId: string) => `${URI}/friends/${friendId}`,
+    getFriendDetail: (friendId: string) => `${URI}/friends/${friendId}`,
 };
 
 export const friendApis = {
     /**
-     * Search users by name
+     * Search users by keyword (dùng cho flow kết bạn)
+     * Sử dụng API mới: GET /friends/search-users
      */
-    searchUsers: async (params: ISearchUserParams): Promise<IUser[]> => {
-        const response = await http.get<ISearchUserResponse>(friendUri.searchUsers, {
-            params: { name: params.name }
-        });
-        return response.data.results;
+    searchUsers: async (params: ISearchUserParams): Promise<IPaginatedResponse<IUserForFriend>> => {
+        const query: ISearchUsersForFriendParams = {
+            keyword: params.name,
+            pageNumber: 0,
+            pageSize: 20,
+        };
+
+        const response = await http.get(friendUri.searchUsers, {
+            params: query
+        }) as any;
+        // Sau interceptor, response.data chính là field "data" trong ApiResponse
+        // data: { meta, results }
+        return response.data as IPaginatedResponse<IUserForFriend>;
     },
 
     /**
@@ -54,20 +66,22 @@ export const friendApis = {
      * Get received friend requests
      */
     getReceivedRequests: async (page: number = 0, size: number = 50): Promise<IFriendRequest[]> => {
-        const response = await http.get<IFriendRequestsResponse>(friendUri.getReceivedRequests, {
+        const response = await http.get(friendUri.getReceivedRequests, {
             params: { page, size }
-        });
-        return response.data.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
      * Get sent friend requests
      */
     getSentRequests: async (page: number = 0, size: number = 50): Promise<IFriendRequest[]> => {
-        const response = await http.get<IFriendRequestsResponse>(friendUri.getSentRequests, {
+        const response = await http.get(friendUri.getSentRequests, {
             params: { page, size }
-        });
-        return response.data.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
@@ -84,14 +98,15 @@ export const friendApis = {
      * Search friends by name (q rỗng = lấy tất cả)
      */
     searchFriends: async (params: ISearchFriendsParams): Promise<IFriend[]> => {
-        const response = await http.get<IFriendsResponse>(friendUri.searchFriends, {
+        const response = await http.get(friendUri.searchFriends, {
             params: {
                 q: params.q || '', // q rỗng = lấy tất cả
                 pageNumber: params.pageNumber || 0,
                 pageSize: params.pageSize || 50
             }
-        });
-        return response.data.results;
+        }) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { meta, results } }
+        return response.data?.results || [];
     },
 
     /**
@@ -114,15 +129,24 @@ export const friendApis = {
         const response = await http.delete<IDeleteFriendResponse>(friendUri.deleteFriend(friendId));
         return response.data;
     },
+
+    /**
+     * Get friend detail
+     */
+    getFriendDetail: async (friendId: string): Promise<IFriendDetail> => {
+        const response = await http.get(friendUri.getFriendDetail(friendId)) as any;
+        // Response sau interceptor: { statusCode, message, timestamp, data: { ... } }
+        return response.data;
+    },
 };
 
 // ==================== REACT QUERY HOOKS ====================
 
 /**
- * Hook search users
+ * Hook search users để kết bạn (sử dụng API /friends/search-users)
  */
 export const useSearchUsers = (name: string, enabled: boolean = false) => {
-    return useQuery<IUser[], AxiosError>({
+    return useQuery<IPaginatedResponse<IUserForFriend>, AxiosError>({
         queryKey: ['searchUsers', name],
         queryFn: () => friendApis.searchUsers({ name }),
         enabled: enabled && name.length > 0,
@@ -200,6 +224,7 @@ export const useGetRequestCount = () => {
     return useQuery<number, AxiosError>({
         queryKey: ['friendRequestCount'],
         queryFn: friendApis.getRequestCount,
+        enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
         retry: false,
         refetchInterval: 30000, // Auto refresh mỗi 30s
         initialData: 0, // Khởi tạo với giá trị 0 để tránh undefined
@@ -212,6 +237,18 @@ export const useGetRequestCount = () => {
 export const useDeleteFriend = () => {
     return useMutation<IDeleteFriendResponse, AxiosError<{message: string}>, string>({
         mutationFn: friendApis.deleteFriend,
+    });
+};
+
+/**
+ * Hook get friend detail
+ */
+export const useGetFriendDetail = (friendId: string, enabled: boolean = true) => {
+    return useQuery<IFriendDetail, AxiosError>({
+        queryKey: ['friendDetail', friendId],
+        queryFn: () => friendApis.getFriendDetail(friendId),
+        enabled: enabled && !!friendId,
+        retry: false,
     });
 };
 

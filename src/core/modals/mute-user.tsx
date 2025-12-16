@@ -65,7 +65,7 @@ const MuteUser = () => {
                     <div className="d-flex align-items-center">
                       <span className="avatar avatar-lg me-2">
                         <ImageWithBasePath
-                          src="assets/img/profiles/avatar-02.jpg"
+                          src="assets/img/profiles/avatar-02.png"
                           className="rounded-circle"
                           alt=""
                         />

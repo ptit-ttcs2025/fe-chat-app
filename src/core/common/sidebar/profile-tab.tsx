@@ -1,15 +1,35 @@
-
 import ImageWithBasePath from '../imageWithBasePath'
-import { Link } from 'react-router-dom'
-import { all_routes } from '../../../feature-module/router/all_routes'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
-import { useLogout } from '../../../hooks/useLogout';
+import { useGetProfile } from 'src/apis/user/user.api';
+import { getGenderLabel, formatDate } from 'src/lib/formatter.helper';
+
 
 export const ProfileTab = () => {
-    const routes = all_routes
+    const {data: user, isLoading, error} = useGetProfile();
+    
+    if (isLoading) {
+      return (
+            <div className="sidebar-content active slimscroll">
+                <div className="d-flex justify-content-center align-items-center vh-100">
+                    <div className="spinner-border" role="status">
+                        <span className="visually-hidden">Đang tải...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
-    const { handleLogout } = useLogout();
+    if (error || !user) {
+      return (
+            <div className="sidebar-content active slimscroll">
+                <div className="alert alert-danger m-3">
+                    Không thể tải thông tin người dùng
+                </div>
+            </div>
+        );
+    }
+
   return (
     <>
         {/* Profile sidebar */}
@@ -26,57 +46,47 @@ export const ProfileTab = () => {
           <div className="slimscroll">
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
-                <h4 className="mb-3">Profile</h4>
+                <h4 className="mb-3">Trang cá nhân</h4>
               </div>
             </div>
+
             {/* Profile */}
             <div className="profile mx-3">
               <div className="border-bottom text-center pb-3 mx-1">
                 <div className="d-flex justify-content-center ">
                   <span className="avatar avatar-xxxl online mb-4">
                     <ImageWithBasePath
-                      src="assets/img/profiles/avatar-16.jpg"
+                      src={user.avatarUrl != null ? user.avatarUrl : 
+                        'assets/img/profiles/avatar-16.jpg'}
                       className="rounded-circle"
                       alt="user"
                     />
                   </span>
                 </div>
                 <div>
-                  <h6 className="fs-16">Salom Katherine</h6>
-                  <div className="d-flex justify-content-center">
-                    <span className="fs-14 text-center">Web Designer</span>
-                  </div>
+                  <h6 className="fs-16">{user.username}</h6>
                 </div>
               </div>
             </div>
             {/* /Profile */}
             <div className="sidebar-body chat-body">
               {/* Profile Info */}
-              <h5 className="mb-2">Profile Info</h5>
+              <h5 className="mb-2">Thông tin tài khoản</h5>
               <div className="card">
                 <div className="card-body">
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Name</h6>
-                      <p className="fs-16 ">Salom Katherine</p>
+                      <h6 className="fs-14">Họ và tên</h6>
+                      <p className="fs-16 ">{user.fullName}</p>
                     </div>
                     <span>
                       <i className="ti ti-user-circle fs-16" />
                     </span>
                   </div>
-                  <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
-                    <div>
-                      <h6 className="fs-14">Phone</h6>
-                      <p className="fs-16">514-245-98315</p>
-                    </div>
-                    <span>
-                      <i className="ti ti-phone-check fs-16" />
-                    </span>
-                  </div>
                   <div className="d-flex profile-list  profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Gender</h6>
-                      <p className="fs-16">Female</p>
+                      <h6 className="fs-14">Giới tính</h6>
+                      <p className="fs-16">{getGenderLabel(user.gender)}</p>
                     </div>
                     <span>
                       <i className="ti ti-user-star fs-16" />
@@ -84,8 +94,8 @@ export const ProfileTab = () => {
                   </div>
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Email Address</h6>
-                      <p className="fs-16">info@example.com</p>
+                      <h6 className="fs-14">Email</h6>
+                      <p className="fs-16">{user.email}</p>
                     </div>
                     <span>
                       <i className="ti ti-mail-heart fs-16" />
@@ -93,8 +103,8 @@ export const ProfileTab = () => {
                   </div>
                   <div className="d-flex profile-list profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Bio</h6>
-                      <p className="fs-16">Web Designer</p>
+                      <h6 className="fs-14">Tiểu sử</h6>
+                      <p className="fs-16">{user.bio ? user.bio : 'Chưa cập nhật'}</p>
                     </div>
                     <span>
                       <i className="ti ti-user-check fs-16" />
@@ -102,8 +112,8 @@ export const ProfileTab = () => {
                   </div>
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
-                      <h6 className="fs-14">Location</h6>
-                      <p className="fs-16">Portland, USA</p>
+                      <h6 className="fs-14">Vị trí</h6>
+                      <p className="fs-16">Việt Nam</p>
                     </div>
                     <span>
                       <i className="ti ti-map-2 fs-16" />
@@ -111,8 +121,8 @@ export const ProfileTab = () => {
                   </div>
                   <div className="d-flex profile-list justify-content-between align-items-center">
                     <div>
-                      <h6 className="fs-14">Join Date</h6>
-                      <p className="fs-16">01 July 2024</p>
+                      <h6 className="fs-14">Tham gia từ</h6>
+                      <p className="fs-16">{formatDate(user.createdAt)}</p>
                     </div>
                     <span>
                       <i className="ti ti-calendar-event fs-16" />
@@ -122,13 +132,13 @@ export const ProfileTab = () => {
               </div>
               {/* /Profile Info */}
               {/* Status */}
-              <h5 className="mb-2">Status</h5>
+              {/* <h5 className="mb-2">Status</h5>
               <div className="card">
                 <div className="card-body">
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
                     <div>
                       <h6 className="fs-14">Active Status</h6>
-                      <p className="fs-16 ">Show when you’re active</p>
+                      <p className="fs-16 ">Show when you're active</p>
                     </div>
                     <div className="form-check form-switch d-flex justify-content-end align-items-center">
                       <input
@@ -154,10 +164,10 @@ export const ProfileTab = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
               {/* /Status */}
               {/* Social Media */}
-              <h5 className="mb-2">Social Media</h5>
+              {/* <h5 className="mb-2">Social Media</h5>
               <div className="card">
                 <div className="card-body">
                   <div className="d-flex profile-list justify-content-between align-items-center border-bottom mb-3 pb-3">
@@ -188,48 +198,8 @@ export const ProfileTab = () => {
                     </span>
                   </div>
                 </div>
-              </div>
+              </div> */}
               {/* /Social Media */}
-              {/* Deactivate */}
-              <h5 className="mb-2">Deactivate </h5>
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex profile-list justify-content-between align-items-center">
-                    <div>
-                      <h6 className="fs-14">Deactivate Account</h6>
-                      <p className="fs-16 ">Deactivate your Account</p>
-                    </div>
-                    <div className="form-check form-switch d-flex justify-content-end align-items-center">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* /Deactivate */}
-              {/* Logout */}
-              <h5 className="mb-2">Logout</h5>
-              <div className="card mb-3">
-                <div className="card-body">
-                  <div className="d-flex profile-list justify-content-between align-items-center">
-                    <div>
-                      <h6 className="fs-14">Logout</h6>
-                      <p className="fs-16">Sign out from this Device</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="link-icon btn btn-link p-0"
-                    >
-                        <i className="ti ti-logout fs-16" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {/* /Logout */}
             </div>
           </div>
           </OverlayScrollbarsComponent>

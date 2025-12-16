@@ -19,13 +19,13 @@ const Avatar = () => {
                             </div>
                             <div className="card-body d-flex flex-wrap gap-2">
                                 <span className="avatar avatar-xl me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl me-2 avatar-radius-0">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl bg-primary avatar-rounded">
                                     <span className="avatar-title">SR</span>
@@ -46,25 +46,25 @@ const Avatar = () => {
                             </div>
                             <div className="card-body">
                                 <span className="avatar avatar-xs me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-sm me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-md me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-lg me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xxl me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xxxl me-2">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                             </div>
                         </div>
@@ -103,35 +103,35 @@ const Avatar = () => {
                             </div>
                             <div className="card-body">
                                 <span className="avatar avatar-xs me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-primary avatar-badge">
                                         2
                                     </span>
                                 </span>
                                 <span className="avatar avatar-sm me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-secondary avatar-badge">
                                         5
                                     </span>
                                 </span>
                                 <span className="avatar avatar-md me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-warning avatar-badge">
                                         1
                                     </span>
                                 </span>
                                 <span className="avatar avatar-lg me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-info avatar-badge">7</span>
                                 </span>
                                 <span className="avatar avatar-xl me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-success avatar-badge">
                                         3
                                     </span>
                                 </span>
                                 <span className="avatar avatar-xxl me-2 avatar-rounded">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                     <span className="badge rounded-pill bg-danger avatar-badge">
                                         9
                                     </span>

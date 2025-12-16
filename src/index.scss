@@ -443,3 +443,34 @@ li a span.version {
 .icon-addon{
   z-index: 1;
 }
+
+// Tùy chỉnh kích thước message của antd
+.ant-message {
+  .ant-message-notice {
+    .ant-message-notice-content {
+      // Tăng kích thước box
+      padding: 16px 24px !important; // Tăng padding để box to hơn
+      min-width: 300px !important; // Chiều rộng tối thiểu
+      max-width: 600px !important; // Chiều rộng tối đa
+
+      // Tăng kích thước chữ
+      font-size: 16px !important; // Tăng từ 14px lên 16px
+      font-weight: 500;
+      line-height: 1.6;
+
+      // Tăng kích thước icon
+      .anticon {
+        font-size: 20px !important; // Tăng từ 16px lên 20px
+        margin-right: 12px;
+      }
+
+      // Tăng khoảng cách giữa icon và text
+      .ant-message-custom-content {
+        font-size: 16px !important;
+        line-height: 1.6;
+      }
+    }
+  }
+}
+
+
