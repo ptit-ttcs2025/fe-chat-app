@@ -8,8 +8,8 @@ const AddGroup = () => {
       <div className="modal fade" id="add-group">
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content">
-            <div className="modal-header">
-              <h4 className="modal-title">Add Members</h4>
+            <div className="modal-header border-bottom">
+              <h4 className="modal-title fw-semibold">Thêm thành viên</h4>
               <button
                 type="button"
                 className="btn-close"
@@ -26,14 +26,14 @@ const AddGroup = () => {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Search"
+                      placeholder="Tìm kiếm liên hệ..."
                     />
                     <Link to="#" className="input-group-text">
                       <i className="ti ti-search" />
                     </Link>
                   </div>
                 </div>
-                <h6 className="mb-3 fw-medium fs-16">Contacts</h6>
+                <h6 className="mb-3 fw-semibold fs-16">Danh bạ</h6>
                 <div className="contact-scroll contact-select mb-3">
                   <div className="contact-user d-flex align-items-center justify-content-between">
                     <div className="d-flex align-items-center">
@@ -61,7 +61,7 @@ const AddGroup = () => {
                     <div className="d-flex align-items-center">
                       <div className="avatar avatar-lg">
                         <ImageWithBasePath
-                          src="assets/img/profiles/avatar-02.jpg"
+                          src="assets/img/profiles/avatar-02.png"
                           className="rounded-circle"
                           alt="image"
                         />
@@ -126,14 +126,27 @@ const AddGroup = () => {
                 </div>
                 <div className="row g-3">
                   <div className="col-6">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-outline-primary w-100"
                       data-bs-toggle="modal"
                       data-bs-target="#new-group"
+                      onClick={() => {
+                        const addGroupModal = document.getElementById('add-group')
+                        const newGroupModal = document.getElementById('new-group')
+                        if (addGroupModal && newGroupModal) {
+                          const bsModal1 = (window as any).bootstrap?.Modal?.getInstance(addGroupModal)
+                          const bsModal2 = (window as any).bootstrap?.Modal?.getInstance(newGroupModal)
+                          bsModal1?.hide()
+                          setTimeout(() => {
+                            bsModal2?.show()
+                          }, 300)
+                        }
+                      }}
                     >
-                      Previous
-                    </Link>
+                      <i className="ti ti-arrow-left me-1" />
+                      Quay lại
+                    </button>
                   </div>
                   <div className="col-6">
                     <button
@@ -141,7 +154,8 @@ const AddGroup = () => {
                       data-bs-dismiss="modal"
                       className="btn btn-primary w-100"
                     >
-                      Start Group
+                      Tạo nhóm
+                      <i className="ti ti-check ms-1" />
                     </button>
                   </div>
                 </div>

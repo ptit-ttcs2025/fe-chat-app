@@ -17,6 +17,7 @@ import {
     ISearchUsersForFriendParams,
     IPaginatedResponse
 } from './friend.type';
+import authStorage from '@/lib/authStorage';
 
 const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
@@ -223,6 +224,7 @@ export const useGetRequestCount = () => {
     return useQuery<number, AxiosError>({
         queryKey: ['friendRequestCount'],
         queryFn: friendApis.getRequestCount,
+        enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
         retry: false,
         refetchInterval: 30000, // Auto refresh mỗi 30s
         initialData: 0, // Khởi tạo với giá trị 0 để tránh undefined

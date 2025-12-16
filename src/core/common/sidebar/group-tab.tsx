@@ -23,7 +23,7 @@ const GroupTab = () => {
         <div className="slimscroll">
           <div className="chat-search-header">
             <div className="header-title d-flex align-items-center justify-content-between">
-              <h4 className="mb-3">Group</h4>
+              <h4 className="mb-3">Nhóm</h4>
               <div className="d-flex align-items-center mb-3">
                 <Link
                   to="#"
@@ -50,7 +50,7 @@ const GroupTab = () => {
                         data-bs-target="#invite"
                       >
                         <i className="ti ti-send me-2" />
-                        Invite Others
+                        Mời người khác
                       </Link>
                     </li>
                   </ul>
@@ -64,7 +64,7 @@ const GroupTab = () => {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Search For Contacts or Messages"
+                    placeholder="Tìm kiếm liên hệ hoặc tin nhắn"
                   />
                   <span className="input-group-text">
                     <i className="ti ti-search" />
@@ -77,7 +77,7 @@ const GroupTab = () => {
           <div className="sidebar-body chat-body">
             {/* Left Chat Title */}
             <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5>All Groups</h5>
+              <h5>Tất cả nhóm</h5>
             </div>
             {/* /Left Chat Title */}
             <div className="chat-users-wrap">
@@ -95,7 +95,7 @@ const GroupTab = () => {
                       <h6>The Dream Team</h6>
                       <p>
                         <span className="animate-typing">
-                          is typing
+                          đang nhập
                           <span className="dot mx-1" />
                           <span className="dot me-1" />
                           <span className="dot" />
@@ -121,31 +121,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -182,31 +182,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -245,31 +245,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -285,7 +285,7 @@ const GroupTab = () => {
                       <h6>Amfr_boys_Group</h6>
                       <p>
                         <i className="ti ti-photo me-2" />
-                        Photo
+                        Ảnh
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -306,31 +306,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -350,7 +350,7 @@ const GroupTab = () => {
                       <h6>The Academic Alliance</h6>
                       <p className="text-success">
                         <i className="ti ti-video-plus me-2" />
-                        Incoming Video Call
+                        Cuộc gọi video đến
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -369,31 +369,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -413,7 +413,7 @@ const GroupTab = () => {
                       <h6>The Chill Zone</h6>
                       <p>
                         <i className="ti ti-photo me-2" />
-                        Photo
+                        Ảnh
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -436,31 +436,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -480,7 +480,7 @@ const GroupTab = () => {
                       <h6>Squad Goals</h6>
                       <p>
                         <i className="ti ti-file me-2" />
-                        Document
+                        Tài liệu
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -499,31 +499,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -561,31 +561,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -605,7 +605,7 @@ const GroupTab = () => {
                       <h6>Scholars Society</h6>
                       <p className="text-danger">
                         <i className="ti ti-video-off me-2" />
-                        Missed Video Call
+                        Cuộc gọi video bị nhỡ
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -625,31 +625,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -687,31 +687,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -747,31 +747,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -808,31 +808,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -852,7 +852,7 @@ const GroupTab = () => {
                       <h6>Game Changers</h6>
                       <p>
                         <i className="ti ti-map-pin-plus me-2" />
-                        Location
+                        Vị trí
                       </p>
                     </div>
                     <div className="chat-user-time">
@@ -871,31 +871,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>
@@ -937,31 +937,31 @@ const GroupTab = () => {
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-box-align-right me-2" />
-                        Archive Group
+                        Lưu trữ nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-volume-off me-2" />
-                        Mute Notification
+                        Tắt thông báo
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-logout-2 me-2" />
-                        Exit Group
+                        Rời khỏi nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-pinned me-2" />
-                        Pin Group
+                        Ghim nhóm
                       </Link>
                     </li>
                     <li>
                       <Link className="dropdown-item" to="#">
                         <i className="ti ti-square-check me-2" />
-                        Mark as Unread
+                        Đánh dấu chưa đọc
                       </Link>
                     </li>
                   </ul>

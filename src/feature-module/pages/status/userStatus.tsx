@@ -1,227 +1,265 @@
-import  { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import ImageWithBasePath from '../../../core/common/imageWithBasePath'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import UploadFile from '../../../core/modals/upload-file-image'
 import NewStatus from '../../../core/modals/new-status'
+import { mockStatusUsers } from '@/mockData/statusData'
 import { all_routes } from '../../router/all_routes'
+import '../../../assets/css/story-viewer.css'
 
 const UserStatus = () => {
+  const navigate = useNavigate()
+  const statusUser = mockStatusUsers[0] // Display first friend's status
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
+  const [progress, setProgress] = useState<number[]>(Array(statusUser.statuses.length).fill(0))
+  const [replyText, setReplyText] = useState('')
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const storyDuration = 5000 // 5 seconds per story
+
+  // Initialize progress tracking
   useEffect(() => {
-    document.querySelectorAll(".chat-user-list").forEach(function (element) {
-      element.addEventListener("click", function () {
-        if (window.innerWidth <= 992) {
-          const showChat = document.querySelector(".chat-messages");
-          if (showChat) {
-            showChat.classList.add("show");
+    const newProgress = [...progress]
+    for (let i = 0; i < currentIndex; i++) {
+      newProgress[i] = 100
+    }
+    for (let i = currentIndex; i < newProgress.length; i++) {
+      newProgress[i] = i === currentIndex ? 0 : 0
+    }
+    setProgress(newProgress)
+  }, [currentIndex])
+
+  // Auto-advance timer
+  useEffect(() => {
+    if (!isPaused && currentIndex < statusUser.statuses.length) {
+      progressIntervalRef.current = setInterval(() => {
+        setProgress(prev => {
+          const newProgress = [...prev]
+          newProgress[currentIndex] += (100 / storyDuration) * 50
+          
+          if (newProgress[currentIndex] >= 100) {
+            newProgress[currentIndex] = 100
+            if (currentIndex < statusUser.statuses.length - 1) {
+              setCurrentIndex(currentIndex + 1)
+            } else {
+              setTimeout(() => navigate(all_routes.status), 300)
+            }
           }
-        }
-      });
-    });
-    document.querySelectorAll(".chat-close").forEach(function (element) {
-      element.addEventListener("click", function () {
-        if (window.innerWidth <= 992) {
-          const hideChat = document.querySelector(".chat-messages");
-          if (hideChat) {
-            hideChat.classList.remove("show");
-          }
-        }
-      });
-    });
-  }, []);
+          
+          return newProgress
+        })
+      }, 50)
+    }
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current)
+      }
+    }
+  }, [currentIndex, isPaused])
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1)
+    } else {
+      navigate(all_routes.status)
+    }
+  }
+
+  const handleNext = () => {
+    if (currentIndex < statusUser.statuses.length - 1) {
+      setCurrentIndex(currentIndex + 1)
+    } else {
+      navigate(all_routes.status)
+    }
+  }
+
+  const togglePause = () => {
+    setIsPaused(!isPaused)
+  }
+
+  const handleSendReply = () => {
+    if (replyText.trim()) {
+      // Here you would send the reply
+      console.log('Sending reply:', replyText)
+      setReplyText('')
+    }
+  }
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        handlePrevious()
+      } else if (e.key === 'ArrowRight') {
+        handleNext()
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        togglePause()
+      } else if (e.key === 'Escape') {
+        navigate(all_routes.status)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [currentIndex, isPaused])
+
+  // Swipe gestures
+  const touchStartX = useRef(0)
+  const touchEndX = useRef(0)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].clientX
+    const diff = touchStartX.current - touchEndX.current
+
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        handleNext()
+      } else {
+        handlePrevious()
+      }
+    }
+  }
+
   return (
     <>
-  {/* Chat */}
-  <div className="chat chat-messages show status-msg justify-content-center">
-    <div className="user-status-group">
-      <div className="d-xl-none">
-        <Link className="text-muted chat-close mb-3 d-block" to="#">
-          <i className="fas fa-arrow-left me-2" />
-          Back
-        </Link>
-      </div>
-      {/* Status*/}
-      <div className="user-stories-box ">
-        <div className="inner-popup">
-          <div
-            id="carouselIndicators"
-            className="carousel slide slider"
-            data-bs-ride="carousel"
-          >
-            <div className="chat status-chat-footer show-chatbar">
-              <div className="chat-footer">
-                <div className="footer-form">
-                  <div className="chat-footer-wrap">
-                    <div className="form-item">
-                      <Link to="#" className="action-circle">
-                        <i className="ti ti-microphone" />
-                      </Link>
-                    </div>
-                    <div className="form-wrap">
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Type Your Message"
-                      />
-                    </div>
-                    <div className="form-item emoj-action-foot">
-                      <Link to="#" className="action-circle">
-                        <i className="ti ti-mood-smile" />
-                      </Link>
-                      <div className="emoj-group-list-foot down-emoji-circle">
-                        <ul>
-                          <li>
-                            <Link to="#">
-                              <ImageWithBasePath
-                                src="assets/img/icons/emonji-02.svg"
-                                alt="Icon"
-                              />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="#">
-                              <ImageWithBasePath
-                                src="assets/img/icons/emonji-05.svg"
-                                alt="Icon"
-                              />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="#">
-                              <ImageWithBasePath
-                                src="assets/img/icons/emonji-06.svg"
-                                alt="Icon"
-                              />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="#">
-                              <ImageWithBasePath
-                                src="assets/img/icons/emonji-07.svg"
-                                alt="Icon"
-                              />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="#">
-                              <ImageWithBasePath
-                                src="assets/img/icons/emonji-08.svg"
-                                alt="Icon"
-                              />
-                            </Link>
-                          </li>
-                          <li className="add-emoj">
-                            <Link to="#">
-                              <i className="ti ti-plus" />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="form-item">
-                      <Link to="#" data-bs-toggle="dropdown">
-                        <i className="ti ti-dots-vertical" />
-                      </Link>
-                      <div className="dropdown-menu dropdown-menu-end p-3">
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-file-text me-2" />
-                          Document
-                        </Link>
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-camera-selfie me-2" />
-                          Camera
-                        </Link>
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-photo-up me-2" />
-                          Gallery
-                        </Link>
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-music me-2" />
-                          Audio
-                        </Link>
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-map-pin-share me-2" />
-                          Location
-                        </Link>
-                        <Link to="#" className="dropdown-item">
-                          <i className="ti ti-user-check me-2" />
-                          Contact
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="form-btn">
-                      <Link className="btn btn-primary" to={all_routes.userStatus}>
-                        <i className="ti ti-send" />
-                      </Link>
-                    </div>
+      {/* Story Viewer */}
+      <div className="chat chat-messages show status-msg justify-content-center"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="user-status-group">
+          {/* Close Button */}
+          <div className="d-xl-none">
+            <Link className="text-muted chat-close mb-3 d-block" to={all_routes.status}>
+              <i className="fas fa-arrow-left" />
+            </Link>
+          </div>
+
+          {/* Progress Bars */}
+          <div className="story-progress-bars">
+            {statusUser.statuses.map((_, index) => (
+              <div key={index} className="story-progress-bar">
+                <div 
+                  className="story-progress-fill"
+                  style={{
+                    transform: `scaleX(${progress[index] / 100})`,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Tap Zones */}
+          <div className="story-tap-zone-left" onClick={handlePrevious} />
+          <div className="story-tap-zone-right" onClick={handleNext} />
+
+          {/* Navigation Arrows (Desktop) */}
+          <button className="story-nav-arrow left" onClick={handlePrevious}>
+            <i className="ti ti-chevron-left" />
+          </button>
+          <button className="story-nav-arrow right" onClick={handleNext}>
+            <i className="ti ti-chevron-right" />
+          </button>
+
+          {/* Story Content */}
+          <div className="user-stories-box">
+            <div className="inner-popup">
+              {/* User Header */}
+              <div className="status-user-blk">
+                <div className="user-details">
+                  <div className="avatar avatar-lg me-2">
+                    <ImageWithBasePath
+                      src={statusUser.avatar}
+                      className="rounded-circle"
+                      alt={statusUser.name}
+                    />
+                  </div>
+                  <div className="user-online">
+                    <h5>{statusUser.name}</h5>
+                    <span>{statusUser.statuses[currentIndex]?.timestamp}</span>
                   </div>
                 </div>
+                <div className="status-voice-group">
+                  <Link 
+                    to="#" 
+                    className="status-pause me-4" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation(); // Ngăn tap zones bắt event
+                      togglePause();
+                    }}
+                  >
+                    <i className={`ti ${isPaused ? 'ti-player-play' : 'ti-player-pause'}`} />
+                  </Link>
+                  <Link to="#" className="text-white me-2 fs-24">
+                    <i className="ti ti-volume" />
+                  </Link>
+                  <Link to="#" className="text-white fs-24">
+                    <i className="ti ti-maximize" />
+                  </Link>
+                </div>
               </div>
-            </div>
-            <div className="status-user-blk">
-              <div className="user-details">
-                <div className="avatar avatar-lg me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-10.jpg"
-                    className="rounded-circle"
-                    alt="image"
+
+              {/* Story Image */}
+              <div className="status_slider">
+                <ImageWithBasePath 
+                  src={statusUser.statuses[currentIndex]?.image} 
+                  alt={`${statusUser.name} - Status ${currentIndex + 1}`}
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '100vh', 
+                    objectFit: 'contain',
+                    animation: 'imageZoomIn 0.4s ease-out'
+                  }}
+                />
+              </div>
+
+              {/* Bottom Overlay - Reply */}
+              <div className="story-bottom-overlay">
+                <div className="story-reply-input">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder={`Trả lời ${statusUser.name}...`}
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onFocus={() => setIsPaused(true)}
+                    onBlur={() => setIsPaused(false)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSendReply()
+                      }
+                    }}
                   />
-                </div>
-                <div className="user-online">
-                  <h5>Michael</h5>
-                  <span>Today at 7:15 AM</span>
+                  <Link to="#" className="action-circle">
+                    <i className="ti ti-mood-smile" />
+                  </Link>
+                  <Link to="#" className="action-circle" onClick={handleSendReply}>
+                    <i className="ti ti-send" />
+                  </Link>
                 </div>
               </div>
-              <div className="status-voice-group ">
-                <Link to="#" className="status-pause me-4">
+
+              {/* Paused Indicator */}
+              {isPaused && (
+                <div className="story-paused-indicator">
                   <i className="ti ti-player-pause" />
-                </Link>
-                <Link to="#" className="text-white me-2 fs-24">
-                  <i className="ti ti-volume" />
-                </Link>
-                <Link to="#" className="text-white fs-24">
-                  <i className="ti ti-maximize" />
-                </Link>
-              </div>
-            </div>
-            <ol className="carousel-indicators">
-              <li
-                data-bs-target="#carouselIndicators"
-                data-bs-slide-to={0}
-                className="active"
-              />
-              <li data-bs-target="#carouselIndicators" data-bs-slide-to={1} />
-              <li data-bs-target="#carouselIndicators" data-bs-slide-to={2} />
-              <li data-bs-target="#carouselIndicators" data-bs-slide-to={3} />
-              <li data-bs-target="#carouselIndicators" data-bs-slide-to={4} />
-            </ol>
-            <div className="carousel-inner status_slider" role="listbox">
-              <div id="target" className="carousel-item active">
-                <ImageWithBasePath src="assets/img/status/status-01.jpg" alt="Image" />
-              </div>
-              <div className="carousel-item">
-                <ImageWithBasePath src="assets/img/status/status-02.jpg" alt="Image" />
-              </div>
-              <div className="carousel-item">
-                <ImageWithBasePath src="assets/img/status/status-03.jpg" alt="Image" />
-              </div>
-              <div className="carousel-item">
-                <ImageWithBasePath src="assets/img/status/status-04.jpg" alt="Image" />
-              </div>
-              <div className="carousel-item">
-                <ImageWithBasePath src="assets/img/status/status-05.jpg" alt="Image" />
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-      {/* /Status */}
-    </div>
-  </div>
-  {/* /Chat */}
-  <UploadFile/>
-  <NewStatus/>
-</>
 
+      <UploadFile />
+      <NewStatus />
+    </>
   )
 }
 

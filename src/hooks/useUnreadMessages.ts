@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import unreadApis from '@/apis/unread/unread.api';
 import type { UnreadSummary } from '@/types/unread';
+import authStorage from '@/lib/authStorage';
 
 // Query Keys
 export const UNREAD_KEYS = {
@@ -19,6 +20,7 @@ export function useUnreadSummary() {
   return useQuery<UnreadSummary>({
     queryKey: UNREAD_KEYS.summary(),
     queryFn: unreadApis.getUnreadSummary,
+    enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
     refetchInterval: 60 * 1000,
@@ -32,6 +34,7 @@ export function useTotalUnreadCount() {
   return useQuery<number>({
     queryKey: UNREAD_KEYS.totalCount(),
     queryFn: unreadApis.getTotalUnreadCount,
+    enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });

@@ -91,7 +91,7 @@ const MessageInfo = () => {
           <div className="d-flex align-items-center mb-4">
             <span className="avatar avatar-lg online">
               <ImageWithBasePath
-                src="assets/img/profiles/avatar-02.jpg"
+                src="assets/img/profiles/avatar-02.png"
                 alt="img"
                 className="rounded-circle"
               />

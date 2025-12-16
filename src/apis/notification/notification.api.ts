@@ -7,6 +7,7 @@ import {
     IMarkAsReadResponse,
     IDeleteNotificationResponse
 } from './notification.type';
+import authStorage from '@/lib/authStorage';
 
 const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
@@ -112,6 +113,7 @@ export const useGetNotifications = (page: number = 0, size: number = 20) => {
     return useQuery<INotification[], AxiosError>({
         queryKey: ['notifications', page, size],
         queryFn: () => notificationApis.getNotifications(page, size),
+        enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
         retry: false,
         refetchInterval: 30000, // Auto refresh every 30s
     });
@@ -124,6 +126,7 @@ export const useGetUnreadCount = () => {
     return useQuery<number, AxiosError>({
         queryKey: ['notificationUnreadCount'],
         queryFn: notificationApis.getUnreadCount,
+        enabled: !!authStorage.getAccessToken(), // Chỉ gọi khi đã đăng nhập
         retry: false,
         refetchInterval: 30000, // Auto refresh every 30s
         initialData: 0,

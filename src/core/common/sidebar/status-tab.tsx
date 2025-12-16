@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { all_routes } from '../../../feature-module/router/all_routes'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
+import { myStatus, mockStatusUsers } from '@/mockData/statusData';
 
 const StatusTab = () => {
     const routes = all_routes;
@@ -21,7 +22,7 @@ const StatusTab = () => {
       <div className="slimscroll">
       <div className="chat-search-header">
         <div className="header-title d-flex align-items-center justify-content-between">
-          <h4 className="mb-3">Status</h4>
+          <h4 className="mb-3">Trạng thái</h4>
           <div className="d-flex align-items-center mb-3">
             <Link
               to="#"
@@ -40,7 +41,7 @@ const StatusTab = () => {
               <input
                 type="text"
                 className="form-control"
-                placeholder="Search Contacts"
+                placeholder="Tìm kiếm liên hệ"
               />
               <span className="input-group-text">
                 <i className="ti ti-search" />
@@ -54,7 +55,7 @@ const StatusTab = () => {
         <div className="status-list">
           {/* Left Chat Title */}
           <div className="d-flex  mb-3">
-            <h5>My Status</h5>
+            <h5>Trạng thái của tôi</h5>
           </div>
           {/* /Left Chat Title */}
           <div className="chat-users-wrap">
@@ -62,15 +63,15 @@ const StatusTab = () => {
               <Link to={routes.myStatus} className="chat-user-list mb-0">
                 <div className="avatar avatar-lg idle me-2">
                   <ImageWithBasePath
-                    src="assets/img/profiles/avatar-17.jpg"
+                    src={myStatus.avatar}
                     className="rounded-circle"
-                    alt="image"
+                    alt={myStatus.name}
                   />
                 </div>
                 <div className="chat-user-info">
                   <div className="chat-user-msg">
-                    <h6>Rabino Desilva</h6>
-                    <p>Today at 06:25 AM</p>
+                    <h6>{myStatus.name}</h6>
+                    <p>{myStatus.lastStatusTime}</p>
                   </div>
                 </div>
               </Link>
@@ -82,19 +83,19 @@ const StatusTab = () => {
                   <li>
                     <Link className="dropdown-item" to="#">
                       <i className="ti ti-share-3 me-2" />
-                      Share Status
+                      Chia sẻ trạng thái
                     </Link>
                   </li>
                   <li>
                     <Link className="dropdown-item" to="#">
                       <i className="ti ti-arrow-forward-up-double me-2" />
-                      Forward
+                      Chuyển tiếp
                     </Link>
                   </li>
                   <li>
                     <Link className="dropdown-item" to="#">
                       <i className="ti ti-trash me-2" />
-                      Delete
+                      Xóa
                     </Link>
                   </li>
                 </ul>
@@ -105,199 +106,83 @@ const StatusTab = () => {
         <div className="status-list">
           {/* Left Chat Title */}
           <div className="d-flex  mb-3">
-            <h5>Recent Updates</h5>
+            <h5>Cập nhật gần đây</h5>
           </div>
           {/* /Left Chat Title */}
           <div className="chat-users-wrap">
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list">
-                <div className="avatar avatar-lg online me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-05.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Federico Wells</h6>
-                    <p>4 hrs ago</p>
+            {mockStatusUsers.slice(0, 2).map((statusUser) => (
+              <div key={statusUser.id} className="position-relative">
+                <Link to={routes.userStatus} className={`chat-user-list ${statusUser === mockStatusUsers[1] ? 'mb-0' : ''}`}>
+                  <div className="avatar avatar-lg online me-2">
+                    <ImageWithBasePath
+                      src={statusUser.avatar}
+                      className="rounded-circle"
+                      alt={statusUser.name}
+                    />
                   </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list mb-0">
-                <div className="avatar avatar-lg online me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-13.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Morkel Jerrin</h6>
-                    <p>Today at 7:15 AM</p>
+                  <div className="chat-user-info">
+                    <div className="chat-user-msg">
+                      <h6>{statusUser.name}</h6>
+                      <p>{statusUser.lastStatusTime}</p>
+                    </div>
                   </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
                 </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
+                <div className="chats-dropdown">
+                  <Link className="#" to="#" data-bs-toggle="dropdown">
+                    <i className="ti ti-dots-vertical" />
+                  </Link>
+                  <ul className="dropdown-menu dropdown-menu-end p-3">
+                    <li>
+                      <Link className="dropdown-item" to="#">
+                        <i className="ti ti-volume-off me-2" />
+                        Tắt tiếng
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
         <div className="status-list">
           {/* Left Chat Title */}
           <div className="d-flex  mb-3">
-            <h5>Already Seen</h5>
+            <h5>Đã xem</h5>
           </div>
           {/* /Left Chat Title */}
           <div className="chat-users-wrap">
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list">
-                <div className="avatar avatar-lg online me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-07.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Danielle Baker</h6>
-                    <p>Just Now</p>
+            {mockStatusUsers.slice(2).map((statusUser, index, array) => (
+              <div key={statusUser.id} className="position-relative">
+                <Link to={routes.userStatus} className={`chat-user-list ${index === array.length - 1 ? 'mb-0' : ''}`}>
+                  <div className={`avatar avatar-lg ${index === 2 ? 'offline' : 'online'} me-2`}>
+                    <ImageWithBasePath
+                      src={statusUser.avatar}
+                      className="rounded-circle"
+                      alt={statusUser.name}
+                    />
                   </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list">
-                <div className="avatar avatar-lg online me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-06.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Edward Lietz</h6>
-                    <p>2 hrs ago</p>
+                  <div className="chat-user-info">
+                    <div className="chat-user-msg">
+                      <h6>{statusUser.name}</h6>
+                      <p>{statusUser.lastStatusTime}</p>
+                    </div>
                   </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
                 </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
+                <div className="chats-dropdown">
+                  <Link className="#" to="#" data-bs-toggle="dropdown">
+                    <i className="ti ti-dots-vertical" />
+                  </Link>
+                  <ul className="dropdown-menu dropdown-menu-end p-3">
+                    <li>
+                      <Link className="dropdown-item" to="#">
+                        <i className="ti ti-volume-off me-2" />
+                        Tắt tiếng
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list">
-                <div className="avatar avatar-lg offline me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-02.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Sarika Jain</h6>
-                    <p>Today at 06:15 AM</p>
-                  </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="position-relative">
-              <Link to={routes.userStatus} className="chat-user-list mb-0">
-                <div className="avatar avatar-lg online me-2">
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-10.jpg"
-                    className="rounded-circle"
-                    alt="image"
-                  />
-                </div>
-                <div className="chat-user-info">
-                  <div className="chat-user-msg">
-                    <h6>Wilbur Martinez</h6>
-                    <p>Today at 04:20 AM</p>
-                  </div>
-                </div>
-              </Link>
-              <div className="chats-dropdown">
-                <Link className="#" to="#" data-bs-toggle="dropdown">
-                  <i className="ti ti-dots-vertical" />
-                </Link>
-                <ul className="dropdown-menu dropdown-menu-end p-3">
-                  <li>
-                    <Link className="dropdown-item" to="#">
-                      <i className="ti ti-volume-off me-2" />
-                      Mute
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>

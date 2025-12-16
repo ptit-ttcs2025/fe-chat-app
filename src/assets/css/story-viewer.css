@@ -1,0 +1,438 @@
+/**
+ * Story Viewer UI - Instagram Style
+ * Progress bars, gradients, và modern interactions
+ */
+
+/* Story Container */
+.status-msg {
+  background: #000;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Progress Bars Container */
+.story-progress-bars {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 4px;
+}
+
+.story-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.story-progress-fill {
+  height: 100%;
+  background: #fff;
+  border-radius: 2px;
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+
+.story-progress-fill.active {
+  animation: progressFill 5s linear forwards;
+}
+
+.story-progress-fill.paused {
+  animation-play-state: paused;
+}
+
+@keyframes progressFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Story User Header với gradient overlay */
+.status-user-blk {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000; /* Tăng z-index để cao hơn tap zones */
+  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+  padding: 56px 16px 24px;
+  pointer-events: auto; /* Đảm bảo có thể click */
+}
+
+.status-user-blk .user-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-user-blk .user-details .avatar {
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.status-user-blk .user-online h5 {
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 2px;
+  font-size: 15px;
+}
+
+.status-user-blk .user-online span {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+}
+
+/* Story Controls */
+.status-voice-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: relative;
+  z-index: 1001; /* Cao hơn status-user-blk để đảm bảo click được */
+  pointer-events: auto; /* Đảm bảo có thể click */
+}
+
+.status-voice-group .status-pause,
+.status-voice-group a {
+  color: #fff !important;
+  font-size: 24px;
+  transition: all 0.2s ease;
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 50% !important;
+  padding: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  width: 40px !important;
+  height: 40px !important;
+  cursor: pointer;
+  text-decoration: none !important;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1002 !important; /* Cao nhất để đảm bảo click được */
+  pointer-events: auto !important; /* Đảm bảo có thể click */
+}
+
+.status-voice-group .status-pause i,
+.status-voice-group a i {
+  color: #fff !important;
+  font-size: 20px !important;
+  display: block !important;
+  line-height: 1 !important;
+}
+
+.status-voice-group .status-pause:hover,
+.status-voice-group a:hover {
+  transform: scale(1.1);
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.status-voice-group .status-pause:active {
+  transform: scale(0.95);
+}
+
+/* Story Image Container */
+.status_slider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #000;
+}
+
+.carousel-item {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.carousel-item img {
+  max-width: 100%;
+  max-height: 100vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  animation: imageZoomIn 0.4s ease-out;
+}
+
+@keyframes imageZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Tap Zones para navigação */
+.story-tap-zone-left,
+.story-tap-zone-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  z-index: 998;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Loại trừ phần header khỏi tap zones */
+.story-tap-zone-left::before,
+.story-tap-zone-right::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px; /* Chiều cao của header */
+  pointer-events: none; /* Không bắt event ở phần header */
+  z-index: 1;
+}
+
+.story-tap-zone-left {
+  left: 0;
+}
+
+.story-tap-zone-right {
+  right: 0;
+}
+
+/* Bottom Gradient Overlay */
+.story-bottom-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+  padding: 24px 16px 32px;
+}
+
+/* Reply Input (Instagram Style) */
+.story-reply-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  padding: 8px 16px;
+  backdrop-filter: blur(10px);
+}
+
+.story-reply-input input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+}
+
+.story-reply-input input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.story-reply-input input:focus {
+  outline: none;
+}
+
+.story-reply-input .action-circle {
+  color: #fff;
+  font-size: 20px;
+  transition: transform 0.2s ease;
+}
+
+.story-reply-input .action-circle:hover {
+  transform: scale(1.1);
+}
+
+/* View Status Button */
+.view-status-list {
+  bottom: 80px !important;
+  right: 16px !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff !important;
+  padding: 8px 16px !important;
+  transition: all 0.2s ease;
+}
+
+.view-status-list:hover {
+  background: rgba(0, 0, 0, 0.8) !important;
+  transform: scale(1.05);
+}
+
+.view-status-list i {
+  font-size: 16px;
+}
+
+/* Loading Skeleton */
+.story-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 997;
+}
+
+.story-loading .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  border-width: 3px;
+  color: #fff;
+}
+
+/* Pause Indicator */
+.story-paused-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  padding: 20px;
+  z-index: 1001;
+  animation: fadeInOut 0.3s ease;
+}
+
+.story-paused-indicator i {
+  font-size: 32px;
+  color: #fff;
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Navigation Arrows (Desktop) */
+.story-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: #fff;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.user-status-group:hover .story-nav-arrow {
+  opacity: 1;
+}
+
+.story-nav-arrow:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.story-nav-arrow.left {
+  left: 16px;
+}
+
+.story-nav-arrow.right {
+  right: 16px;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .story-progress-bars {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+  }
+
+  .status-user-blk {
+    padding: 48px 12px 20px;
+  }
+
+  .story-bottom-overlay {
+    padding: 20px 12px 24px;
+  }
+
+  .story-nav-arrow {
+    display: none;
+  }
+
+  .view-status-list {
+    bottom: 70px !important;
+  }
+}
+
+/* Close Button */
+.chat-close {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  color: #fff !important;
+  font-size: 24px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.chat-close:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.story-bottom-overlay {
+  animation: slideUp 0.3s ease;
+}
+
+/* Dark mode improvements */
+@media (prefers-color-scheme: dark) {
+  .story-reply-input {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+}
+

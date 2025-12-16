@@ -3,6 +3,7 @@ import websocketService from '@/core/services/websocket.service';
 import { notificationApis } from '@/apis/notification/notification.api';
 import type { INotification } from '@/apis/notification/notification.type';
 import { useQueryClient } from '@tanstack/react-query';
+import authStorage from '@/lib/authStorage';
 
 interface NotificationContextType {
     notifications: INotification[];
@@ -203,10 +204,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         };
     }, [handleWebSocketNotification]);
 
-    // Load initial notifications
+    // Load initial notifications - chỉ gọi khi đã đăng nhập
     useEffect(() => {
-        refreshNotifications();
-        refreshUnreadCount();
+        const isAuthenticated = !!authStorage.getAccessToken();
+        if (isAuthenticated) {
+            refreshNotifications();
+            refreshUnreadCount();
+        } else {
+            // Clear notifications khi chưa đăng nhập
+            setNotifications([]);
+            setUnreadCount(0);
+        }
     }, [refreshNotifications, refreshUnreadCount]);
 
     const value: NotificationContextType = {

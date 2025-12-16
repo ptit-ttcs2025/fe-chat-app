@@ -5,7 +5,7 @@ import type { AxiosError } from 'axios';
 import { IUploadAvatarResponse, IUserProfile } from './user.type';
 import { IUpdateProfileRequest, IChangePasswordRequest } from './user.schema';
 
-const URI = '/api/v1';
+const URI = ''; // ✅ baseURL đã có /api/v1 rồi
 
 export const userUri = {
     profile: `${URI}/auth/profile`,

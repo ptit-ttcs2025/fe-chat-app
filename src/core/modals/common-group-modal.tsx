@@ -6,6 +6,7 @@ import InviteModal from './invite-modal'
 import MuteNotification from './mute-notification'
 import MessageDisapper from './message-disapper'
 import ApproveParticipants from './approve-participants'
+import PendingRequests from './pending-requests'
 import ReportUser from './report-user'
 import MuteUser from './mute-user'
 import AddGroup from './add-group'
@@ -25,6 +26,7 @@ const CommonGroupModal = () => {
     <MuteNotification/>
     <MessageDisapper/>
     <ApproveParticipants/>
+    <PendingRequests/>
     <ReportUser/>
     <AddGroup/>
     <EditGroup/>

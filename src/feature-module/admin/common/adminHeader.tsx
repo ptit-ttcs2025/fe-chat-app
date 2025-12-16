@@ -314,7 +314,7 @@ const AdminHeader = () => {
                       <div className="d-flex">
                         <span className="avatar avatar-lg me-2 flex-shrink-0">
                           <ImageWithBasePath
-                            src="assets/admin/img/profiles/avatar-02.jpg"
+                            src="assets/admin/img/profiles/avatar-02.png"
                             alt="Profile"
                             className="rounded-circle"
                           />

@@ -984,7 +984,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-sm me-3 avatar-rounded">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple secondary alert with image—check it out!</div>
               <button
@@ -1095,7 +1095,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-xs me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple primary alert with image—check it out!</div>
               <button
@@ -1112,7 +1112,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-sm me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple secondary alert with image—check it out!</div>
               <button
@@ -1129,7 +1129,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple warning alert with image—check it out!</div>
               <button
@@ -1146,7 +1146,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-md me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple danger alert with image—check it out!</div>
               <button
@@ -1163,7 +1163,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-lg me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple info alert with image—check it out!</div>
               <button
@@ -1180,7 +1180,7 @@ const AlertUi = () => {
               role="alert"
             >
               <div className="avatar avatar-xl me-3">
-                <ImageWithBasePath src="assets/img/profiles/avatar-02.jpg" alt="img" />
+                <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
               </div>
               <div>A simple info alert with image—check it out!</div>
               <button

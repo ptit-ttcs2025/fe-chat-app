@@ -151,7 +151,7 @@ const Borders = () => {
                                         alt="img"
                                     />
                                     <ImageWithBasePath
-                                        src="assets/img/profiles/avatar-02.jpg"
+                                        src="assets/img/profiles/avatar-02.png"
                                         className="avatar-xxl avatar  d-placeholder-img rounded-top me-1"
                                         alt="img"
                                     />
@@ -197,7 +197,7 @@ const Borders = () => {
                                         alt="img"
                                     />
                                     <ImageWithBasePath
-                                        src="assets/img/profiles/avatar-02.jpg"
+                                        src="assets/img/profiles/avatar-02.png"
                                         className="avatar-xxl avatar bd-placeholder-img bd-placeholder-img rounded-1 me-1"
                                         alt="img"
                                     />
