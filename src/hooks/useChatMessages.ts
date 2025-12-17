@@ -146,15 +146,63 @@ export const useChatMessages = ({
         }
     }, [messagesData]);
 
+    // Helper: Scroll to bottom - định nghĩa trước để tránh lỗi reference
+    const scrollToBottom = useCallback((instant: boolean = false) => {
+        requestAnimationFrame(() => {
+            const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
+            if (!chatBody) return;
+            
+            const scrollHeight = chatBody.scrollHeight;
+            const clientHeight = chatBody.clientHeight;
+            const maxScroll = scrollHeight - clientHeight;
+            
+            if (instant) {
+                chatBody.scrollTop = Math.max(0, maxScroll);
+            } else {
+                chatBody.scrollTo({
+                    top: Math.max(0, maxScroll),
+                    behavior: 'smooth'
+                });
+            }
+        });
+        
+        if (messagesEndRef.current) {
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ 
+                    behavior: instant ? 'instant' : 'smooth',
+                    block: 'end',
+                    inline: 'nearest'
+                });
+            }, 50);
+        }
+    }, []);
+
     // Handle real-time messages từ WebSocket
     const handleNewMessage = useCallback(
         (message: MessageResponse) => {
             setMessages((prev) => {
-                // Check if message already exists (prevent duplicates)
-                const exists = prev.some((m) => m.id === message.id);
-                if (exists) return prev;
+                // 1. Check duplicate ID
+                if (prev.some((m) => m.id === message.id)) {
+                    return prev;
+                }
 
-                // Add new message to the end
+                // 2. Check optimistic message tương ứng (trường hợp WebSocket đến trước API response)
+                // Tìm message tạm có content và sender tương ứng
+                if (message.senderId === currentUserId) {
+                    const optimisticMatchIndex = prev.findIndex(m => 
+                        m.id.startsWith('optimistic-') && 
+                        m.content === message.content
+                    );
+
+                    if (optimisticMatchIndex !== -1) {
+                        console.log('🔄 Replaced optimistic message with real WebSocket message');
+                        const newMessages = [...prev];
+                        newMessages[optimisticMatchIndex] = message;
+                        return newMessages;
+                    }
+                }
+
+                // 3. Add new message
                 return [...prev, message];
             });
 
@@ -178,7 +226,7 @@ export const useChatMessages = ({
             // Invalidate conversations query để update lastMessage
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
         },
-        [autoMarkAsRead, currentUserId, queryClient]
+        [autoMarkAsRead, currentUserId, queryClient, scrollToBottom]
     );
 
     // Subscribe to real-time messages
@@ -187,12 +235,50 @@ export const useChatMessages = ({
     // Mutation: Send message
     const sendMessageMutation = useMutation({
         mutationFn: (data: SendMessageRequest) => chatApi.sendMessage(data),
-        onSuccess: () => {
-            // Message sẽ được thêm qua WebSocket subscription
-            scrollToBottom();
+        onMutate: async (newMessage) => {
+            // Cancel outgoing refetches
+            await queryClient.cancelQueries({ queryKey: [...queryKey, apiType] });
+
+            // Optimistic Update
+            const tempId = `optimistic-${Date.now()}`;
+            const optimisticMessage: IMessage = {
+                id: tempId,
+                conversationId: newMessage.conversationId,
+                content: newMessage.content,
+                senderId: currentUserId || '',
+                senderName: 'Bạn', // Có thể cải thiện lấy tên thật từ props
+                type: newMessage.type || 'TEXT',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                isDeleted: false,
+                readCount: 0,
+                readByUserIds: [],
+                pinned: false,
+                // Mock attachment nếu có
+                attachment: undefined
+            };
+
+            setMessages((prev) => [...prev, optimisticMessage]);
+            scrollToBottom(true); // Instant scroll
+
+            return { tempId };
         },
-        onError: (error) => {
+        onSuccess: (response, variables, context) => {
+            // Replace optimistic message with real message from API response
+            if (response && response.id) {
+                setMessages((prev) => 
+                    prev.map(msg => 
+                        msg.id === context?.tempId ? response : msg
+                    )
+                );
+            }
+        },
+        onError: (error, variables, context) => {
             console.error('❌ Failed to send message:', error);
+            // Remove optimistic message if failed
+            if (context?.tempId) {
+                setMessages((prev) => prev.filter(msg => msg.id !== context.tempId));
+            }
         },
     });
 
@@ -396,40 +482,6 @@ export const useChatMessages = ({
             });
         }
     }, [conversationId, cursor, pageSize, isLoadingMore, apiType, currentPage]);
-
-    // Helper: Scroll to bottom - sử dụng scrollTop để đảm bảo scroll
-    const scrollToBottom = useCallback((instant: boolean = false) => {
-        // Sử dụng requestAnimationFrame để đảm bảo DOM đã render
-        requestAnimationFrame(() => {
-            const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
-            if (!chatBody) return;
-            
-            // Scroll đến cuối cùng - không cộng thêm footerHeight vì paddingBottom đã được set trong CSS
-            const scrollHeight = chatBody.scrollHeight;
-            const clientHeight = chatBody.clientHeight;
-            const maxScroll = scrollHeight - clientHeight;
-            
-            if (instant) {
-                chatBody.scrollTop = Math.max(0, maxScroll);
-            } else {
-                chatBody.scrollTo({
-                    top: Math.max(0, maxScroll),
-                    behavior: 'smooth'
-                });
-            }
-        });
-        
-        // Backup: Sử dụng scrollIntoView nếu có messagesEndRef
-        if (messagesEndRef.current) {
-            setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ 
-                    behavior: instant ? 'instant' : 'smooth',
-                    block: 'end',
-                    inline: 'nearest'
-                });
-            }, 50);
-        }
-    }, []);
 
     // Helper: Send message
     const sendMessage = useCallback(

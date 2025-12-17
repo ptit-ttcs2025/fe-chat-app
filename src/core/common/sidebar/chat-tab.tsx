@@ -176,15 +176,25 @@ const ChatTab = () => {
     
     const date = new Date(timestamp);
     const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInHours = diffInMs / (1000 * 60 * 60);
     
     if (diffInHours < 1) {
-      const diffInMins = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-      return `${diffInMins} min`;
+      const diffInMins = Math.floor(diffInMs / (1000 * 60));
+      const diffInSecs = Math.floor(diffInMs / 1000);
+      
+      // Nếu < 0 (timestamp trong tương lai) hoặc < 1 phút
+      if (diffInMins < 0 || diffInSecs < 60) {
+        return 'Vừa xong';
+      } else if (diffInMins === 1) {
+        return '1 phút trước';
+      } else {
+        return `${diffInMins} phút trước`;
+      }
     } else if (diffInHours < 24) {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (diffInHours < 48) {
-      return 'Yesterday';
+      return 'Hôm qua';
     } else if (diffInHours < 168) {
       return date.toLocaleDateString('vi-VN', { weekday: 'long' });
     } else {

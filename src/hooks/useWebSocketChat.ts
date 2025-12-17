@@ -13,6 +13,29 @@ import type {
 } from '@/apis/chat/chat.type';
 
 /**
+ * Hook để check WebSocket connection status
+ */
+export const useWebSocketStatus = () => {
+    const [isConnected, setIsConnected] = React.useState(
+        websocketService.getConnectionStatus()
+    );
+
+    useEffect(() => {
+        // Check connection status periodically
+        const interval = setInterval(() => {
+            const connected = websocketService.getConnectionStatus();
+            if (connected !== isConnected) {
+                setIsConnected(connected);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [isConnected]);
+
+    return isConnected;
+};
+
+/**
  * Hook để subscribe conversation messages
  */
 export const useConversationMessages = (
@@ -21,6 +44,7 @@ export const useConversationMessages = (
     enabled: boolean = true
 ) => {
     const onMessageRef = useRef(onMessage);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -28,7 +52,9 @@ export const useConversationMessages = (
     }, [onMessage]);
 
     useEffect(() => {
-        if (!conversationId || !enabled) return;
+        if (!conversationId || !enabled || !isConnected) return;
+
+        console.log('🔄 Hook: Subscribing to conversation:', conversationId);
 
         // Subscribe with stable callback reference
         const unsubscribe = websocketService.subscribeToConversation(
@@ -39,7 +65,7 @@ export const useConversationMessages = (
         return () => {
             unsubscribe();
         };
-    }, [conversationId, enabled]);
+    }, [conversationId, enabled, isConnected]);
 };
 
 /**
@@ -51,6 +77,7 @@ export const useTypingStatus = (
     enabled: boolean = true
 ) => {
     const onTypingRef = useRef(onTyping);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -58,7 +85,7 @@ export const useTypingStatus = (
     }, [onTyping]);
 
     useEffect(() => {
-        if (!conversationId || !enabled) return;
+        if (!conversationId || !enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToTyping(
             conversationId,
@@ -68,7 +95,7 @@ export const useTypingStatus = (
         return () => {
             unsubscribe();
         };
-    }, [conversationId, enabled]);
+    }, [conversationId, enabled, isConnected]);
 };
 
 /**
@@ -80,6 +107,7 @@ export const useReadReceipts = (
     enabled: boolean = true
 ) => {
     const onReadRef = useRef(onRead);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -87,7 +115,7 @@ export const useReadReceipts = (
     }, [onRead]);
 
     useEffect(() => {
-        if (!conversationId || !enabled) return;
+        if (!conversationId || !enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToReadReceipts(
             conversationId,
@@ -97,7 +125,7 @@ export const useReadReceipts = (
         return () => {
             unsubscribe();
         };
-    }, [conversationId, enabled]);
+    }, [conversationId, enabled, isConnected]);
 };
 
 /**
@@ -108,6 +136,7 @@ export const useUserStatus = (
     enabled: boolean = true
 ) => {
     const onStatusRef = useRef(onStatus);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -115,7 +144,7 @@ export const useUserStatus = (
     }, [onStatus]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToUserStatus(
             (status) => onStatusRef.current(status)
@@ -124,7 +153,7 @@ export const useUserStatus = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -135,6 +164,7 @@ export const usePersonalNotifications = (
     enabled: boolean = true
 ) => {
     const onNotificationRef = useRef(onNotification);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -142,7 +172,7 @@ export const usePersonalNotifications = (
     }, [onNotification]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToPersonalNotifications(
             (message) => onNotificationRef.current(message)
@@ -151,7 +181,7 @@ export const usePersonalNotifications = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -162,6 +192,7 @@ export const useSystemMessages = (
     enabled: boolean = true
 ) => {
     const onMessageRef = useRef(onMessage);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -169,7 +200,7 @@ export const useSystemMessages = (
     }, [onMessage]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToSystemMessages(
             (message) => onMessageRef.current(message)
@@ -178,7 +209,7 @@ export const useSystemMessages = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -273,26 +304,5 @@ export const useTypingTimeout = (
         startTyping,
         stopTyping,
     };
-};
-
-/**
- * Hook để check WebSocket connection status
- */
-export const useWebSocketStatus = () => {
-    const [isConnected, setIsConnected] = React.useState(
-        websocketService.getConnectionStatus()
-    );
-
-    useEffect(() => {
-        // Check connection status periodically
-        const interval = setInterval(() => {
-            const connected = websocketService.getConnectionStatus();
-            setIsConnected(connected);
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    return isConnected;
 };
 
