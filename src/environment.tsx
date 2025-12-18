@@ -91,8 +91,8 @@ export const environment = {
         // ✅ Configurable via environment variables
         reconnectInterval: Number(import.meta.env.VITE_WS_RECONNECT_INTERVAL) || 3000, // 3 seconds (faster reconnect)
         maxReconnectAttempts: Number(import.meta.env.VITE_WS_MAX_RECONNECT) || 10, // Tăng từ 5 -> 10
-        heartbeatInterval: Number(import.meta.env.VITE_WS_HEARTBEAT) || 10000, // 10 seconds (phù hợp DO App Platform)
-        connectionTimeout: Number(import.meta.env.VITE_WS_TIMEOUT) || 10000, // 10 seconds
+        heartbeatInterval: Number(import.meta.env.VITE_WS_HEARTBEAT) || 30000, // ✅ 30s (tối ưu cho production)
+        connectionTimeout: Number(import.meta.env.VITE_WS_TIMEOUT) || 15000, // ✅ 15s (tăng từ 10s)
 
         // ✅ SockJS Transport Options
         transports: (import.meta.env.VITE_WS_TRANSPORTS || 'websocket,xhr-streaming').split(','),
