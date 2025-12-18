@@ -53,6 +53,37 @@ static_sites:
     value: /assets/img/
     type: SECRET
 
+  # ✅ WebSocket Fine-tuning Configuration
+  - key: VITE_WS_HEARTBEAT
+    scope: BUILD_TIME
+    value: "10000"
+    type: SECRET
+
+  - key: VITE_WS_MAX_RECONNECT
+    scope: BUILD_TIME
+    value: "10"
+    type: SECRET
+
+  - key: VITE_WS_RECONNECT_INTERVAL
+    scope: BUILD_TIME
+    value: "3000"
+    type: SECRET
+
+  - key: VITE_WS_TIMEOUT
+    scope: BUILD_TIME
+    value: "10000"
+    type: SECRET
+
+  - key: VITE_WS_TRANSPORTS
+    scope: BUILD_TIME
+    value: "websocket,xhr-streaming"
+    type: SECRET
+
+  - key: VITE_WS_DEBUG
+    scope: BUILD_TIME
+    value: "true"
+    type: SECRET
+
   # Routing
   routes:
   - path: /

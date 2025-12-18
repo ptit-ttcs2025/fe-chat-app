@@ -646,6 +646,7 @@ const Chat = () => {
             onDeleteMessage={handleDeleteMessage}
             onPinnedMessageClick={handlePinnedMessageClick}
             onUnpin={(messageId) => handleTogglePin(messageId, true)}
+            typingUsers={typingUsers}
             // Cursor pagination props
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
@@ -661,7 +662,6 @@ const Chat = () => {
         }}>
         <ChatFooter
           footerRef={footerRef}
-          typingUsers={typingUsers}
           selectedConversation={selectedConversation}
           inputMessage={inputMessage}
           inputRef={inputRef}

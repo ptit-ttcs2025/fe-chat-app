@@ -181,33 +181,42 @@ export const useChatMessages = ({
     const handleNewMessage = useCallback(
         (message: MessageResponse) => {
             setMessages((prev) => {
-                // 1. Check duplicate ID
-                if (prev.some((m) => m.id === message.id)) {
+                // 1. Check duplicate bằng real ID
+                const existingIndex = prev.findIndex((m) => m.id === message.id);
+                if (existingIndex !== -1) {
                     return prev;
                 }
 
-                // 2. Check optimistic message tương ứng (trường hợp WebSocket đến trước API response)
-                // Tìm message tạm có content và sender tương ứng
+                // 2. ✅ FIX: Tìm và replace optimistic message của chính mình
+                // CHỈ áp dụng cho message từ currentUser để tránh replace nhầm
                 if (message.senderId === currentUserId) {
-                    const optimisticMatchIndex = prev.findIndex(m => 
-                        m.id.startsWith('optimistic-') && 
-                        m.content === message.content
-                    );
+                    // Tìm optimistic message có content GIỐNG NHAU
+                    // Dùng timestamp để match chính xác hơn (trong vòng 5 giây)
+                    const messageTime = new Date(message.createdAt).getTime();
+                    
+                    const optimisticMatchIndex = prev.findIndex(m => {
+                        if (!m.id.startsWith('optimistic-')) return false;
+                        if (m.content !== message.content) return false;
+                        
+                        // Check timestamp trong vòng 5 giây
+                        const optimisticTime = new Date(m.createdAt).getTime();
+                        const timeDiff = Math.abs(messageTime - optimisticTime);
+                        return timeDiff < 5000; // 5 seconds tolerance
+                    });
 
                     if (optimisticMatchIndex !== -1) {
-                        console.log('🔄 Replaced optimistic message with real WebSocket message');
                         const newMessages = [...prev];
                         newMessages[optimisticMatchIndex] = message;
                         return newMessages;
                     }
                 }
 
-                // 3. Add new message
+                // 3. Add new message (from others or no optimistic match)
                 return [...prev, message];
             });
 
-            // Scroll to bottom
-            scrollToBottom();
+            // ✅ FIX: XÓA scrollToBottom() - để ChatBody tự động scroll qua useEffect
+            // Tránh conflict giữa 2 scroll mechanisms
 
             // Auto mark as read if message from others
             if (
@@ -226,7 +235,7 @@ export const useChatMessages = ({
             // Invalidate conversations query để update lastMessage
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
         },
-        [autoMarkAsRead, currentUserId, queryClient, scrollToBottom]
+        [autoMarkAsRead, currentUserId, queryClient] // ✅ Removed scrollToBottom from deps
     );
 
     // Subscribe to real-time messages
@@ -241,6 +250,7 @@ export const useChatMessages = ({
 
             // Optimistic Update
             const tempId = `optimistic-${Date.now()}`;
+
             const optimisticMessage: IMessage = {
                 id: tempId,
                 conversationId: newMessage.conversationId,
@@ -266,11 +276,26 @@ export const useChatMessages = ({
         onSuccess: (response, variables, context) => {
             // Replace optimistic message with real message from API response
             if (response && response.id) {
-                setMessages((prev) => 
-                    prev.map(msg => 
-                        msg.id === context?.tempId ? response : msg
-                    )
-                );
+                setMessages((prev) => {
+                    // Check if optimistic message still exists
+                    const hasOptimistic = prev.some(m => m.id === context?.tempId);
+                    
+                    if (hasOptimistic) {
+                        return prev.map(msg => 
+                            msg.id === context?.tempId ? response : msg
+                        );
+                    } else {
+                        // Optimistic message đã bị replace bởi WebSocket
+                        // Check xem real message đã có chưa
+                        const hasReal = prev.some(m => m.id === response.id);
+                        if (hasReal) {
+                            return prev;
+                        } else {
+                            // Edge case: không có optimistic, không có real → add real
+                            return [...prev, response];
+                        }
+                    }
+                });
             }
         },
         onError: (error, variables, context) => {

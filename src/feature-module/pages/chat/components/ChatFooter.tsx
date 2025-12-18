@@ -1,6 +1,5 @@
 import { RefObject, useState, useRef, useEffect } from "react";
 import { Tooltip } from "antd";
-import TypingIndicator from "./TypingIndicator";
 import type { IConversation } from "@/apis/chat/chat.type";
 
 // Emoji data - các emoji phổ biến theo category
@@ -14,7 +13,6 @@ const EMOJI_DATA = {
 
 interface ChatFooterProps {
   footerRef: RefObject<HTMLDivElement | null>;
-  typingUsers: string[];
   selectedConversation: IConversation | null;
   inputMessage: string;
   inputRef: RefObject<HTMLInputElement | null>;
@@ -35,7 +33,6 @@ interface ChatFooterProps {
 
 const ChatFooter = ({
   footerRef,
-  typingUsers,
   selectedConversation,
   inputMessage,
   inputRef,
@@ -118,9 +115,6 @@ const ChatFooter = ({
         display: 'block',
       } as React.CSSProperties}
     >
-      {/* Typing Indicator */}
-      {selectedConversation && <TypingIndicator typingUsers={typingUsers} />}
-      
       <form className="footer-form" onSubmit={onSendMessage}>
         <div className="chat-footer-wrap">
           {/* Hidden file inputs */}

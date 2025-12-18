@@ -14,6 +14,7 @@ import type {
 
 /**
  * Hook để check WebSocket connection status
+ * ✅ Optimized: CHỈ update state khi status thực sự thay đổi
  */
 export const useWebSocketStatus = () => {
     const [isConnected, setIsConnected] = React.useState(
@@ -24,13 +25,18 @@ export const useWebSocketStatus = () => {
         // Check connection status periodically
         const interval = setInterval(() => {
             const connected = websocketService.getConnectionStatus();
-            if (connected !== isConnected) {
-                setIsConnected(connected);
-            }
+            // CHỈ update state khi có thay đổi → tránh re-render không cần thiết
+            setIsConnected(prev => {
+                if (prev !== connected) {
+                    // Chỉ log khi status thay đổi (quan trọng)
+                    return connected;
+                }
+                return prev;
+            });
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isConnected]);
+    }, []); // ✅ Empty deps - không phụ thuộc vào isConnected
 
     return isConnected;
 };
@@ -52,14 +58,16 @@ export const useConversationMessages = (
     }, [onMessage]);
 
     useEffect(() => {
-        if (!conversationId || !enabled || !isConnected) return;
-
-        console.log('🔄 Hook: Subscribing to conversation:', conversationId);
+        if (!conversationId || !enabled || !isConnected) {
+            return;
+        }
 
         // Subscribe with stable callback reference
         const unsubscribe = websocketService.subscribeToConversation(
             conversationId,
-            (message) => onMessageRef.current(message)
+            (message) => {
+                onMessageRef.current(message);
+            }
         );
 
         return () => {

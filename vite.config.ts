@@ -1,7 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+
+// ✅ ES Module compatible __dirname
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     plugins: [
@@ -53,12 +57,22 @@ export default defineConfig({
         hmr: {
             overlay: true
         },
-        proxy: { // ✅ Thêm proxy cho API
+        proxy: {
+            // ✅ Proxy cho API requests (tự động forward đến production backend)
             '/api': {
-                target: 'http://localhost:8080',
+                target: 'https://ttcs-chat-app-z86ml.ondigitalocean.app',
                 changeOrigin: true,
-                secure: false,
-            }
+                secure: true,
+                configure: (proxy, _options) => {
+                    proxy.on('proxyReq', (proxyReq, req, res) => {
+                        // ✅ Log proxy requests for debugging
+                        console.log(`🔄 [Vite Proxy] ${req.method} ${req.url} → ${proxyReq.path}`);
+                    });
+                    proxy.on('error', (err, req, res) => {
+                        console.error('❌ [Vite Proxy] Error:', err.message);
+                    });
+                },
+            },
         }
     }
 })

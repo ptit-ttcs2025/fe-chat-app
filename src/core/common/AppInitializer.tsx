@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { rehydrateAuth, setCredentials } from '@/slices/auth/reducer';
+import { setDark } from '@/core/data/redux/commonSlice';
 import authStorage from '@/lib/authStorage';
 import { authApis } from '@/apis/auth/auth.api';
 import websocketService from '@/core/services/websocket.service';
@@ -13,6 +14,7 @@ import { environment } from '../../environment';
  * - Rehydrate auth state từ cookies + sessionStorage
  * - Nếu có token nhưng không có user → Tự động fetch user từ API
  * - Kết nối WebSocket khi user đã đăng nhập
+ * - Khôi phục dark mode từ localStorage
  */
 export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const dispatch = useDispatch();
@@ -25,6 +27,14 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
             // ✅ Rehydrate auth state từ cookies + sessionStorage
             dispatch(rehydrateAuth());
             
+            // ✅ Khôi phục dark mode từ localStorage
+            const darkMode = localStorage.getItem("darkMode");
+            if (darkMode === "enabled") {
+                dispatch(setDark(true));
+            } else {
+                dispatch(setDark(false));
+            }
+
             // ✅ Kiểm tra: Nếu có token nhưng không có user → Fetch từ API
             const accessToken = authStorage.getAccessToken();
             const user = authStorage.getUser();

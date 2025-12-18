@@ -21,9 +21,13 @@ class WebSocketService {
     private notificationCallbacks: Set<NotificationCallback> = new Set();
     private subscription: StompSubscription | null = null;
     private reconnectAttempts: number = 0;
-    private maxReconnectAttempts: number = 5;
+    private maxReconnectAttempts: number = 10; // ✅ Tăng từ 5 -> 10
     private reconnectDelay: number = 5000;
     private currentUserId: string | null = null;
+
+    // ✅ New: Transport & Connection Quality Monitoring
+    private currentTransport: string = 'unknown';
+    private connectionQuality: 'good' | 'poor' | 'disconnected' = 'disconnected';
 
     // Chat-related subscriptions and callbacks
     private chatSubscriptions: Map<string, StompSubscription> = new Map();
@@ -61,36 +65,64 @@ class WebSocketService {
         // Convert wss:// -> https:// và ws:// -> http:// nếu cần
         const httpUrl = wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
         
-        console.log('🔌 Connecting WebSocket for user:', userId, 'to:', httpUrl);
-
         // Create STOMP client
         this.stompClient = new Client({
-            webSocketFactory: () => new SockJS(httpUrl) as any,
+            webSocketFactory: () => new SockJS(httpUrl, null, {
+                // ✅ Force WebSocket transport, fallback to xhr-streaming if needed
+                transports: ['websocket', 'xhr-streaming'],
+                timeout: 15000, // ✅ 15s connection timeout (tăng từ 10s cho production)
+                // Debug transport selection
+                debug: import.meta.env.PROD, // Enable detailed debug in production
+            }) as any,
             connectHeaders: {
                 'Authorization': `Bearer ${token}`
             },
             debug: (str) => {
-                if (str.includes('ERROR') || str.includes('CONNECT') || str.includes('DISCONNECT')) {
-                    console.log('🔧 STOMP:', str);
+                // ✅ Enhanced logging for production debugging
+                const timestamp = new Date().toISOString();
+                if (import.meta.env.PROD) {
+                    if (str.includes('ERROR') || str.includes('DISCONNECT')) {
+                        console.error(`🔍 [${timestamp}] STOMP:`, str);
+                    } else if (str.includes('CONNECTED')) {
+                        console.log(`✅ [${timestamp}] STOMP:`, str);
+                    } else if (str.includes('SEND') || str.includes('MESSAGE')) {
+                        // Log message flow in production for debugging
+                        console.debug(`📤 [${timestamp}] STOMP:`, str.substring(0, 100));
+                    }
+                } else {
+                    // Development: log all for debugging
+                    if (str.includes('ERROR')) {
+                        console.error(`❌ [${timestamp}] STOMP Error:`, str);
+                    } else if (str.includes('CONNECTED') || str.includes('DISCONNECT')) {
+                        console.log(`🔍 [${timestamp}] STOMP:`, str);
+                    }
                 }
             },
-            reconnectDelay: this.reconnectDelay,
-            heartbeatIncoming: 4000,
-            heartbeatOutgoing: 4000,
+            reconnectDelay: 0, // ✅ Disable STOMP auto-reconnect, use custom logic
+            heartbeatIncoming: 30000, // ✅ 30s (tối ưu cho production, giảm overhead)
+            heartbeatOutgoing: 30000, // ✅ 30s - match với backend config
             onConnect: (frame) => {
                 this.onConnected(frame);
             },
             onStompError: (frame) => {
                 console.error('❌ STOMP error:', frame);
+                console.error('   - Headers:', frame.headers);
+                console.error('   - Body:', frame.body);
                 this.isConnected = false;
+                this.connectionQuality = 'disconnected';
             },
             onWebSocketError: (event) => {
                 console.error('❌ WebSocket error:', event);
+                console.error('   - Type:', event.type);
                 this.isConnected = false;
+                this.connectionQuality = 'poor';
             },
             onDisconnect: () => {
                 console.log('👋 WebSocket disconnected');
+                console.log('   - Reconnect attempts:', this.reconnectAttempts);
+                console.log('   - Last transport:', this.currentTransport);
                 this.isConnected = false;
+                this.connectionQuality = 'disconnected';
                 this.handleReconnect(wsUrl, token, userId);
             },
         });
@@ -102,14 +134,20 @@ class WebSocketService {
     private onConnected(frame: any): void {
         this.isConnected = true;
         this.reconnectAttempts = 0;
-        console.log('✅ WebSocket connected for user:', this.currentUserId);
-        console.log('📡 Connection frame:', frame);
+        this.connectionQuality = 'good';
+        
+        // ✅ Detect and log actual transport being used
+        const sockjs = (this.stompClient as any)?._webSocket?._transport;
+        this.currentTransport = sockjs?.transportName || 'unknown';
+        
+        console.log('✅ WebSocket connected');
+        console.log('   - User ID:', this.currentUserId);
+        console.log('   - Transport:', this.currentTransport); // ⭐ KEY INFO
+        console.log('   - URL:', sockjs?.url || 'N/A');
 
         // Subscribe to personal notification topic
         if (this.stompClient && this.currentUserId) {
             const notificationTopic = `/topic/users/${this.currentUserId}/notifications`;
-            console.log(`📡 Subscribing to: ${notificationTopic}`);
-
             this.subscription = this.stompClient.subscribe(
                 notificationTopic,
                 (message: IMessage) => {
@@ -122,40 +160,42 @@ class WebSocketService {
     private handleIncomingNotification(message: IMessage): void {
         try {
             const notification: INotification = JSON.parse(message.body);
-            console.log('📩 Received notification:', notification);
-
             // Notify all registered callbacks
             this.notificationCallbacks.forEach(callback => {
                 try {
                     callback(notification);
                 } catch (error) {
-                    console.error('Error in notification callback:', error);
+                    console.error('❌ Error in notification callback:', error);
                 }
             });
         } catch (error) {
-            console.error('Error parsing notification:', error);
+            console.error('❌ Error parsing notification:', error);
         }
     }
 
     private handleReconnect(wsUrl: string, token: string, userId: string): void {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.error('❌ Max reconnection attempts reached');
+            this.connectionQuality = 'disconnected';
             return;
         }
 
         this.reconnectAttempts++;
-        console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        this.connectionQuality = 'poor';
+        
+        // ✅ Exponential backoff: 1s, 2s, 4s, 8s, 16s, ... (max 30s)
+        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
+        
+        console.log(`🔄 Reconnecting in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
         setTimeout(() => {
             if (!this.isConnected) {
                 this.connect(wsUrl, token, userId);
             }
-        }, this.reconnectDelay);
+        }, delay);
     }
 
     disconnect(): void {
-        console.log('Disconnecting WebSocket...');
-        
         // Cleanup chat subscriptions first
         this.cleanupChatSubscriptions();
 
@@ -174,8 +214,6 @@ class WebSocketService {
         this.isConnected = false;
         this.currentUserId = null;
         this.reconnectAttempts = 0;
-        
-        console.log('👋 WebSocket disconnected');
     }
 
     // Subscribe to notification events
@@ -208,6 +246,31 @@ class WebSocketService {
         return this.currentUserId;
     }
 
+    /**
+     * ✅ Get connection quality metrics
+     */
+    getConnectionQuality(): { status: string; transport: string; quality: string } {
+        return {
+            status: this.isConnected ? 'connected' : 'disconnected',
+            transport: this.currentTransport,
+            quality: this.connectionQuality,
+        };
+    }
+
+    /**
+     * ✅ Detect if using fallback transport (not native WebSocket)
+     */
+    isUsingFallbackTransport(): boolean {
+        return this.currentTransport !== 'websocket' && this.currentTransport !== 'unknown';
+    }
+
+    /**
+     * ✅ Get current transport type
+     */
+    getCurrentTransport(): string {
+        return this.currentTransport;
+    }
+
     // ===========================
     // CHAT WEBSOCKET METHODS
     // ===========================
@@ -220,7 +283,7 @@ class WebSocketService {
         callback: MessageCallback
     ): () => void {
         if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to conversation.');
+            console.warn('⚠️ WebSocket not connected. Cannot subscribe to conversation.');
             return () => { };
         }
 
@@ -238,22 +301,24 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 `/topic/conversations/${conversationId}`,
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageResponse;
-                    console.log('📨 Received message:', data);
-
-                    // Notify all callbacks for this conversation
-                    this.messageCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in message callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body) as MessageResponse;
+                        // Notify all callbacks for this conversation
+                        const callbacks = this.messageCallbacks.get(conversationId);
+                        callbacks?.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in message callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing message:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to conversation: ${conversationId}`);
         }
 
         // Return unsubscribe function
@@ -278,7 +343,6 @@ class WebSocketService {
             subscription.unsubscribe();
             this.chatSubscriptions.delete(subscriptionKey);
             this.messageCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from conversation: ${conversationId}`);
         }
     }
 
@@ -308,22 +372,23 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 `/topic/conversations/${conversationId}/typing`,
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body) as TypingStatus;
-                    console.log('⌨️ Typing status:', data);
-
-                    // Notify all callbacks
-                    this.typingCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in typing callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body) as TypingStatus;
+                        // Notify all callbacks
+                        this.typingCallbacks.get(conversationId)?.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in typing callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing typing status:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to typing: ${conversationId}`);
         }
 
         // Return unsubscribe function
@@ -348,7 +413,6 @@ class WebSocketService {
             subscription.unsubscribe();
             this.chatSubscriptions.delete(subscriptionKey);
             this.typingCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from typing: ${conversationId}`);
         }
     }
 
@@ -378,22 +442,23 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 `/topic/conversations/${conversationId}/read`,
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageRead;
-                    console.log('📖 Read receipt:', data);
-
-                    // Notify all callbacks
-                    this.readCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in read callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body) as MessageRead;
+                        // Notify all callbacks
+                        this.readCallbacks.get(conversationId)?.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in read callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing read receipt:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to read receipts: ${conversationId}`);
         }
 
         // Return unsubscribe function
@@ -418,7 +483,6 @@ class WebSocketService {
             subscription.unsubscribe();
             this.chatSubscriptions.delete(subscriptionKey);
             this.readCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from read receipts: ${conversationId}`);
         }
     }
 
@@ -440,22 +504,23 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 '/topic/user-status',
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body) as UserStatus;
-                    console.log('👤 User status:', data);
-
-                    // Notify all callbacks
-                    this.userStatusCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in user status callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body) as UserStatus;
+                        // Notify all callbacks
+                        this.userStatusCallbacks.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in user status callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing user status:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to user status');
         }
 
         // Return unsubscribe function
@@ -482,22 +547,23 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 '/user/queue/messages',
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageResponse;
-                    console.log('📬 Personal notification:', data);
-
-                    // Notify all callbacks
-                    this.personalNotificationCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in personal notification callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body) as MessageResponse;
+                        // Notify all callbacks
+                        this.personalNotificationCallbacks.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in personal notification callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing personal notification:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to personal notifications');
         }
 
         // Return unsubscribe function
@@ -524,22 +590,23 @@ class WebSocketService {
             const subscription = this.stompClient.subscribe(
                 '/user/queue/system',
                 (message: IMessage) => {
-                    const data = JSON.parse(message.body);
-                    console.log('🔔 System message:', data);
-
-                    // Notify all callbacks
-                    this.systemMessageCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in system message callback:', error);
-                        }
-                    });
+                    try {
+                        const data = JSON.parse(message.body);
+                        // Notify all callbacks
+                        this.systemMessageCallbacks.forEach((cb) => {
+                            try {
+                                cb(data);
+                            } catch (error) {
+                                console.error('❌ Error in system message callback:', error);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('❌ Error parsing system message:', error);
+                    }
                 }
             );
 
             this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to system messages');
         }
 
         // Return unsubscribe function
@@ -567,8 +634,6 @@ class WebSocketService {
             destination: '/app/chat.send',
             body: JSON.stringify(message),
         });
-
-        console.log('📤 Sent message via WebSocket:', message);
     }
 
     /**
@@ -593,8 +658,6 @@ class WebSocketService {
                 timestamp: new Date().toISOString(),
             }),
         });
-
-        console.log(`⌨️ Sent typing status: ${isTyping ? 'typing' : 'stopped'}`);
     }
 
     /**
@@ -614,20 +677,15 @@ class WebSocketService {
                 timestamp: new Date().toISOString(),
             }),
         });
-
-        console.log('📖 Marked messages as read:', messageIds);
     }
 
     /**
      * Cleanup all chat subscriptions
      */
     cleanupChatSubscriptions(): void {
-        console.log('🧹 Cleaning up chat subscriptions...');
-
         // Unsubscribe all chat subscriptions
-        this.chatSubscriptions.forEach((subscription, key) => {
+        this.chatSubscriptions.forEach((subscription) => {
             subscription.unsubscribe();
-            console.log(`🔕 Unsubscribed from ${key}`);
         });
 
         // Clear all maps and sets
@@ -638,8 +696,6 @@ class WebSocketService {
         this.userStatusCallbacks.clear();
         this.personalNotificationCallbacks.clear();
         this.systemMessageCallbacks.clear();
-
-        console.log('✅ Chat subscriptions cleaned up');
     }
 }
 

@@ -16,21 +16,17 @@ const Sidebar = () => {
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
   const { data: totalUnreadCount } = useTotalUnreadCount();
-  const LayoutDark = () => {
-    if (darkMode === "enabled") {
-      localStorage.setItem("darkMode", "enabled");
-      dispatch(setDark(true));
-      setDarkMode("enabled");
-    } else {
-      localStorage.setItem("darkMode", "disabled");
-      dispatch(setDark(false));
-      setDarkMode("disabled");
-    }
-  };
+
   useEffect(() => {
-    setDarkMode(localStorage.getItem("darkMode"));
-    LayoutDark();
-  }, [darkMode]);
+    const currentDarkMode = localStorage.getItem("darkMode");
+    setDarkMode(currentDarkMode);
+
+    if (currentDarkMode === "enabled") {
+      dispatch(setDark(true));
+    } else {
+      dispatch(setDark(false));
+    }
+  }, [dispatch]);
 
   return (
     <>
@@ -195,9 +191,13 @@ const Sidebar = () => {
                   to="#"
                   id="dark-mode-toggle"
                   className={`dark-mode-toggle ${
-                    darkMode === "disabled" ? "active" : ""
+                    darkMode === "enabled" ? "active" : ""
                   }`}
-                  onClick={() => setDarkMode("enabled")}
+                  onClick={() => {
+                    localStorage.setItem("darkMode", "enabled");
+                    dispatch(setDark(true));
+                    setDarkMode("enabled");
+                  }}
                 >
                   <i className="ti ti-moon" />
                 </Link>
@@ -205,9 +205,13 @@ const Sidebar = () => {
                   to="#"
                   id="light-mode-toggle"
                   className={`dark-mode-toggle ${
-                    darkMode === "enabled" ? "active" : ""
+                    darkMode === "disabled" ? "active" : ""
                   }`}
-                  onClick={() => setDarkMode("disabled")}
+                  onClick={() => {
+                    localStorage.setItem("darkMode", "disabled");
+                    dispatch(setDark(false));
+                    setDarkMode("disabled");
+                  }}
                 >
                   <i className="ti ti-sun" />
                 </Link>

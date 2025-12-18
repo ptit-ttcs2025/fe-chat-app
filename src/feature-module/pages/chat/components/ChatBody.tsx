@@ -1,8 +1,10 @@
-import { RefObject, useEffect, useCallback, useRef } from "react";
+import { RefObject, useEffect, useCallback, useRef, useState } from "react";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
 import MessageItem from "./MessageItem";
 import PinnedMessages from "./PinnedMessages";
 import EmptyState from "./EmptyState";
+import NewMessagesBadge from "./NewMessagesBadge";
+import TypingIndicator from "./TypingIndicator";
 
 interface ChatBodyProps {
   messages: IMessage[];
@@ -21,6 +23,7 @@ interface ChatBodyProps {
   onDeleteMessage: (messageId: string) => void;
   onPinnedMessageClick: (messageId: string) => void;
   onUnpin?: (messageId: string) => void;
+  typingUsers?: string[]; // Typing indicator
   // Cursor pagination props
   hasMore?: boolean;
   isLoadingMore?: boolean;
@@ -44,6 +47,7 @@ const ChatBody = ({
   onDeleteMessage,
   onPinnedMessageClick,
   onUnpin,
+  typingUsers = [], // Typing indicator
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
@@ -53,6 +57,11 @@ const ChatBody = ({
   const prevConversationIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef<number>(0);
   const initialLoadDoneRef = useRef<boolean>(false);
+  const isAtBottomRef = useRef<boolean>(true); // Track if user is at bottom
+  const lastSeenMessageCountRef = useRef<number>(0); // Track last seen message count for badge
+  
+  // State for new messages badge
+  const [unreadNewMessagesCount, setUnreadNewMessagesCount] = useState(0);
   
   // Fallback: Nếu filteredMessages rỗng nhưng messages có dữ liệu và không có search keyword, sử dụng messages
   const displayMessages = searchKeyword.trim() 
@@ -65,13 +74,25 @@ const ChatBody = ({
       prevConversationIdRef.current = selectedConversation?.id || null;
       prevMessageCountRef.current = 0;
       initialLoadDoneRef.current = false;
+      lastSeenMessageCountRef.current = 0;
+      setUnreadNewMessagesCount(0);
+      isAtBottomRef.current = true;
     }
   }, [selectedConversation?.id]);
   
   // Scroll up handler - Load more messages khi scroll gần đầu
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement;
-    const scrollTop = target.scrollTop;
+    const { scrollTop, scrollHeight, clientHeight } = target;
+    
+    // ✅ FIX: Tăng threshold lên 250px để user có thể scroll lên một chút mà vẫn auto-scroll
+    // 250px cho phép user xem tin cũ nhưng vẫn được coi là "đang theo dõi chat"
+    const threshold = 250;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
+    
+    // Update isAtBottomRef (không log để giảm noise)
+    
+    isAtBottomRef.current = isAtBottom;
     
     // Trigger load more khi scroll lên gần đầu (< 150px từ top)
     if (scrollTop < 150 && hasMore && !isLoadingMore && !loadMoreThrottleRef.current && onLoadMore) {
@@ -124,6 +145,55 @@ const ChatBody = ({
     
     // Không auto scroll khi load more; chỉ xử lý initial load
   }, [isLoadingMessages, displayMessages.length, selectedConversation?.id]);
+  
+  // ✅ Auto-scroll thông minh + Badge tracking - FIXED: Gộp chung 1 useEffect để tránh conflict
+  useEffect(() => {
+    // Đợi initial load xong
+    if (!initialLoadDoneRef.current) {
+      lastSeenMessageCountRef.current = displayMessages.length;
+      return;
+    }
+    
+    // Check có tin nhắn mới không
+    const hasNewMessages = displayMessages.length > lastSeenMessageCountRef.current;
+    
+    if (hasNewMessages) {
+      const newCount = displayMessages.length - lastSeenMessageCountRef.current;
+      
+      if (isAtBottomRef.current) {
+        // ✅ User đang ở cuối => Auto-scroll + reset badge
+        requestAnimationFrame(() => {
+          const chatBody = chatBodyRef.current;
+          if (chatBody) {
+            chatBody.scrollTo({
+              top: chatBody.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        });
+        setUnreadNewMessagesCount(0);
+      } else {
+        // ✅ User KHÔNG ở cuối => Tăng badge count (KHÔNG scroll)
+        setUnreadNewMessagesCount(prev => prev + newCount);
+      }
+      
+      lastSeenMessageCountRef.current = displayMessages.length;
+    }
+  }, [displayMessages.length]); // ✅ CHỈ phụ thuộc vào displayMessages.length
+  
+  // Scroll to bottom handler for badge
+  const scrollToBottomSmooth = useCallback(() => {
+    const chatBody = chatBodyRef.current;
+    if (chatBody) {
+      chatBody.scrollTo({
+        top: chatBody.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    setUnreadNewMessagesCount(0);
+    lastSeenMessageCountRef.current = displayMessages.length;
+    isAtBottomRef.current = true;
+  }, [displayMessages.length]);
   
   return (
     <div 
@@ -290,6 +360,13 @@ const ChatBody = ({
           </>
         )}
         
+        {/* Typing Indicator - hiển thị khi có người đang nhập */}
+        {typingUsers.length > 0 && !isLoadingMessages && displayMessages.length > 0 && (
+          <div style={{ padding: '8px 0', marginLeft: '46px' }}>
+            <TypingIndicator typingUsers={typingUsers} />
+          </div>
+        )}
+        
         {/* No search results - chỉ hiển thị khi đang search và không có kết quả */}
         {!isLoadingMessages && searchKeyword.trim() && displayMessages.length === 0 && messages.length > 0 && (
           <EmptyState type="no-results" />
@@ -320,6 +397,14 @@ const ChatBody = ({
           />
         )}
       </div>
+      
+      {/* New Messages Badge - Floating button */}
+      {unreadNewMessagesCount > 0 && (
+        <NewMessagesBadge 
+          unreadCount={unreadNewMessagesCount}
+          onScrollToBottom={scrollToBottomSmooth}
+        />
+      )}
     </div>
   );
 };
