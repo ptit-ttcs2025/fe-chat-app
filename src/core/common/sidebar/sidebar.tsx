@@ -7,6 +7,7 @@ import { Tooltip } from "antd";
 import { setDark } from "../../data/redux/commonSlice";
 import { useLogout } from '../../../hooks/useLogout';
 import { useTotalUnreadCount } from '@/hooks/useUnreadMessages';
+import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
 
 const Sidebar = () => {
   const routes = all_routes;
@@ -16,6 +17,14 @@ const Sidebar = () => {
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
   const { data: totalUnreadCount } = useTotalUnreadCount();
+  const { isCollapsed, toggleCollapse } = useSidebarCollapse();
+
+  // Smart Toggle Handler: Expand sidebar if collapsed when clicking an icon
+  const handleIconClick = () => {
+    if (isCollapsed) {
+      toggleCollapse();
+    }
+  };
 
   useEffect(() => {
     const currentDarkMode = localStorage.getItem("darkMode");
@@ -37,6 +46,9 @@ const Sidebar = () => {
             <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
           </Link>
         </div>
+        
+        {/* No separate Expand Button - clicking any icon expands the sidebar */}
+        
         <div className="menu-wrap">
           <div className="main-menu">
             <ul className="nav">
@@ -52,6 +64,7 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#chat-menu"
+                    onClick={handleIconClick}
                   >
                     <span className="position-relative d-inline-flex align-items-center justify-content-center">
                       <i className="ti ti-message-2-heart" />
@@ -78,6 +91,7 @@ const Sidebar = () => {
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#contact-menu"
+                    onClick={handleIconClick}
                   >
                     <i className="ti ti-user-shield" />
                   </Link>
@@ -94,53 +108,9 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#group-menu"
+                    onClick={handleIconClick}
                   >
                     <i className="ti ti-users-group" />
-                  </Link>
-                </li>
-              </Tooltip>
-              <Tooltip title="Status" placement="right" color={"#6338F6 "}>
-                <li>
-                  {/* {location.pathname.includes(routes.status) || location.pathname.includes(routes.myStatus) || location.pathname.includes(routes.userStatus) ? (
-                    <Link
-                    to={routes.status}
-                    data-bs-toggle="tab"
-                    data-bs-target="#status-menu"
-                    className={
-                      location.pathname.includes(routes.status) || location.pathname.includes(routes.myStatus) || location.pathname.includes(routes.userStatus)
-                        ? "active"
-                        : ""
-                    }
-                  >
-                    <i className="ti ti-circle-dot" />
-                  </Link>
-                    
-                  ) : (
-                    <Link
-                      to={routes.status}
-                      className={
-                        location.pathname.includes(routes.status)
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      <i className="ti ti-circle-dot" />
-                    </Link>
-                  )} */}
-                  <Link
-                    onClick={() => navigate(routes.status)}
-                    to={routes.status}
-                    data-bs-toggle="tab"
-                    data-bs-target="#status-menu"
-                    className={
-                      location.pathname.includes(routes.status) ||
-                      location.pathname.includes(routes.myStatus) ||
-                      location.pathname.includes(routes.userStatus)
-                        ? "active"
-                        : ""
-                    }
-                  >
-                    <i className="ti ti-circle-dot" />
                   </Link>
                 </li>
               </Tooltip>
@@ -155,19 +125,26 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#call-menu"
+                    onClick={handleIconClick}
                   >
-                    <i className="ti ti-phone-call" />
+                    <i className="ti ti-phone" />
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Profile" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Status" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
+                    className={
+                      location.pathname.includes(routes.status) || location.pathname.includes(routes.myStatus) || location.pathname.includes(routes.userStatus)
+                        ? "active"
+                        : ""
+                    }
                     data-bs-toggle="tab"
-                    data-bs-target="#profile-menu"
+                    data-bs-target="#status-menu"
+                    onClick={handleIconClick}
                   >
-                    <i className="ti ti-user-circle" />
+                    <i className="ti ti-chart-donut-2" />
                   </Link>
                 </li>
               </Tooltip>
@@ -177,6 +154,7 @@ const Sidebar = () => {
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#setting-menu"
+                    onClick={handleIconClick}
                   >
                     <i className="ti ti-settings" />
                   </Link>
@@ -184,64 +162,52 @@ const Sidebar = () => {
               </Tooltip>
             </ul>
           </div>
-          <div className="profile-menu">
-            <ul>
-              <li>
-                <Link
-                  to="#"
-                  id="dark-mode-toggle"
-                  className={`dark-mode-toggle ${
-                    darkMode === "enabled" ? "active" : ""
-                  }`}
-                  onClick={() => {
-                    localStorage.setItem("darkMode", "enabled");
-                    dispatch(setDark(true));
-                    setDarkMode("enabled");
-                  }}
-                >
-                  <i className="ti ti-moon" />
+          {/* Profile & Logout Section - Compact Icon Style */}
+          <div className="profile-menu d-flex flex-column align-items-center gap-3 pb-4 w-100 mt-auto">
+            
+            {/* Profile Avatar */}
+            <Tooltip title="Hồ sơ" placement="right" color={"#6338F6"}>
+              <div className="profile-img">
+                <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={handleIconClick}>
+                  <ImageWithBasePath
+                    src="assets/img/profiles/avatar-05.jpg"
+                    alt="image"
+                    className="rounded-circle"
+                    style={{ width: '40px', height: '40px', objectFit: 'cover', border: '2px solid transparent' }}
+                  />
                 </Link>
-                <Link
-                  to="#"
-                  id="light-mode-toggle"
-                  className={`dark-mode-toggle ${
-                    darkMode === "disabled" ? "active" : ""
-                  }`}
-                  onClick={() => {
-                    localStorage.setItem("darkMode", "disabled");
-                    dispatch(setDark(false));
-                    setDarkMode("disabled");
-                  }}
-                >
-                  <i className="ti ti-sun" />
-                </Link>
-              </li>
-              <li>
-                <div className="dropdown">
-                  <Link
-                    to="#"
-                    className="avatar avatar-md"
-                    data-bs-toggle="dropdown"
-                  >
-                    <ImageWithBasePath
-                      src="assets/img/profiles/avatar-16.jpg"
-                      alt="img"
-                      className="rounded-circle"
-                    />
-                  </Link>
-                    <div className="dropdown-menu dropdown-menu-end p-3">
-                        <Link
-                            to="#"
-                            className="dropdown-item"
-                            onClick={handleLogout}
-                        >
-                            <i className="ti ti-logout-2 me-2" />
-                            Logout
-                        </Link>
-                    </div>
-                </div>
-              </li>
-            </ul>
+              </div>
+            </Tooltip>
+            
+            {/* Logout Button */}
+            <Tooltip title="Đăng xuất" placement="right" color={"#ff4d4f"}>
+              <button 
+                className="btn btn-link p-0 d-flex align-items-center justify-content-center"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleLogout();
+                }}
+                style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  color: '#9ca3af',
+                  transition: 'all 0.2s',
+                  border: 'none',
+                  background: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#ff4d4f';
+                  e.currentTarget.style.background = '#ff4d4f15';
+                  e.currentTarget.style.borderRadius = '8px';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <i className="ti ti-logout-2" style={{ fontSize: '22px' }} />
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>

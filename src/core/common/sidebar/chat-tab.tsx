@@ -17,6 +17,8 @@ import "overlayscrollbars/overlayscrollbars.css";
 import { all_routes } from '../../../feature-module/router/all_routes';
 import { isValidUrl, getInitial, getAvatarColor } from '@/lib/avatarHelper';
 import { useTotalUnreadCount, useUnreadSummary } from '@/hooks/useUnreadMessages';
+import CollapseButton from './CollapseButton';
+import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
 
 // API Hooks
 import { useChatConversations } from '@/hooks/useChatConversations';
@@ -50,6 +52,9 @@ const ChatTab = () => {
   // Local state
   const [activeTab, setActiveTab] = useState('All Chats');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Sidebar collapse state
+  const { isCollapsed, toggleCollapse } = useSidebarCollapse();
 
   // Tổng số tin nhắn chưa đọc để hiển thị badge nhỏ bên cạnh tiêu đề "Chats"
   const { data: totalUnreadCount } = useTotalUnreadCount();
@@ -424,12 +429,18 @@ const ChatTab = () => {
                     </span>
                   )}
                 </h4>
-                <div className="d-flex align-items-center mb-3">
+                <div className="d-flex align-items-center mb-3 gap-1">
+                  <CollapseButton 
+                    isCollapsed={isCollapsed} 
+                    onToggle={toggleCollapse}
+                    variant="header"
+                  />
                   <Link
                     to="#"
                     data-bs-toggle="modal"
                     data-bs-target="#new-chat"
-                    className="add-icon btn btn-primary p-0 d-flex align-items-center justify-content-center fs-16 me-2"
+                    className="add-icon btn btn-primary p-0 d-flex align-items-center justify-content-center fs-16"
+                    style={{ width: '36px', height: '36px' }}
                   >
                     <i className="ti ti-plus" />
                   </Link>
@@ -437,7 +448,8 @@ const ChatTab = () => {
                     <Link
                       to="#"
                       data-bs-toggle="dropdown"
-                      className="fs-16 text-default"
+                      className="fs-16 text-default d-flex align-items-center justify-content-center"
+                      style={{ width: '36px', height: '36px' }}
                     >
                       <i className="ti ti-dots-vertical" />
                     </Link>

@@ -237,16 +237,30 @@
 	flex-direction: column;
 	position: relative;
 	z-index: 99;
-	width: 400px;
+	// Width is now controlled by inline styles (resizable)
+	// Default width: 400px via useSidebarResize hook
 	margin-left: 72px;
     background-color: variables.$light-900;
     border-right: 1px solid variables.$dark-transparent;
     @include mixins.transition(all .5s ease);
-    @include mixins.respond-below(xxl) {
-        width: 330px;
+    
+    // Prevent text selection during resize
+    &.resizing {
+        user-select: none;
+        
+        * {
+            user-select: none;
+        }
     }
+    
+    // Collapsed state
+    &.collapsed {
+        border-right: none;
+        overflow: hidden;
+    }
+    
     @include mixins.respond-below(xl) {
-        width: calc(100% - 72px);
+        width: calc(100% - 72px) !important;
     }
     @include mixins.respond-below(lg) {
         width: calc(100% - 57px);
@@ -257,6 +271,33 @@
         margin-left: 0;
     }
 }
+
+// Resize handle hover effect
+.sidebar-resize-handle {
+    &:hover {
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: -2px;
+            right: -2px;
+            background-color: rgba(99, 56, 246, 0.1);
+        }
+    }
+}
+
+// Collapse button dark mode support
+.darkmode .sidebar-collapse-btn {
+    background-color: variables.$dark-light-900 !important;
+    border-color: variables.$dark-transparent !important;
+    
+    &:hover {
+        background-color: rgba(99, 56, 246, 0.1) !important;
+        border-color: #6338F6 !important;
+    }
+}
+
 .main-wrapper {
     height: 100vh;
     display: flex;

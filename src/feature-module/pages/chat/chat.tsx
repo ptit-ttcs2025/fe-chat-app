@@ -608,6 +608,7 @@ const Chat = () => {
         style={{
           display: 'flex',
           flexDirection: 'column',
+          flex: 1, // Take remaining space after sidebar
           height: '100vh',
           maxHeight: '100vh',
           overflow: 'hidden',
