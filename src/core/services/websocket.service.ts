@@ -15,6 +15,7 @@ import type {
 import { connectionManager } from './ConnectionManager';
 import { subscriptionManager } from './SubscriptionManager';
 import { messageHandler, MessageHandler } from './MessageHandler';
+import { environment } from '@/environment';
 import type {
     NotificationCallback,
     MessageCallback,
@@ -30,6 +31,9 @@ class WebSocketService {
     // Notification-specific (not migrated to SubscriptionManager for backward compatibility)
     private notificationCallbacks: Set<NotificationCallback> = new Set();
     private notificationSubscription: StompSubscription | null = null;
+
+    // ✅ NEW: Event emitter for ACK events
+    private eventHandlers: Map<string, Set<Function>> = new Map();
 
     private constructor() {
         // Setup connection callbacks
@@ -56,10 +60,10 @@ class WebSocketService {
             wsUrl,
             token,
             userId,
-            maxReconnectAttempts: 10,
-            heartbeatIncoming: 30000,
-            heartbeatOutgoing: 30000,
-            timeout: 15000,
+            maxReconnectAttempts: environment.websocket.maxReconnectAttempts,
+            heartbeatIncoming: environment.websocket.heartbeatInterval,
+            heartbeatOutgoing: environment.websocket.heartbeatInterval,
+            timeout: environment.websocket.connectionTimeout,
         });
     }
 
@@ -89,6 +93,12 @@ class WebSocketService {
                 }
             );
         }
+
+        // ✅ NEW: Subscribe to ACK channel
+        this.subscribeToAckChannel();
+
+        // ✅ NEW: Subscribe to Error channel
+        this.subscribeToErrorChannel();
 
         // Re-subscribe to all previous subscriptions
         subscriptionManager.resubscribeAll();
@@ -283,7 +293,63 @@ class WebSocketService {
     }
 
     /**
+     * ✅ NEW: Subscribe to ACK channel
+     */
+    private subscribeToAckChannel(): void {
+        subscriptionManager.subscribe<any>(
+            'message-ack',
+            '/user/queue/ack',
+            (ack) => {
+                this.emit('message-ack', ack);
+            },
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
+     * ✅ NEW: Subscribe to Error channel
+     */
+    private subscribeToErrorChannel(): void {
+        subscriptionManager.subscribe<any>(
+            'message-error',
+            '/user/queue/errors',
+            (error) => {
+                console.error('❌ [WebSocket] Error received:', error);
+                this.emit('message-error', error);
+            },
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
+     * ✅ NEW: Event emitter
+     */
+    on(event: string, handler: Function): () => void {
+        if (!this.eventHandlers.has(event)) {
+            this.eventHandlers.set(event, new Set());
+        }
+        this.eventHandlers.get(event)!.add(handler);
+
+        // Return unsubscribe function
+        return () => {
+            this.eventHandlers.get(event)?.delete(handler);
+        };
+    }
+
+    /**
+     * ✅ NEW: Emit event
+     */
+    private emit(event: string, data: any): void {
+        const handlers = this.eventHandlers.get(event);
+        if (handlers) {
+            handlers.forEach(handler => handler(data));
+        }
+    }
+
+    /**
      * Send message via WebSocket
+     * ✅ UPDATED: Removed callbacks - use event emitter instead
+     * ✅ UPDATED: Add Authorization header
      */
     sendMessage(message: {
         conversationId: string;
@@ -295,13 +361,19 @@ class WebSocketService {
         const client = connectionManager.getClient();
         if (!client?.connected) {
             console.error('❌ WebSocket not connected. Cannot send message.');
+            this.emit('message-error', { error: 'WebSocket not connected' });
             return;
         }
 
-        client.publish({
-            destination: '/app/chat.send',
-            body: JSON.stringify(message),
-        });
+        try {
+            client.publish({
+                destination: '/app/chat.send',
+                body: JSON.stringify(message),
+            });
+        } catch (error: any) {
+            console.error('❌ WebSocket send error:', error);
+            this.emit('message-error', { error: error.message || 'Failed to send message' });
+        }
     }
 
     /**

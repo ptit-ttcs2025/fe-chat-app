@@ -18,6 +18,11 @@ export interface MessageAttachment {
   fileName?: string;
 }
 
+// ===========================
+// MESSAGE STATUS (for queue tracking)
+// ===========================
+export type MessageStatus = 'pending' | 'sending' | 'sent' | 'failed';
+
 export interface IMessage {
   id: string;
   conversationId: string;
@@ -35,6 +40,11 @@ export interface IMessage {
   repliedToMessage?: IMessage;
   attachment?: MessageAttachment;
   isDeleted?: boolean;
+  
+  // ✅ Queue tracking fields (client-side only)
+  status?: MessageStatus;
+  retryCount?: number;
+  error?: string;
 }
 
 // ===========================

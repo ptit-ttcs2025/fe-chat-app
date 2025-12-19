@@ -363,7 +363,7 @@ const ChatFooter = ({
           </div>
             
           {/* Right side: Send Button */}
-          <div className="form-btn">
+          <div className="form-btn" style={{ margin: 0, padding: 0, display: 'flex', justifyContent: 'flex-end' }}>
             <button 
               className="btn btn-primary" 
               type="submit"
@@ -389,7 +389,10 @@ const ChatFooter = ({
                 transition: 'all 0.2s ease',
                 boxShadow: inputMessage.trim() || isUploading 
                   ? '0 2px 8px rgba(102, 126, 234, 0.3)' 
-                  : 'none'
+                  : 'none',
+                margin: 0,
+                padding: 0,
+                boxSizing: 'border-box',
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled && (inputMessage.trim() || isUploading)) {

@@ -22,8 +22,6 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
 
     useEffect(() => {
         const initializeAuth = async () => {
-            console.log('🚀 AppInitializer mounted - Starting auth rehydration...');
-            
             // ✅ Rehydrate auth state từ cookies + sessionStorage
             dispatch(rehydrateAuth());
             
@@ -40,21 +38,16 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
             const user = authStorage.getUser();
             
             if (accessToken && !user) {
-                console.log('⚠️ Has token but no user - Fetching user from API...');
-                
                 try {
                     // Gọi API để lấy user info
                     const userInfo = await authApis.me();
                     const refreshToken = authStorage.getRefreshToken();
-                    
                     // Lưu lại toàn bộ auth data
                     dispatch(setCredentials({
                         user: userInfo,
                         accessToken,
                         refreshToken: refreshToken || '',
                     }));
-                    
-                    console.log('✅ User fetched and auth restored:', userInfo.username);
                 } catch (error) {
                     console.error('❌ Failed to fetch user - Clearing invalid token');
                     // Token không hợp lệ → Xóa toàn bộ
@@ -62,7 +55,6 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             }
             
-            console.log('✅ AppInitializer completed');
         };
         
         initializeAuth();
@@ -72,15 +64,10 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (user && accessToken) {
             const wsUrl = environment.wsUrl;
-            console.log('🔌 [AppInitializer] Connecting WebSocket');
-            console.log('   - Username:', user.username);
-            console.log('   - User ID:', user.id);
-            console.log('   - WS URL:', wsUrl);
             websocketService.connect(wsUrl, accessToken, user.id);
         } else {
             // Disconnect nếu user đăng xuất
             if (websocketService.getConnectionStatus()) {
-                console.log('🔌 [AppInitializer] Disconnecting WebSocket');
                 websocketService.disconnect();
             }
         }

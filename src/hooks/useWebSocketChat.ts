@@ -14,29 +14,39 @@ import type {
 
 /**
  * Hook để check WebSocket connection status
- * ✅ Optimized: CHỈ update state khi status thực sự thay đổi
+ * ✅ FIXED: Dùng ref để track status và tránh infinite loop
  */
 export const useWebSocketStatus = () => {
-    const [isConnected, setIsConnected] = React.useState(
+    const [isConnected, setIsConnected] = React.useState(() => 
         websocketService.getConnectionStatus()
     );
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const prevStatusRef = useRef<boolean>(websocketService.getConnectionStatus());
 
     useEffect(() => {
-        // Check connection status periodically
-        const interval = setInterval(() => {
-            const connected = websocketService.getConnectionStatus();
-            // CHỈ update state khi có thay đổi → tránh re-render không cần thiết
-            setIsConnected(prev => {
-                if (prev !== connected) {
-                    // Chỉ log khi status thay đổi (quan trọng)
-                    return connected;
-                }
-                return prev;
-            });
-        }, 1000);
+        // Cleanup existing interval
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
 
-        return () => clearInterval(interval);
-    }, []); // ✅ Empty deps - không phụ thuộc vào isConnected
+        // Check connection status periodically với debounce
+        intervalRef.current = setInterval(() => {
+            const connected = websocketService.getConnectionStatus();
+            
+            // ✅ FIXED: Chỉ update nếu thực sự thay đổi (dùng ref để track)
+            if (prevStatusRef.current !== connected) {
+                prevStatusRef.current = connected;
+                setIsConnected(connected);
+            }
+        }, 3000); // Tăng lên 3s để giảm frequency hơn nữa
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, []); // Empty deps
 
     return isConnected;
 };

@@ -131,9 +131,6 @@ export class SubscriptionManager {
             return;
         }
 
-        const timestamp = new Date().toISOString();
-        console.log(`🔄 [${timestamp}] Re-subscribing to ${this.subscriptions.size} subscription(s)...`);
-
         this.subscriptions.forEach((entry, key) => {
             // Only re-subscribe if there are active callbacks
             if (entry.callbacks.size === 0) {
@@ -144,9 +141,6 @@ export class SubscriptionManager {
             if (entry.subscription) {
                 return;
             }
-
-            // Re-subscribe
-            console.log(`   - Re-subscribing to: ${entry.topic}`);
 
             const messageHandlerFn = messageHandler.createMessageHandler(
                 entry.callbacks,
@@ -160,16 +154,12 @@ export class SubscriptionManager {
                 console.error(`❌ Failed to re-subscribe to ${key}:`, error);
             }
         });
-
-        console.log(`✅ [${timestamp}] Re-subscription completed`);
     }
 
     /**
      * Cleanup all subscriptions
      */
     cleanup(): void {
-        console.log(`🧹 Cleaning up ${this.subscriptions.size} subscription(s)...`);
-
         this.subscriptions.forEach((entry, key) => {
             if (entry.subscription) {
                 try {

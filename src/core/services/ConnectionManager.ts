@@ -6,6 +6,7 @@
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import type { ConnectionConfig, ConnectionQuality } from './websocket.types';
+import { environment } from '@/environment';
 
 /**
  * Connection state
@@ -70,13 +71,11 @@ export class ConnectionManager {
 
         // Check if already connected
         if (this.state.isConnected && this.state.currentUserId === config.userId) {
-            console.log('WebSocket already connected for user:', config.userId);
             return;
         }
 
         // Disconnect previous connection if switching user
         if (this.state.isConnected && this.state.currentUserId !== config.userId) {
-            console.log('Switching user, disconnecting previous connection');
             this.disconnect();
         }
 
@@ -87,11 +86,23 @@ export class ConnectionManager {
             .replace(/^wss:/, 'https:')
             .replace(/^ws:/, 'http:');
 
+        // Get transport options from environment (fallback to default)
+        const transports = environment.websocket.transports || ['websocket', 'xhr-streaming'];
+
         // Create SockJS instance
         const sockjs = new SockJS(httpUrl, null, {
-            transports: ['websocket', 'xhr-streaming'],
+            transports: transports as any,
             timeout: this.config.timeout,
         });
+        
+        // Log SockJS events for debugging
+        if (environment.websocket.enableDebugLogs) {
+            sockjs.onopen = () => {};
+            sockjs.onclose = () => {};
+            sockjs.onerror = (error) => {
+                console.error('❌ SockJS error:', error);
+            };
+        }
         this.sockjsInstance = sockjs;
 
         // Create STOMP client
@@ -142,16 +153,11 @@ export class ConnectionManager {
         this.detectTransport();
 
         const timestamp = new Date().toISOString();
-        console.log(`✅ [${timestamp}] WebSocket connected`);
-        console.log('   - User ID:', this.state.currentUserId);
-        console.log('   - Transport:', this.state.transport);
+        console.info(`✅ [${timestamp}] WebSocket connected - Transport: ${this.state.transport}`);
 
         // Warning if using fallback
         if (this.isUsingFallbackTransport()) {
-            console.warn('⚠️ Using fallback transport (not native WebSocket)');
-            console.warn('   - Current transport:', this.state.transport);
-        } else if (this.state.transport === 'websocket') {
-            console.log('✅ Native WebSocket connection confirmed');
+            console.warn('⚠️ Using fallback transport (not native WebSocket)', this.state.transport);
         }
 
         // Notify callback
@@ -164,9 +170,7 @@ export class ConnectionManager {
      * Handle disconnect
      */
     private handleDisconnect(): void {
-        console.log('👋 WebSocket disconnected');
-        console.log('   - Reconnect attempts:', this.state.reconnectAttempts);
-        console.log('   - Last transport:', this.state.transport);
+        console.info('👋 WebSocket disconnected');
 
         this.state.isConnected = false;
         this.state.quality = 'disconnected';
@@ -187,8 +191,22 @@ export class ConnectionManager {
         console.error('❌ STOMP error:', frame);
         console.error('   - Headers:', frame.headers);
         console.error('   - Body:', frame.body);
+        console.error('   - Current transport:', this.state.transport);
+        console.error('   - Reconnect attempts:', this.state.reconnectAttempts);
+        
+        // Log thêm thông tin trong production để debug
+        if (import.meta.env.PROD) {
+            console.error('   - WS URL:', this.config.wsUrl);
+            console.error('   - User ID:', this.state.currentUserId);
+        }
+        
         this.state.isConnected = false;
         this.state.quality = 'disconnected';
+        
+        // Attempt reconnection nếu chưa vượt quá max attempts
+        if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
+            this.attemptReconnect();
+        }
     }
 
     /**
@@ -197,8 +215,22 @@ export class ConnectionManager {
     private handleWebSocketError(event: any): void {
         console.error('❌ WebSocket error:', event);
         console.error('   - Type:', event.type);
+        console.error('   - Current transport:', this.state.transport);
+        console.error('   - Reconnect attempts:', this.state.reconnectAttempts);
+        
+        // Log thêm thông tin trong production để debug
+        if (import.meta.env.PROD) {
+            console.error('   - WS URL:', this.config.wsUrl);
+            console.error('   - User ID:', this.state.currentUserId);
+        }
+        
         this.state.isConnected = false;
         this.state.quality = 'poor';
+        
+        // Attempt reconnection nếu chưa vượt quá max attempts
+        if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
+            this.attemptReconnect();
+        }
     }
 
     /**
@@ -220,8 +252,6 @@ export class ConnectionManager {
         const jitter = baseDelay * 0.2 * (Math.random() - 0.5);
         const delay = Math.round(baseDelay + jitter);
 
-        console.log(`🔄 Reconnecting in ${delay}ms (${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
-
         // Notify callback
         if (this.onReconnectCallback) {
             this.onReconnectCallback(this.state.reconnectAttempts);
@@ -229,7 +259,6 @@ export class ConnectionManager {
 
         setTimeout(() => {
             if (!this.state.isConnected) {
-                console.log('🔄 Attempting reconnection...');
                 this.connect(this.config);
             }
         }, delay);
@@ -269,9 +298,7 @@ export class ConnectionManager {
                         transport = 'xhr-streaming';
                     }
                 }
-            } catch (error) {
-                console.debug('Could not detect transport directly');
-            }
+            } catch (_error) {}
         }
 
         this.state.transport = transport;
@@ -283,18 +310,8 @@ export class ConnectionManager {
     private handleDebugLog(str: string): void {
         const timestamp = new Date().toISOString();
 
-        if (import.meta.env.PROD) {
-            if (str.includes('ERROR') || str.includes('DISCONNECT')) {
-                console.error(`🔍 [${timestamp}] STOMP:`, str);
-            } else if (str.includes('CONNECTED')) {
-                console.log(`✅ [${timestamp}] STOMP:`, str);
-            }
-        } else {
-            if (str.includes('ERROR')) {
-                console.error(`❌ [${timestamp}] STOMP Error:`, str);
-            } else if (str.includes('CONNECTED') || str.includes('DISCONNECT')) {
-                console.log(`🔍 [${timestamp}] STOMP:`, str);
-            }
+        if (str.includes('ERROR') || str.includes('DISCONNECT')) {
+            console.error(`🔍 [${timestamp}] STOMP:`, str);
         }
     }
 
@@ -342,6 +359,13 @@ export class ConnectionManager {
      */
     getCurrentTransport(): string {
         return this.state.transport;
+    }
+
+    /**
+     * Get current token
+     */
+    getToken(): string {
+        return this.config.token;
     }
 }
 

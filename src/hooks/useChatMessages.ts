@@ -6,6 +6,12 @@
  * - Initial load: Lấy N tin nhắn mới nhất
  * - Scroll up: Load older messages với beforeMessageId
  * - Performance: ~30ms consistent (vs 500ms+ với offset pagination)
+ * 
+ * ✅ NEW: Explicit ACK với Simple Pending Tracker
+ * - Backend gửi ACK qua /user/queue/ack
+ * - Simple Map để track pending messages
+ * - Timeout detection (10s) → REST API fallback
+ * - No complex queue, no throttling
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -20,6 +26,8 @@ import type {
 } from '@/apis/chat/chat.type';
 import { useConversationMessages } from './useWebSocketChat';
 import { UNREAD_KEYS } from './useUnreadMessages';
+import websocketService from '@/core/services/websocket.service';
+import { environment } from '@/environment';
 
 interface UseChatMessagesOptions {
     conversationId: string | null;
@@ -47,6 +55,10 @@ export const useChatMessages = ({
     const [apiType, setApiType] = useState<'cursor' | 'pagination'>('cursor'); // Track API type being used
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const hasMarkedAsReadRef = useRef(false); // Track đã mark as read chưa
+
+    // ✅ NEW: Simple Pending Tracker
+    // Map: tempId -> { timeoutId, content, conversationId }
+    const pendingMessages = useRef<Map<string, { timeoutId: NodeJS.Timeout; content: string; conversationId: string }>>(new Map());
 
     // Query key
     const queryKey = ['chat', 'messages', conversationId];
@@ -91,7 +103,6 @@ export const useChatMessages = ({
                 }
                 
                 // Nếu response không có messages field
-                console.warn('⚠️ Cursor API response missing messages field:', response);
                 throw new Error('Invalid cursor API response format');
             } catch (error: any) {
                 console.error('❌ Cursor API error:', error);
@@ -177,9 +188,72 @@ export const useChatMessages = ({
         }
     }, []);
 
+    // ✅ NEW: Subscribe to ACK events  
+    // ACK chỉ dùng để log, actual confirmation là từ broadcast
+    useEffect(() => {
+        const unsubscribeAck = websocketService.on('message-ack', () => {
+            // ACK confirms backend received message
+            // Actual delivery confirmation comes from broadcast
+        });
+
+        const unsubscribeError = websocketService.on('message-error', (error: any) => {
+            console.error('❌ [useChatMessages] Error received:', error);
+            // Mark all pending messages as failed
+            pendingMessages.current.forEach((pending, tempId) => {
+                setMessages(prev =>
+                    prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: 'Gửi thất bại' } : m)
+                );
+                clearTimeout(pending.timeoutId);
+            });
+            pendingMessages.current.clear();
+        });
+
+        return () => {
+            unsubscribeAck();
+            unsubscribeError();
+        };
+    }, [conversationId]);
+
     // Handle real-time messages từ WebSocket
     const handleNewMessage = useCallback(
         (message: MessageResponse) => {
+            // Check if this is our own message (implicit ACK via broadcast)
+            if (message.senderId === currentUserId) {
+                // Tìm pending message matching với broadcast message
+                let foundTempId: string | null = null;
+                
+                pendingMessages.current.forEach((pending, tempId) => {
+                    if (pending.content === message.content && 
+                        pending.conversationId === message.conversationId) {
+                        foundTempId = tempId;
+                    }
+                });
+                
+                if (foundTempId) {
+                    // Update status: sending → delivered
+                    // Replace optimistic message with real one
+                    setMessages(prev =>
+                        prev.map(m => m.id === foundTempId ? { ...message, status: 'delivered' } : m)
+                    );
+                    
+                    // Clear pending
+                    const pending = pendingMessages.current.get(foundTempId);
+                    if (pending) {
+                        clearTimeout(pending.timeoutId);
+                        pendingMessages.current.delete(foundTempId);
+                    }
+                } else {
+                    // Message không match với pending nào, có thể từ device khác
+                    setMessages(prev => {
+                        const exists = prev.find(m => m.id === message.id);
+                        if (exists) return prev;
+                        return [...prev, { ...message, status: 'delivered' }];
+                    });
+                }
+                
+                return;
+            }
+
             setMessages((prev) => {
                 // 1. Check duplicate bằng real ID
                 const existingIndex = prev.findIndex((m) => m.id === message.id);
@@ -235,75 +309,95 @@ export const useChatMessages = ({
             // Invalidate conversations query để update lastMessage
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
         },
-        [autoMarkAsRead, currentUserId, queryClient] // ✅ Removed scrollToBottom from deps
+        [autoMarkAsRead, currentUserId, queryClient]
     );
 
     // Subscribe to real-time messages
     useConversationMessages(conversationId, handleNewMessage, !!conversationId);
 
-    // Mutation: Send message
+    // ✅ NEW: Send message với pending tracker
     const sendMessageMutation = useMutation({
-        mutationFn: (data: SendMessageRequest) => chatApi.sendMessage(data),
-        onMutate: async (newMessage) => {
-            // Cancel outgoing refetches
-            await queryClient.cancelQueries({ queryKey: [...queryKey, apiType] });
+        mutationFn: async (data: SendMessageRequest) => {
+            const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-            // Optimistic Update
-            const tempId = `optimistic-${Date.now()}`;
-
+            // Optimistic update UI
             const optimisticMessage: IMessage = {
                 id: tempId,
-                conversationId: newMessage.conversationId,
-                content: newMessage.content,
+                conversationId: data.conversationId,
+                content: data.content,
                 senderId: currentUserId || '',
-                senderName: 'Bạn', // Có thể cải thiện lấy tên thật từ props
-                type: newMessage.type || 'TEXT',
+                senderName: 'Bạn',
+                type: data.type || 'TEXT',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 isDeleted: false,
                 readCount: 0,
                 readByUserIds: [],
                 pinned: false,
-                // Mock attachment nếu có
-                attachment: undefined
+                status: 'sending', // Status: sending → sent (ACK) → delivered (broadcast)
+                attachment: undefined,
             };
 
             setMessages((prev) => [...prev, optimisticMessage]);
-            scrollToBottom(true); // Instant scroll
+            scrollToBottom(true);
 
-            return { tempId };
-        },
-        onSuccess: (response, variables, context) => {
-            // Replace optimistic message with real message from API response
-            if (response && response.id) {
-                setMessages((prev) => {
-                    // Check if optimistic message still exists
-                    const hasOptimistic = prev.some(m => m.id === context?.tempId);
+            // Check if WebSocket is connected
+            if (!websocketService.getConnectionStatus()) {
+                console.warn('⚠️ WebSocket offline, using REST API');
+                // Fallback to REST API immediately
+                const response = await chatApi.sendMessage(data);
+                
+                // Replace optimistic message with real one
+                setMessages((prev) =>
+                    prev.map(m => m.id === tempId ? { ...response.data, status: 'delivered' } : m)
+                );
+                
+                return response.data;
+            }
+
+            // Send via WebSocket
+            websocketService.sendMessage({
+                conversationId: data.conversationId,
+                content: data.content,
+                type: data.type,
+                repliedToMessageId: data.repliedToMessageId,
+                attachmentId: data.attachmentId,
+            });
+
+            // Track pending with timeout
+            const timeoutId = setTimeout(async () => {
+                console.warn(`⏱️ [useChatMessages] Message timeout: ${tempId}`);
+                
+                // Fallback to REST API
+                try {
+                    const response = await chatApi.sendMessage(data);
                     
-                    if (hasOptimistic) {
-                        return prev.map(msg => 
-                            msg.id === context?.tempId ? response : msg
-                        );
-                    } else {
-                        // Optimistic message đã bị replace bởi WebSocket
-                        // Check xem real message đã có chưa
-                        const hasReal = prev.some(m => m.id === response.id);
-                        if (hasReal) {
-                            return prev;
-                        } else {
-                            // Edge case: không có optimistic, không có real → add real
-                            return [...prev, response];
-                        }
-                    }
-                });
-            }
+                    // Replace optimistic message
+                    setMessages((prev) =>
+                        prev.map(m => m.id === tempId ? { ...response.data, status: 'delivered' } : m)
+                    );
+                    
+                    pendingMessages.current.delete(tempId);
+                } catch (error) {
+                    console.error('❌ REST API fallback failed:', error);
+                    
+                    // Mark as failed
+                    setMessages((prev) =>
+                        prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: 'Gửi tin nhắn thất bại' } : m)
+                    );
+                }
+            }, environment.websocket.ackTimeout || 10000);
+
+            pendingMessages.current.set(tempId, { 
+                timeoutId, 
+                content: data.content,
+                conversationId: data.conversationId 
+            });
+
+            return { id: tempId } as any;
         },
-        onError: (error, variables, context) => {
+        onError: (error) => {
             console.error('❌ Failed to send message:', error);
-            // Remove optimistic message if failed
-            if (context?.tempId) {
-                setMessages((prev) => prev.filter(msg => msg.id !== context.tempId));
-            }
         },
     });
 
@@ -558,7 +652,7 @@ export const useChatMessages = ({
         setCurrentPage(0);
         refetch();
     }, [refetch]);
-    
+
     return {
         // Data
         messages,

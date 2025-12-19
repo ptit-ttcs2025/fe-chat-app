@@ -16,9 +16,6 @@ export const cookieManager = {
         // ✅ Cách đơn giản nhất - KHÔNG dùng secure, KHÔNG dùng sameSite phức tạp
         document.cookie = `${name}=${value}; ${expires}; path=/`;
         
-        console.log(`✅ Cookie set: ${name}`);
-        console.log(`📋 All cookies now:`, document.cookie);
-        
         // Verify ngay lập tức
         const check = this.get(name);
         if (!check) {
@@ -48,9 +45,6 @@ export const cookieManager = {
      * Remove cookie - Cách đơn giản nhất
      */
     remove(name: string): void {
-        console.log(`🗑️ Removing cookie: ${name}`);
-        console.log(`📋 Before remove:`, document.cookie);
-        
         // ✅ Cách 1: Set expires về quá khứ
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
         
@@ -60,15 +54,11 @@ export const cookieManager = {
         // ✅ Cách 3: Set empty value
         document.cookie = `${name}=; path=/`;
         
-        console.log(`📋 After remove:`, document.cookie);
-        
         // Verify
         const check = this.get(name);
         if (check) {
             console.error(`❌ Cookie still exists: ${name} = ${check}`);
             console.error(`This may be a browser issue or cookie protection.`);
-        } else {
-            console.log(`✅ Cookie removed successfully: ${name}`);
         }
     },
 
@@ -76,7 +66,6 @@ export const cookieManager = {
      * Clear all cookies
      */
     clearAll(): void {
-        console.log(`🗑️ Clearing ALL cookies...`);
         const cookies = document.cookie.split(';');
         
         for (let i = 0; i < cookies.length; i++) {
@@ -89,7 +78,6 @@ export const cookieManager = {
             }
         }
         
-        console.log(`📋 Cookies after clear all:`, document.cookie);
     },
 
     /**

@@ -413,8 +413,8 @@ export const chatStyles = `
   
   .chat-footer-wrap .form-btn button {
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
     display: flex;
     align-items: center;
     justify-content: center;

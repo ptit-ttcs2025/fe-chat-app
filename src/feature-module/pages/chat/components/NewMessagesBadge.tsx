@@ -1,109 +1,99 @@
 import { useEffect, useState } from 'react';
 
 interface NewMessagesBadgeProps {
+  show: boolean;
   unreadCount: number;
   onScrollToBottom: () => void;
 }
 
-const NewMessagesBadge = ({ unreadCount, onScrollToBottom }: NewMessagesBadgeProps) => {
-  const [isVisible, setIsVisible] = useState(false);
+const NewMessagesBadge = ({ show, unreadCount, onScrollToBottom }: NewMessagesBadgeProps) => {
+  const [shouldRender, setShouldRender] = useState(show);
 
   useEffect(() => {
-    if (unreadCount > 0) {
-      setIsVisible(true);
+    if (show) {
+      setShouldRender(true);
     } else {
-      // Fade out animation
-      const timeout = setTimeout(() => setIsVisible(false), 300);
+      const timeout = setTimeout(() => setShouldRender(false), 300);
       return () => clearTimeout(timeout);
     }
-  }, [unreadCount]);
+  }, [show]);
 
-  if (!isVisible) return null;
+  if (!shouldRender) return null;
 
   return (
     <div
       style={{
         position: 'absolute',
-        bottom: '30px',
-        right: '30px',
-        zIndex: 60,
-        animation: unreadCount > 0 ? 'slideUpFadeIn 0.3s ease-out' : 'fadeOut 0.3s ease-out',
+        bottom: '70px',
+        right: '20px',
+        zIndex: 1000,
+        opacity: show ? 1 : 0,
+        transform: show ? 'translateY(0)' : 'translateY(20px)',
+        transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        pointerEvents: 'none',
       }}
     >
       <button
         onClick={onScrollToBottom}
         style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '50px',
-          padding: '12px 20px',
-          fontSize: '14px',
-          fontWeight: 600,
-          cursor: 'pointer',
+          width: '42px',
+          height: '42px',
+          borderRadius: '50%',
+          background: '#fff',
+          color: '#667eea',
+          border: '1px solid #e5e7eb',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)',
-          transition: 'all 0.2s ease',
-          minWidth: 'fit-content',
-          whiteSpace: 'nowrap',
+          justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+          position: 'relative',
+          pointerEvents: 'auto',
+          margin: 0,
+          padding: 0,
+          boxSizing: 'border-box',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          e.currentTarget.style.boxShadow = '0 6px 25px rgba(102, 126, 234, 0.5)';
+          e.currentTarget.style.transform = 'translateY(-3px)';
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.18)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 20px rgba(102, 126, 234, 0.4)';
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
         }}
+        title="Cuộn xuống tin nhắn mới"
       >
-        <span
-          style={{
-            background: '#fff',
-            color: '#667eea',
-            borderRadius: '50%',
-            width: '24px',
-            height: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
-        <span>tin nhắn mới</span>
-        <i className="ti ti-arrow-down" style={{ fontSize: '16px' }} />
-      </button>
-
-      {/* CSS Animations - inline styles */}
-      <style>{`
-        @keyframes slideUpFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+        <i className="ti ti-chevrons-down" style={{ fontSize: '20px' }} />
         
-        @keyframes fadeOut {
-          from {
-            opacity: 1;
-          }
-          to {
-            opacity: 0;
-          }
-        }
-      `}</style>
+        {/* Badge number */}
+        {unreadCount > 0 && (
+          <span
+            style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '0',
+              background: '#ff4d4f',
+              color: '#fff',
+              borderRadius: '10px',
+              padding: '0 5px',
+              fontSize: '10px',
+              fontWeight: 700,
+              minWidth: '16px',
+              height: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1.5px solid #fff',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            }}
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
     </div>
   );
 };
 
 export default NewMessagesBadge;
-
