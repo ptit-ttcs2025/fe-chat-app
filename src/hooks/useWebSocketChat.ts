@@ -52,7 +52,9 @@ export const useWebSocketStatus = () => {
 };
 
 /**
- * Hook để subscribe conversation messages
+ * Hook để listen messages (NO LONGER SUBSCRIBES)
+ * Subscription is handled globally in WebSocketService
+ * This hook now only listens to the global event
  */
 export const useConversationMessages = (
     conversationId: string | null,
@@ -60,30 +62,24 @@ export const useConversationMessages = (
     enabled: boolean = true
 ) => {
     const onMessageRef = useRef(onMessage);
-    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
         onMessageRef.current = onMessage;
     }, [onMessage]);
 
+    // ✅ Just listen to the global event, don't subscribe
     useEffect(() => {
-        if (!conversationId || !enabled || !isConnected) {
-            return;
-        }
+        if (!conversationId || !enabled) return;
 
-        // Subscribe with stable callback reference
-        const unsubscribe = websocketService.subscribeToConversation(
-            conversationId,
-            (message) => {
+        const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
+            if (message.conversationId === conversationId) {
                 onMessageRef.current(message);
             }
-        );
+        });
 
-        return () => {
-            unsubscribe();
-        };
-    }, [conversationId, enabled, isConnected]);
+        return () => unsubscribe();
+    }, [conversationId, enabled]);
 };
 
 /**

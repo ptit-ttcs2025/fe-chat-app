@@ -24,7 +24,6 @@ import type {
     MarkAsReadRequest,
     CursorInfo,
 } from '@/apis/chat/chat.type';
-import { useConversationMessages } from './useWebSocketChat';
 import { UNREAD_KEYS } from './useUnreadMessages';
 import websocketService from '@/core/services/websocket.service';
 import { environment } from '@/environment';
@@ -312,8 +311,21 @@ export const useChatMessages = ({
         [autoMarkAsRead, currentUserId, queryClient]
     );
 
-    // Subscribe to real-time messages
-    useConversationMessages(conversationId, handleNewMessage, !!conversationId);
+    // ✅ NEW: Subscribe to real-time messages globally (all conversations)
+    // Replaced useConversationMessages which only subscribed to one conversation at a time
+    useEffect(() => {
+        if (!conversationId) return;
+
+        const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
+            // Only process messages for current conversation
+            if (message.conversationId === conversationId) {
+                handleNewMessage(message);
+            }
+            // Messages for other conversations are handled by useChatConversations
+        });
+
+        return () => unsubscribe();
+    }, [conversationId, handleNewMessage]);
 
     // ✅ NEW: Send message với pending tracker
     const sendMessageMutation = useMutation({

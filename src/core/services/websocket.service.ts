@@ -24,6 +24,7 @@ import type {
     UserStatusCallback,
     SystemMessageCallback,
 } from './websocket.types';
+import { chatApi } from '@/apis/chat/chat.api';
 
 class WebSocketService {
     private static instance: WebSocketService | null = null;
@@ -102,6 +103,9 @@ class WebSocketService {
 
         // Re-subscribe to all previous subscriptions
         subscriptionManager.resubscribeAll();
+
+        // ✅ NEW: Subscribe to ALL conversations after connect
+        this.subscribeAllConversations();
     }
 
     /**
@@ -344,6 +348,53 @@ class WebSocketService {
         if (handlers) {
             handlers.forEach(handler => handler(data));
         }
+    }
+
+    /**
+     * ✅ NEW: Subscribe to ALL user's conversations
+     * Called after WebSocket connects
+     */
+    async subscribeAllConversations(): Promise<void> {
+        try {
+            // Get all conversations from API
+            const response = await chatApi.getConversations(0, 100);
+            const conversations = response.results || [];
+            const conversationIds = conversations.map(c => c.id);
+            
+            // Subscribe to each conversation
+            conversationIds.forEach(id => {
+                subscriptionManager.subscribe<MessageResponse>(
+                    `conversation-${id}`,
+                    `/topic/conversations/${id}`,
+                    (message) => this.handleGlobalMessage(message),
+                    MessageHandler.jsonParser
+                );
+            });
+            
+            console.info(`✅ Subscribed to ${conversationIds.length} conversations`);
+        } catch (error) {
+            console.error('❌ Failed to subscribe to conversations:', error);
+        }
+    }
+
+    /**
+     * ✅ NEW: Handle incoming message for ANY conversation
+     */
+    private handleGlobalMessage(message: MessageResponse): void {
+        // Emit event for hooks to listen
+        this.emit('conversation-message', message);
+    }
+
+    /**
+     * ✅ NEW: Subscribe to a NEW conversation (when user creates one)
+     */
+    subscribeNewConversation(conversationId: string): void {
+        subscriptionManager.subscribe<MessageResponse>(
+            `conversation-${conversationId}`,
+            `/topic/conversations/${conversationId}`,
+            (message) => this.handleGlobalMessage(message),
+            MessageHandler.jsonParser
+        );
     }
 
     /**
