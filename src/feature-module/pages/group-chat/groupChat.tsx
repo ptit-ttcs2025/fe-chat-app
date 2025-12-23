@@ -1,451 +1,770 @@
-import  { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
-import {Tooltip} from "antd";
-import CommonGroupModal from "../../../core/modals/common-group-modal";
-import { all_routes } from "../../router/all_routes";
-import ForwardMessage from "../../../core/modals/forward-message";
-import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
-import "overlayscrollbars/overlayscrollbars.css";
-import { mockGroupInfo, mockGroupMessages } from '@/mockData/groupChatData';
+/**
+ * Group Chat Component - Tích hợp API đầy đủ với realtime messaging
+ * Redesigned theo cấu trúc chat.tsx với group-specific features
+ */
+
+import { useEffect, useState, useCallback, useRef, RefObject } from "react";
+import { useSelector } from "react-redux";
+
+// API & Hooks
+import { useChatMessages } from "@/hooks/useChatMessages";
+import { useChatConversations } from "@/hooks/useChatConversations";
+import { useGroupManagement } from "@/hooks/useGroupManagement";
+import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
+import websocketService from "@/core/services/websocket.service";
+import type { IMessage, IConversation } from "@/apis/chat/chat.type";
+import { uploadImage, uploadFile, chatApi } from "@/apis/chat/chat.api";
+
+// Components
+import GroupChatHeader from "./components/GroupChatHeader";
+import GroupChatBody from "./components/GroupChatBody";
+import GroupChatFooter from "./components/GroupChatFooter";
+import TypingIndicator from "../chat/components/TypingIndicator";
+import { chatStyles } from "../chat/styles/chatStyles";
+
+// Modals
+import CreateGroupModal from "@/core/modals/create-group-modal";
+import AddMembersModal from "@/core/modals/add-members-modal";
+import EditGroupModal from "@/core/modals/edit-group-modal";
+import GroupMembersModal from "@/core/modals/group-members-modal";
+
+// Redux State Interface
+interface RootState {
+  auth: {
+    user: {
+      id: string;
+      username: string;
+      fullName: string;
+      avatarUrl?: string;
+    } | null;
+    token: string | null;
+  };
+  common: {
+    selectedConversationId: string | null;
+  };
+}
 
 const GroupChat = () => {
-  const [open1, setOpen1] = useState(false);
+  // ==================== Redux State ====================
+  const user = useSelector((state: RootState) => state.auth?.user);
+  const selectedConversationId = useSelector(
+    (state: RootState) => state.common?.selectedConversationId
+  );
+
+  // ==================== Local State (UI) ====================
   const [showSearch, setShowSearch] = useState(false);
-  const [showReply, setShowReply] = useState(false);
-  const [showEmoji, setShowEmoji] = useState<Record<number, boolean>>({});
-  const toggleEmoji = (groupId: number) => {
-    setShowEmoji((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId], // Toggle the state for this specific group
-    }));
-  };
-  const toggleSearch = () => {
-    setShowSearch(!showSearch);
-  };
-  const routes = all_routes;
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [inputMessage, setInputMessage] = useState("");
+  const [selectedConversation, setSelectedConversation] =
+    useState<IConversation | null>(null);
+  const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Modal states
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+
+  // ==================== Refs ====================
+  const inputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null) as RefObject<HTMLDivElement>;
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null) as RefObject<HTMLDivElement>;
+  const [footerHeight, setFooterHeight] = useState(100);
+
+  // ==================== API Hooks ====================
+
+  // WebSocket connection
+  const isWsConnected = useWebSocketStatus();
+
+  // Group conversations list (filter type=GROUP)
+  const { conversations } = useChatConversations({
+    pageSize: 50,
+    autoRefresh: true,
+    type: "GROUP", // Filter only GROUP conversations
+  });
+
+  // Sync conversation from Redux
   useEffect(() => {
-    document.querySelectorAll(".chat-user-list").forEach(function (element) {
-      element.addEventListener("click", function () {
-        if (window.innerWidth <= 992) {
-          const showChat = document.querySelector(".chat-messages");
-          if (showChat) {
-            showChat.classList.add("show");
-          }
+    if (selectedConversationId && conversations.length > 0) {
+      const conv = conversations.find((c) => c.id === selectedConversationId);
+      if (conv) {
+        setSelectedConversation(conv);
+      }
+    }
+  }, [selectedConversationId, conversations]);
+
+  // Group management hook
+  const {
+    group,
+    members,
+    isLoadingMembers,
+    addMembers: addMembersToGroup,
+    removeMember: removeMemberFromGroup,
+    updateGroup: updateGroupInfo,
+    isAdmin,
+    getOnlineMembersCount,
+  } = useGroupManagement({
+    groupId: selectedConversation?.groupId || null,
+    autoFetchMembers: true,
+  });
+
+  // Messages hook (reuse from chat - supports both ONE_TO_ONE and GROUP)
+  const {
+    messages,
+    isLoading: isLoadingMessages,
+    isSending,
+    sendMessage: sendMessageHook,
+    deleteMessage,
+    togglePin,
+    hasMore,
+    isLoadingMore,
+    loadMoreMessages,
+  } = useChatMessages({
+    conversationId: selectedConversation?.id || null,
+    pageSize: 50,
+    autoMarkAsRead: true,
+    currentUserId: user?.id,
+  });
+
+  // Pinned messages state
+  const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
+
+  // Send message with attachment helper
+  const sendMessageWithAttachment = useCallback(
+    async (
+      content: string,
+      type: "TEXT" | "IMAGE" | "FILE",
+      attachmentId?: string
+    ) => {
+      if (!selectedConversation) return;
+
+      await chatApi.sendMessage({
+        conversationId: selectedConversation.id,
+        content,
+        type,
+        attachmentId,
+      });
+    },
+    [selectedConversation]
+  );
+
+  // Use scrollToBottom from hook
+  const { scrollToBottom: scrollToBottomFromHook } = {
+    scrollToBottom: () => {
+      requestAnimationFrame(() => {
+        const chatBody = document.querySelector(
+          "#middle .chat-body.chat-page-group"
+        ) as HTMLElement;
+        if (chatBody) {
+          const scrollHeight = chatBody.scrollHeight;
+          const clientHeight = chatBody.clientHeight;
+          const maxScroll = scrollHeight - clientHeight;
+          chatBody.scrollTop = Math.max(0, maxScroll);
         }
       });
-    });
-    document.querySelectorAll(".chat-close").forEach(function (element) {
-      element.addEventListener("click", function () {
-        if (window.innerWidth <= 992) {
-          const hideChat = document.querySelector(".chat-messages");
-          if (hideChat) {
-            hideChat.classList.remove("show");
+    },
+  };
+
+  // Chat actions (typing, etc)
+  const { sendTypingStatus } = useChatActions();
+
+  // Typing users state
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+
+  // ==================== Effects ====================
+
+  // Auto-select first conversation if none selected
+  useEffect(() => {
+    if (!selectedConversation && conversations.length > 0) {
+      setSelectedConversation(conversations[0]);
+    }
+  }, [conversations, selectedConversation]);
+
+  // Subscribe to typing status
+  useEffect(() => {
+    if (selectedConversation?.id && isWsConnected) {
+      const unsubscribe = websocketService.subscribeToTyping(
+        selectedConversation.id,
+        (status) => {
+          if (status.userId !== user?.id) {
+            setTypingUsers((prev) => {
+              if (status.isTyping) {
+                return [
+                  ...prev.filter((u) => u !== status.userName),
+                  status.userName,
+                ];
+              } else {
+                return prev.filter((u) => u !== status.userName);
+              }
+            });
+
+            // Auto clear after 2s
+            setTimeout(() => {
+              setTypingUsers((prev) =>
+                prev.filter((u) => u !== status.userName)
+              );
+            }, 2000);
           }
         }
-      });
+      );
+
+      return () => unsubscribe();
+    }
+  }, [selectedConversation?.id, isWsConnected, user?.id]);
+
+  // Mobile responsive handlers
+  useEffect(() => {
+    const handleChatUserClick = () => {
+      if (window.innerWidth <= 992) {
+        const showChat = document.querySelector(".chat-messages");
+        if (showChat) {
+          showChat.classList.add("show");
+        }
+      }
+    };
+
+    const handleChatClose = () => {
+      if (window.innerWidth <= 992) {
+        const hideChat = document.querySelector(".chat-messages");
+        if (hideChat) {
+          hideChat.classList.remove("show");
+        }
+      }
+    };
+
+    document.querySelectorAll(".chat-user-list").forEach((element) => {
+      element.addEventListener("click", handleChatUserClick);
     });
+
+    document.querySelectorAll(".chat-close").forEach((element) => {
+      element.addEventListener("click", handleChatClose);
+    });
+
+    return () => {
+      document.querySelectorAll(".chat-user-list").forEach((element) => {
+        element.removeEventListener("click", handleChatUserClick);
+      });
+      document.querySelectorAll(".chat-close").forEach((element) => {
+        element.removeEventListener("click", handleChatClose);
+      });
+    };
   }, []);
-  return (
-      <>
-        {/* Chat */}
-        <div className="chat chat-messages show" id="middle">
-          <div>
-            <div className="chat-header">
-              <div className="user-details">
-                <div className="d-xl-none">
-                  <Link className="text-muted chat-close me-2" to="#">
-                    <i className="fas fa-arrow-left" />
-                  </Link>
-                </div>
-                <div className="avatar avatar-lg online flex-shrink-0">
-                  <ImageWithBasePath
-                    src={mockGroupInfo.avatar}
-                    className="rounded-circle"
-                    alt={mockGroupInfo.name}
-                  />
-                </div>
-                <div className="ms-2 overflow-hidden">
-                  <h6>{mockGroupInfo.name}</h6>
-                  <p className="last-seen text-truncate">
-                    {mockGroupInfo.totalMembers} thành viên, <span className="text-success">{mockGroupInfo.onlineMembers} trực tuyến</span>
-                  </p>
-                </div>
-              </div>
-              <div className="chat-options">
-                <ul>
-                  <li>
-                    <div className="avatar-list-stacked avatar-group-md d-flex">
-                      {mockGroupInfo.members.slice(0, 4).map((member) => (
-                        <span key={member.id} className="avatar avatar-rounded">
-                        <ImageWithBasePath
-                            src={member.avatar}
-                            alt={member.name}
-                        />
-                      </span>
-                      ))}
-                      {mockGroupInfo.totalMembers > 4 && (
-                      <Link
-                        className="avatar bg-primary avatar-rounded text-fixed-white"
-                        to="#"
-                      >
-                          {mockGroupInfo.totalMembers - 4}+
-                      </Link>
-                      )}
-                    </div>
-                  </li>
-                  <li>
-                    <Tooltip title="Search" placement="bottom">
-                      <Link
-                        to="#"
-                        className="btn chat-search-btn"
-                        onClick={() => toggleSearch()}
-                      >
-                        <i className="ti ti-search" />
-                      </Link>
-                    </Tooltip>
-                  </li>
-                  <li>
-                    <Tooltip title="Group Info" placement="bottom">
-                      <Link
-                        to="#"
-                        className="btn position-relative"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#contact-profile"
-                      >
-                        <i className="ti ti-info-circle" />
-                        {/* Badge đếm yêu cầu tham gia nhóm - chỉ hiển thị khi có yêu cầu và tính năng đang bật */}
-                        {3 > 0 && (
-                          <span
-                            className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                            style={{
-                              fontSize: "10px",
-                              minWidth: "18px",
-                              height: "18px",
-                              padding: "2px 6px",
-                            }}
-                          >
-                            {3 > 99 ? "99+" : 3}
-                          </span>
-                        )}
-                      </Link>
-                    </Tooltip>
-                  </li>
-                  <li>
-                    <Link
-                      className="btn no-bg"
-                      to="#"
-                      data-bs-toggle="dropdown"
-                    >
-                      <i className="ti ti-dots-vertical" />
-                    </Link>
-                    <ul className="dropdown-menu dropdown-menu-end p-3">
-                      <li>
-                        <Link to={routes.index} className="dropdown-item">
-                          <i className="ti ti-x me-2" />
-                          Đóng nhóm
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#mute-notification"
-                        >
-                          <i className="ti ti-volume-off me-2" />
-                          Tắt thông báo
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#disappearing-messages"
-                        >
-                          <i className="ti ti-clock-hour-4 me-2" />
-                          Tin nhắn tự xóa
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#clear-chat"
-                        >
-                          <i className="ti ti-clear-all me-2" />
-                          Xóa tin nhắn
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#delete-chat"
-                        >
-                          <i className="ti ti-trash me-2" />
-                          Xóa nhóm
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#report-user"
-                        >
-                          <i className="ti ti-thumb-down me-2" />
-                          Báo cáo
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
-                          to="#"
-                          className="dropdown-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#block-user"
-                        >
-                          <i className="ti ti-ban me-2" />
-                          Chặn
-                        </Link>
-                      </li>
-                    </ul>
-                  </li>
-                </ul>
-              </div>
-              {/* Chat Search */}
-              <div
-                className={`chat-search search-wrap contact-search ${
-                  showSearch ? "visible-chat" : ""
-                }`}
-              >
-                <form>
-                  <div className="input-group">
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Tìm kiếm liên hệ"
-                    />
-                    <span className="input-group-text">
-                      <i className="ti ti-search" />
-                    </span>
-                  </div>
-                </form>
-              </div>
-              {/* /Chat Search */}
-            </div>
-            <OverlayScrollbarsComponent
-              options={{
-                scrollbars: {
-                  autoHide: 'scroll',
-                  autoHideDelay: 1000,
-                },
-              }}
-              style={{ maxHeight: '88vh' }}
-            >
-              <div className="chat-body chat-page-group ">
-                <div className="messages">
-                  {mockGroupMessages.map((message, index) => (
-                    <div key={message.id} className={message.isOwn ? 'chats chats-right' : 'chats'}>
-                      {!message.isOwn && (
-                    <div className="chat-avatar">
-                      <ImageWithBasePath
-                            src={message.senderAvatar}
-                        className="rounded-circle"
-                            alt={message.senderName}
-                      />
-                    </div>
-                      )}
-                    <div className="chat-content">
-                        <div className="chat-profile-name" style={{ textAlign: message.isOwn ? 'right' : 'left' }}>
-                        <h6>
-                            {message.senderName}
-                          <i className="ti ti-circle-filled fs-7 mx-2" />
-                            <span className="chat-time">{message.timestamp}</span>
-                            {message.isOwn && (
-                          <span className="msg-read success">
-                            <i className="ti ti-checks" />
-                          </span>
-                            )}
-                        </h6>
-                      </div>
-                      <div className="chat-info">
-                        <div className="message-content">
-                            {message.type === 'text' && (
-                              <>{message.content}</>
-                            )}
-                            {message.type === 'image' && (
-                              <div className="chat-image">
-                                        <ImageWithBasePath
-                                  src={message.content}
-                                  alt="Hình ảnh"
-                                  className="img-fluid rounded"
-                                  onClick={() => setOpen1(true)}
-                                />
-                                </div>
-                            )}
-                            {message.type === 'file' && (
-                          <div className="file-attach">
-                                <div className="d-flex align-items-center">
-                                  <span className="file-icon bg-primary text-white">
-                                    <i className="ti ti-file-text" />
-                            </span>
-                            <div className="ms-2 overflow-hidden">
-                                    <h6 className="mb-1 text-truncate">{message.content}</h6>
-                                    <p className="text-muted mb-0 small">Tài liệu</p>
-                            </div>
-                          </div>
-                                </div>
-                            )}
-                            {message.type === 'voice' && (
-                          <div className="file-attach">
-                            <div className="d-flex align-items-center">
-                                  <span className="file-icon bg-info text-white">
-                                    <i className="ti ti-microphone" />
-                              </span>
-                              <div className="ms-2 overflow-hidden">
-                                    <h6 className="mb-1 text-truncate">{message.content}</h6>
-                                    <p className="text-muted mb-0 small">Tin nhắn thoại</p>
-                              </div>
-                            </div>
-                          </div>
-                            )}
-                        </div>
-                        <div className="chat-actions">
-                          <Link className="#" to="#" data-bs-toggle="dropdown">
-                            <i className="ti ti-dots-vertical" />
-                          </Link>
-                          <ul className="dropdown-menu dropdown-menu-end p-3">
-                            <li>
-                              <Link className="dropdown-item" to="#">
-                                <i className="ti ti-heart me-2" />
-                                  Trả lời
-                              </Link>
-                            </li>
-                            <li>
-                              <Link className="dropdown-item" to="#">
-                                  <i className="ti ti-pinned me-2" />
-                                  Chuyển tiếp
-                              </Link>
-                            </li>
-                            <li>
-                              <Link className="dropdown-item" to="#">
-                                  <i className="ti ti-file-export me-2" />
-                                  Sao chép
-                              </Link>
-                            </li>
-                            <li>
-                              <Link className="dropdown-item" to="#">
-                                <i className="ti ti-trash me-2" />
-                                  Xóa
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                            </div>
-                          </div>
-                      {message.isOwn && (
-                    <div className="chat-avatar">
-                      <ImageWithBasePath
-                            src={message.senderAvatar}
-                        className="rounded-circle dreams_chat"
-                            alt="Bạn"
-                      />
-                    </div>
-                      )}
-                  </div>
-                  ))}
-                </div>
-              </div>
-            </OverlayScrollbarsComponent>
-          </div>
-          <div className="chat-footer">
-            <form className="footer-form">
-              <div className="chat-footer-wrap">
-                <div className="form-item">
-                  <Link to="#" className="action-circle">
-                    <i className="ti ti-microphone" />
-                  </Link>
-                </div>
-                <div className="form-wrap">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Nhập tin nhắn của bạn"
-                  />
-                </div>
-                <div className="form-item emoj-action-foot">
-                  <Link to="#" className="action-circle">
-                    <i className="ti ti-mood-smile" />
-                  </Link>
-                </div>
-                <div className="form-item position-relative d-flex align-items-center justify-content-center ">
-                  <Link to="#" className="action-circle file-action position-absolute">
-                    <i className="ti ti-folder" />
-                  </Link>
-                  <input
-                    type="file"
-                    className="open-file position-relative"
-                    name="files"
-                    id="files"
-                  />
-                </div>
-                <div className="form-item">
-                  <Link to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <div className="dropdown-menu dropdown-menu-end p-3">
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-file-text me-2" />
-                      Tài liệu
-                    </Link>
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-camera-selfie me-2" />
-                      Máy ảnh
-                    </Link>
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-photo-up me-2" />
-                      Thư viện
-                    </Link>
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-music me-2" />
-                      Âm thanh
-                    </Link>
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-map-pin-share me-2" />
-                      Vị trí
-                    </Link>
-                    <Link to="#" className="dropdown-item">
-                      <i className="ti ti-user-check me-2" />
-                      Liên hệ
-                    </Link>
-                  </div>
-                </div>
-                <div className="form-btn">
-                  <button className="btn btn-primary" type="submit">
-                    <i className="ti ti-send" />
-                  </button>
-                </div>
-              </div>
-            </form>
+
+  // Filter messages when search keyword changes
+  useEffect(() => {
+    if (searchKeyword.trim()) {
+      const filtered = messages.filter(
+        (msg) =>
+          msg.content?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+          msg.senderName?.toLowerCase().includes(searchKeyword.toLowerCase())
+      );
+      setFilteredMessages(filtered);
+    } else {
+      setFilteredMessages(messages);
+    }
+  }, [searchKeyword, messages]);
+
+  // Focus input when conversation changes
+  useEffect(() => {
+    if (selectedConversation) {
+      inputRef.current?.focus();
+    }
+  }, [selectedConversation?.id]);
+
+  // Calculate footer height dynamically
+  useEffect(() => {
+    const updateFooterHeight = () => {
+      if (footerRef.current) {
+        const height = footerRef.current.offsetHeight;
+        const maxHeight = Math.min(height, 150);
+        setFooterHeight(maxHeight);
+      }
+    };
+
+    const timeoutId = setTimeout(updateFooterHeight, 100);
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        const maxHeight = Math.min(height, 150);
+        setFooterHeight(maxHeight);
+      }
+    });
+
+    if (footerRef.current) {
+      resizeObserver.observe(footerRef.current);
+    }
+
+    window.addEventListener("resize", updateFooterHeight);
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateFooterHeight);
+    };
+  }, [typingUsers.length, selectedConversation]);
+
+  // Fetch pinned messages
+  useEffect(() => {
+    const fetchPinnedMessages = async () => {
+      if (!selectedConversation?.id) {
+        setPinnedMessages([]);
+        return;
+      }
+
+      try {
+        const response = await chatApi.getPinnedMessages(
+          selectedConversation.id
+        );
+
+        if (response.data) {
+          const pinnedData = Array.isArray(response.data) ? response.data : [];
+          setPinnedMessages(pinnedData);
+        } else if (response && Array.isArray(response)) {
+          setPinnedMessages(response);
+        } else {
+          const pinnedFromMessages = messages.filter((m) => m.pinned);
+          setPinnedMessages(pinnedFromMessages);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching pinned messages:", error);
+        const pinnedFromMessages = messages.filter((m) => m.pinned);
+        setPinnedMessages(pinnedFromMessages);
+      }
+    };
+
+    fetchPinnedMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation?.id]);
+
+  // ==================== Handlers ====================
+
+  const toggleSearch = useCallback(() => {
+    setShowSearch((prev) => !prev);
+  }, []);
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setInputMessage(value);
+
+      // Send typing indicator
+      if (selectedConversation && value.length > 0) {
+        sendTypingStatus(
+          selectedConversation.id,
+          true,
+          user?.fullName || "User"
+        );
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          sendTypingStatus(
+            selectedConversation.id,
+            false,
+            user?.fullName || "User"
+          );
+        }, 1000);
+      }
+    },
+    [selectedConversation, sendTypingStatus, user]
+  );
+
+  const handleSendMessage = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+
+      if (!inputMessage.trim() || !selectedConversation || isSending) return;
+
+      const messageToSend = inputMessage.trim();
+
+      try {
+        setInputMessage("");
+        inputRef.current?.focus();
+
+        sendMessageHook(messageToSend, "TEXT");
+
+        if (selectedConversation) {
+          sendTypingStatus(
+            selectedConversation.id,
+            false,
+            user?.fullName || "User"
+          );
+        }
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+
+        scrollToBottomFromHook();
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
+      } catch (error) {
+        console.error("❌ Error sending message:", error);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      }
+    },
+    [
+      inputMessage,
+      selectedConversation,
+      isSending,
+      sendMessageHook,
+      sendTypingStatus,
+      user,
+    ]
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    [handleSendMessage]
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (globalThis.confirm("Bạn có chắc muốn xóa tin nhắn này?")) {
+        deleteMessage(messageId);
+      }
+    },
+    [deleteMessage]
+  );
+
+  const handleTogglePin = useCallback(
+    (messageId: string, currentlyPinned: boolean) => {
+      if (!selectedConversation?.id) return;
+
+      if (currentlyPinned) {
+        setPinnedMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+      } else {
+        const messageToPin = messages.find((msg) => msg.id === messageId);
+        if (messageToPin) {
+          setPinnedMessages((prev) => [
+            { ...messageToPin, pinned: true },
+            ...prev,
+          ]);
+        }
+      }
+
+      togglePin(messageId, !currentlyPinned);
+
+      setTimeout(async () => {
+        try {
+          const response = await chatApi.getPinnedMessages(
+            selectedConversation.id
+          );
+          if (response.data) {
+            setPinnedMessages(
+              Array.isArray(response.data) ? response.data : []
+            );
+          } else if (response && Array.isArray(response)) {
+            setPinnedMessages(response);
+          }
+        } catch (error) {
+          console.error("❌ Error refreshing pinned messages:", error);
+        }
+      }, 150);
+    },
+    [togglePin, selectedConversation?.id, messages]
+  );
+
+  const handlePinnedMessageClick = useCallback(() => {
+    // Logic handled in PinnedMessages component
+  }, []);
+
+  // File upload handlers
+  const handleFileUpload = useCallback(
+    async (file: File, type: "IMAGE" | "FILE") => {
+      if (!selectedConversation || isUploading) return;
+
+      setIsUploading(true);
+      try {
+        const uploadResponse = await (type === "IMAGE"
+          ? uploadImage(file, selectedConversation.id)
+          : uploadFile({
+              file,
+              conversationId: selectedConversation.id,
+              type: "FILE",
+            }));
+
+        if (uploadResponse.data) {
+          await sendMessageWithAttachment(
+            uploadResponse.data.fileName ||
+              (type === "IMAGE" ? "Ảnh" : "File"),
+            type,
+            uploadResponse.data.id
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error uploading file:", error);
+        alert("Không thể tải file lên. Vui lòng thử lại.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [selectedConversation, isUploading, sendMessageWithAttachment]
+  );
+
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && file.type.startsWith("image/")) {
+        handleFileUpload(file, "IMAGE");
+      }
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
+    },
+    [handleFileUpload]
+  );
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        handleFileUpload(file, "FILE");
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    },
+    [handleFileUpload]
+  );
+
+  const triggerFileInput = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const triggerImageInput = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  // Group management handlers
+  const handleAddMembers = useCallback(
+    async (memberIds: string[]) => {
+      try {
+        await addMembersToGroup(memberIds);
+        setShowAddMembersModal(false);
+      } catch (error) {
+        console.error("❌ Error adding members:", error);
+        alert("Không thể thêm thành viên. Vui lòng thử lại.");
+      }
+    },
+    [addMembersToGroup]
+  );
+
+  const handleRemoveMember = useCallback(
+    async (memberId: string) => {
+      if (confirm("Bạn có chắc muốn xóa thành viên này?")) {
+        try {
+          await removeMemberFromGroup(memberId);
+        } catch (error) {
+          console.error("❌ Error removing member:", error);
+          alert("Không thể xóa thành viên. Vui lòng thử lại.");
+        }
+      }
+    },
+    [removeMemberFromGroup]
+  );
+
+  const handleUpdateGroup = useCallback(
+    async (data: any) => {
+      try {
+        await updateGroupInfo(data);
+        setShowEditGroupModal(false);
+      } catch (error) {
+        console.error("❌ Error updating group:", error);
+        alert("Không thể cập nhật nhóm. Vui lòng thử lại.");
+      }
+    },
+    [updateGroupInfo]
+  );
+
+  // ==================== Render ====================
+
+  if (!user) {
+    return (
+      <div className="content main_content">
+        <div
+          className="d-flex align-items-center justify-content-center"
+          style={{ height: "100vh" }}
+        >
+          <div className="text-center">
+            <i
+              className="ti ti-user-off"
+              style={{ fontSize: "64px", color: "#667eea" }}
+            />
+            <h4 className="mt-3">Bạn chưa đăng nhập</h4>
+            <p className="text-muted">Vui lòng đăng nhập để sử dụng chat</p>
           </div>
         </div>
-      <Lightbox
-        open={open1}
-        close={() => setOpen1(false)}
-        slides={mockGroupMessages
-          .filter(msg => msg.type === 'image')
-          .map(msg => ({ src: msg.content }))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Modern Styles */}
+      <style>{chatStyles}</style>
+
+      {/* Chat Container */}
+      <div
+        className="chat chat-messages show"
+        id="middle"
+        style={
+          {
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            height: "100vh",
+            maxHeight: "100vh",
+            overflow: "hidden",
+            position: "relative",
+            "--footer-height": `${footerHeight}px`,
+          } as React.CSSProperties
+        }
+      >
+        {/* Header Section */}
+        <div
+          style={{
+            flexShrink: 0,
+            zIndex: 10,
+            position: "relative",
+          }}
+        >
+          <GroupChatHeader
+            conversation={selectedConversation}
+            group={group}
+            members={members}
+            onlineMembersCount={getOnlineMembersCount()}
+            onToggleSearch={toggleSearch}
+            onShowMembers={() => setShowMembersModal(true)}
+            onShowEditGroup={() => setShowEditGroupModal(true)}
+            isAdmin={isAdmin(user?.id || "")}
+            showSearch={showSearch}
+            searchKeyword={searchKeyword}
+            onSearchChange={setSearchKeyword}
+          />
+        </div>
+
+        {/* Body Section */}
+        <div
+          style={{
+            flex: "1 1 auto",
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            minHeight: 0,
+            overflow: "hidden",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <GroupChatBody
+            messages={filteredMessages}
+            pinnedMessages={pinnedMessages}
+            members={members}
+            isLoadingMessages={isLoadingMessages}
+            searchKeyword={searchKeyword}
+            selectedConversation={selectedConversation}
+            currentUserId={user?.id}
+            userAvatarUrl={user?.avatarUrl}
+            userFullName={user?.fullName}
+            footerHeight={footerHeight}
+            messagesEndRef={messagesEndRef}
+            onTogglePin={handleTogglePin}
+            onDeleteMessage={handleDeleteMessage}
+            onPinnedMessageClick={handlePinnedMessageClick}
+            onUnpin={(messageId) => handleTogglePin(messageId, true)}
+            typingUsers={typingUsers}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={loadMoreMessages}
+            isAdmin={isAdmin(user?.id || "")}
+          />
+        </div>
+
+        {/* Footer Section */}
+        <div
+          style={{
+            flexShrink: 0,
+            zIndex: 100,
+            position: "relative",
+          }}
+        >
+          {typingUsers.length > 0 && (
+            <TypingIndicator typingUsers={typingUsers} />
+          )}
+
+          <GroupChatFooter
+            footerRef={footerRef as RefObject<HTMLDivElement>}
+            selectedConversation={selectedConversation}
+            inputMessage={inputMessage}
+            inputRef={inputRef as RefObject<HTMLInputElement>}
+            imageInputRef={imageInputRef as RefObject<HTMLInputElement>}
+            fileInputRef={fileInputRef as RefObject<HTMLInputElement>}
+            isUploading={isUploading}
+            isSending={isSending}
+            onInputChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onSendMessage={handleSendMessage}
+            onImageSelect={handleImageSelect}
+            onFileSelect={handleFileSelect}
+            onTriggerImageInput={triggerImageInput}
+            onTriggerFileInput={triggerFileInput}
+            footerHeight={footerHeight}
+            onEmojiSelect={(emoji) => setInputMessage((prev) => prev + emoji)}
+          />
+        </div>
+      </div>
+
+      {/* Modals */}
+      <CreateGroupModal
+        show={showCreateGroupModal}
+        onHide={() => setShowCreateGroupModal(false)}
       />
-      <CommonGroupModal />
-      <ForwardMessage />
+      <AddMembersModal
+        show={showAddMembersModal}
+        onHide={() => setShowAddMembersModal(false)}
+        groupId={selectedConversation?.groupId || ""}
+        currentMembers={members}
+        onAddMembers={handleAddMembers}
+      />
+      <EditGroupModal
+        show={showEditGroupModal}
+        onHide={() => setShowEditGroupModal(false)}
+        group={group}
+        onUpdate={handleUpdateGroup}
+      />
+      <GroupMembersModal
+        show={showMembersModal}
+        onHide={() => setShowMembersModal(false)}
+        groupId={selectedConversation?.groupId || ""}
+        members={members}
+        isLoadingMembers={isLoadingMembers}
+        isAdmin={isAdmin(user?.id || "")}
+        onRemoveMember={handleRemoveMember}
+        onAddMembers={() => {
+          setShowMembersModal(false);
+          setShowAddMembersModal(true);
+        }}
+      />
     </>
-  )
-}
+  );
+};
 
 export default GroupChat;

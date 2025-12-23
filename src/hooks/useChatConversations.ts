@@ -18,12 +18,14 @@ interface UseChatConversationsOptions {
     pageSize?: number;
     filter?: ConversationFilter;
     autoRefresh?: boolean;
+    type?: 'ONE_TO_ONE' | 'GROUP';  // NEW: Filter by conversation type
 }
 
 export const useChatConversations = ({
     pageSize = 20,
     filter,
     autoRefresh = true,
+    type,  // NEW: Conversation type filter
 }: UseChatConversationsOptions = {}) => {
     const queryClient = useQueryClient();
     const [page, setPage] = useState(0);
@@ -31,8 +33,14 @@ export const useChatConversations = ({
         null
     );
 
-    // Query key
-    const queryKey = ['chat', 'conversations', page, filter];
+    // Query key - include type for cache separation
+    const queryKey = ['chat', 'conversations', page, filter, type];
+
+    // Merge type filter with existing filters
+    const mergedFilter = {
+        ...filter,
+        ...(type && { type }),
+    };
 
     // Fetch conversations
     const {
@@ -42,7 +50,7 @@ export const useChatConversations = ({
         refetch,
     } = useQuery({
         queryKey,
-        queryFn: () => chatApi.getConversations(page, pageSize, filter),
+        queryFn: () => chatApi.getConversations(page, pageSize, mergedFilter),
         staleTime: autoRefresh ? 10000 : 30000, // 10s or 30s
         refetchInterval: autoRefresh ? 30000 : false, // Auto refresh every 30s
     });
@@ -225,7 +233,7 @@ export const useChatConversations = ({
     const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
       // Update conversation preview and unread count in React Query cache
       queryClient.setQueryData(
-        ['chat', 'conversations', page, filter],
+        ['chat', 'conversations', page, filter, type],
         (oldData: any) => {
           if (!oldData) return oldData;
           
@@ -251,7 +259,7 @@ export const useChatConversations = ({
     });
     
     return () => unsubscribe();
-  }, [selectedConversationId, queryClient, page, filter]);
+  }, [selectedConversationId, queryClient, page, filter, type]);
 
   return {
     // Data
