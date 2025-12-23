@@ -13,7 +13,7 @@ const Sidebar = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
+  const [, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
   const { data: totalUnreadCount } = useTotalUnreadCount();
   const LayoutDark = () => {
