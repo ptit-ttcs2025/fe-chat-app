@@ -1,5 +1,8 @@
-import SockJS from 'sockjs-client';
-import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+/**
+ * WebSocketService - Refactored Facade Pattern
+ */
+
+import type { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import type { INotification } from '@/apis/notification/notification.type';
 import type {
     MessageResponse,
@@ -8,33 +11,39 @@ import type {
     UserStatus,
 } from '@/apis/chat/chat.type';
 
-type NotificationCallback = (notification: INotification) => void;
-type MessageCallback = (message: MessageResponse) => void;
-type TypingCallback = (status: TypingStatus) => void;
-type ReadCallback = (read: MessageRead) => void;
-type UserStatusCallback = (status: UserStatus) => void;
+// Import refactored managers
+import { connectionManager } from './ConnectionManager';
+import { subscriptionManager } from './SubscriptionManager';
+import { messageHandler, MessageHandler } from './MessageHandler';
+import { environment } from '@/environment';
+import type {
+    NotificationCallback,
+    MessageCallback,
+    TypingCallback,
+    ReadCallback,
+    UserStatusCallback,
+    SystemMessageCallback,
+} from './websocket.types';
+import { chatApi } from '@/apis/chat/chat.api';
 
 class WebSocketService {
     private static instance: WebSocketService | null = null;
-    private stompClient: Client | null = null;
-    private isConnected: boolean = false;
+
+    // Notification-specific (not migrated to SubscriptionManager for backward compatibility)
     private notificationCallbacks: Set<NotificationCallback> = new Set();
-    private subscription: StompSubscription | null = null;
-    private reconnectAttempts: number = 0;
-    private maxReconnectAttempts: number = 5;
-    private reconnectDelay: number = 5000;
-    private currentUserId: string | null = null;
+    private notificationSubscription: StompSubscription | null = null;
 
-    // Chat-related subscriptions and callbacks
-    private chatSubscriptions: Map<string, StompSubscription> = new Map();
-    private messageCallbacks: Map<string, Set<MessageCallback>> = new Map();
-    private typingCallbacks: Map<string, Set<TypingCallback>> = new Map();
-    private readCallbacks: Map<string, Set<ReadCallback>> = new Map();
-    private userStatusCallbacks: Set<UserStatusCallback> = new Set();
-    private personalNotificationCallbacks: Set<MessageCallback> = new Set();
-    private systemMessageCallbacks: Set<(message: any) => void> = new Set();
+    // ✅ NEW: Event emitter for ACK events
+    private eventHandlers: Map<string, Set<Function>> = new Map();
 
-    private constructor() {}
+    private constructor() {
+        // Setup connection callbacks
+        connectionManager.setCallbacks({
+            onConnect: (client) => this.handleConnect(client),
+            onDisconnect: () => this.handleDisconnect(),
+        });
+    }
+
 
     static getInstance(): WebSocketService {
         if (!WebSocketService.instance) {
@@ -43,155 +52,115 @@ class WebSocketService {
         return WebSocketService.instance;
     }
 
+    /**
+     * Connect to WebSocket
+     * Delegates to ConnectionManager
+     */
     connect(wsUrl: string, token: string, userId: string): void {
-        if (this.isConnected && this.currentUserId === userId) {
-            console.log('WebSocket already connected for user:', userId);
-            return;
-        }
-
-        // Disconnect previous connection if exists
-        if (this.isConnected && this.currentUserId !== userId) {
-            console.log('Switching user, disconnecting previous connection');
-            this.disconnect();
-        }
-
-        this.currentUserId = userId;
-
-        // ✅ SockJS yêu cầu URL HTTP/HTTPS, không phải ws:// hay wss://
-        // Convert wss:// -> https:// và ws:// -> http:// nếu cần
-        const httpUrl = wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
-        
-        console.log('🔌 Connecting WebSocket for user:', userId, 'to:', httpUrl);
-
-        // Create STOMP client
-        this.stompClient = new Client({
-            webSocketFactory: () => new SockJS(httpUrl) as any,
-            connectHeaders: {
-                'Authorization': `Bearer ${token}`
-            },
-            debug: (str) => {
-                if (str.includes('ERROR') || str.includes('CONNECT') || str.includes('DISCONNECT')) {
-                    console.log('🔧 STOMP:', str);
-                }
-            },
-            reconnectDelay: this.reconnectDelay,
-            heartbeatIncoming: 4000,
-            heartbeatOutgoing: 4000,
-            onConnect: (frame) => {
-                this.onConnected(frame);
-            },
-            onStompError: (frame) => {
-                console.error('❌ STOMP error:', frame);
-                this.isConnected = false;
-            },
-            onWebSocketError: (event) => {
-                console.error('❌ WebSocket error:', event);
-                this.isConnected = false;
-            },
-            onDisconnect: () => {
-                console.log('👋 WebSocket disconnected');
-                this.isConnected = false;
-                this.handleReconnect(wsUrl, token, userId);
-            },
+        connectionManager.connect({
+            wsUrl,
+            token,
+            userId,
+            maxReconnectAttempts: environment.websocket.maxReconnectAttempts,
+            heartbeatIncoming: environment.websocket.heartbeatInterval,
+            heartbeatOutgoing: environment.websocket.heartbeatInterval,
+            timeout: environment.websocket.connectionTimeout,
         });
-
-        // Activate connection
-        this.stompClient.activate();
     }
 
-    private onConnected(frame: any): void {
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        console.log('✅ WebSocket connected for user:', this.currentUserId);
-        console.log('📡 Connection frame:', frame);
+    /**
+     * Handle connection established
+     * Called by ConnectionManager
+     */
+    private handleConnect(client: Client): void {
+        // Update SubscriptionManager with new client
+        subscriptionManager.setClient(client);
 
-        // Subscribe to personal notification topic
-        if (this.stompClient && this.currentUserId) {
-            const notificationTopic = `/topic/users/${this.currentUserId}/notifications`;
-            console.log(`📡 Subscribing to: ${notificationTopic}`);
-
-            this.subscription = this.stompClient.subscribe(
+        // Subscribe to personal notifications
+        const userId = connectionManager.getCurrentUserId();
+        if (userId) {
+            const notificationTopic = `/topic/users/${userId}/notifications`;
+            this.notificationSubscription = client.subscribe(
                 notificationTopic,
                 (message: IMessage) => {
-                    this.handleIncomingNotification(message);
+                    const result = messageHandler.parseMessage<INotification>(message);
+                    if (result.success && result.data) {
+                        messageHandler.notifyCallbacks(
+                            this.notificationCallbacks,
+                            result.data,
+                            'notification'
+                        );
+                    }
                 }
             );
         }
+
+        // ✅ NEW: Subscribe to ACK channel
+        this.subscribeToAckChannel();
+
+        // ✅ NEW: Subscribe to Error channel
+        this.subscribeToErrorChannel();
+
+        // Re-subscribe to all previous subscriptions
+        subscriptionManager.resubscribeAll();
+
+        // ✅ NEW: Subscribe to ALL conversations after connect
+        this.subscribeAllConversations();
     }
 
-    private handleIncomingNotification(message: IMessage): void {
-        try {
-            const notification: INotification = JSON.parse(message.body);
-            console.log('📩 Received notification:', notification);
-
-            // Notify all registered callbacks
-            this.notificationCallbacks.forEach(callback => {
-                try {
-                    callback(notification);
-                } catch (error) {
-                    console.error('Error in notification callback:', error);
-                }
-            });
-        } catch (error) {
-            console.error('Error parsing notification:', error);
+    /**
+     * Handle disconnection
+     * Called by ConnectionManager
+     */
+    private handleDisconnect(): void {
+        // Cleanup notification subscription
+        if (this.notificationSubscription) {
+            this.notificationSubscription.unsubscribe();
+            this.notificationSubscription = null;
         }
     }
 
-    private handleReconnect(wsUrl: string, token: string, userId: string): void {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('❌ Max reconnection attempts reached');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-
-        setTimeout(() => {
-            if (!this.isConnected) {
-                this.connect(wsUrl, token, userId);
-            }
-        }, this.reconnectDelay);
-    }
-
+    /**
+     * Disconnect WebSocket
+     * Delegates to ConnectionManager
+     */
     disconnect(): void {
-        console.log('Disconnecting WebSocket...');
-        
-        // Cleanup chat subscriptions first
-        this.cleanupChatSubscriptions();
+        // Cleanup subscriptions first
+        subscriptionManager.cleanup();
 
-        // Unsubscribe notifications
-        if (this.subscription) {
-            this.subscription.unsubscribe();
-            this.subscription = null;
+        // Cleanup notifications
+        if (this.notificationSubscription) {
+            this.notificationSubscription.unsubscribe();
+            this.notificationSubscription = null;
         }
 
-        // Deactivate STOMP client
-        if (this.stompClient) {
-            this.stompClient.deactivate();
-            this.stompClient = null;
-        }
-
-        this.isConnected = false;
-        this.currentUserId = null;
-        this.reconnectAttempts = 0;
-        
-        console.log('👋 WebSocket disconnected');
+        // Disconnect
+        connectionManager.disconnect();
     }
 
-    // Subscribe to notification events
+
+    // ===========================
+    // PUBLIC API METHODS
+    // ===========================
+
+    /**
+     * Subscribe to notification events
+     */
     onNotification(callback: NotificationCallback): () => void {
         this.notificationCallbacks.add(callback);
         
-        // Return unsubscribe function
         return () => {
             this.notificationCallbacks.delete(callback);
         };
     }
 
-    // Send message (if needed)
+    /**
+     * Send message (generic)
+     */
     send(destination: string, body: any): void {
-        if (this.stompClient && this.isConnected) {
-            this.stompClient.publish({
+        const client = connectionManager.getClient();
+        if (client && connectionManager.isConnected()) {
+            client.publish({
                 destination,
                 body: JSON.stringify(body),
             });
@@ -200,13 +169,41 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Get connection status
+     */
     getConnectionStatus(): boolean {
-        return this.isConnected;
+        return connectionManager.isConnected();
     }
 
+    /**
+     * Get current user ID
+     */
     getCurrentUserId(): string | null {
-        return this.currentUserId;
+        return connectionManager.getCurrentUserId();
     }
+
+    /**
+     * Get connection quality metrics
+     */
+    getConnectionQuality(): { status: string; transport: string; quality: string } {
+        return connectionManager.getConnectionQuality();
+    }
+
+    /**
+     * Check if using fallback transport
+     */
+    isUsingFallbackTransport(): boolean {
+        return connectionManager.isUsingFallbackTransport();
+    }
+
+    /**
+     * Get current transport type
+     */
+    getCurrentTransport(): string {
+        return connectionManager.getCurrentTransport();
+    }
+
 
     // ===========================
     // CHAT WEBSOCKET METHODS
@@ -214,342 +211,196 @@ class WebSocketService {
 
     /**
      * Subscribe to conversation messages
+     * Uses SubscriptionManager for generic subscription handling
      */
     subscribeToConversation(
         conversationId: string,
         callback: MessageCallback
     ): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to conversation.');
-            return () => { };
-        }
-
-        // Initialize callbacks set if not exists
-        if (!this.messageCallbacks.has(conversationId)) {
-            this.messageCallbacks.set(conversationId, new Set());
-        }
-
-        // Add callback
-        this.messageCallbacks.get(conversationId)!.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = `conversation-${conversationId}`;
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                `/topic/conversations/${conversationId}`,
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageResponse;
-                    console.log('📨 Received message:', data);
-
-                    // Notify all callbacks for this conversation
-                    this.messageCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in message callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to conversation: ${conversationId}`);
-        }
-
-        // Return unsubscribe function
-        return () => {
-            this.messageCallbacks.get(conversationId)?.delete(callback);
-
-            // If no more callbacks, unsubscribe
-            if (this.messageCallbacks.get(conversationId)?.size === 0) {
-                this.unsubscribeFromConversation(conversationId);
-            }
-        };
-    }
-
-    /**
-     * Unsubscribe from conversation
-     */
-    private unsubscribeFromConversation(conversationId: string): void {
-        const subscriptionKey = `conversation-${conversationId}`;
-        const subscription = this.chatSubscriptions.get(subscriptionKey);
-
-        if (subscription) {
-            subscription.unsubscribe();
-            this.chatSubscriptions.delete(subscriptionKey);
-            this.messageCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from conversation: ${conversationId}`);
-        }
+        return subscriptionManager.subscribe<MessageResponse>(
+            `conversation-${conversationId}`,
+            `/topic/conversations/${conversationId}`,
+            callback,
+            MessageHandler.jsonParser
+        );
     }
 
     /**
      * Subscribe to typing status
+     * Uses SubscriptionManager for generic subscription handling
      */
     subscribeToTyping(
         conversationId: string,
         callback: TypingCallback
     ): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to typing.');
-            return () => { };
-        }
-
-        // Initialize callbacks set if not exists
-        if (!this.typingCallbacks.has(conversationId)) {
-            this.typingCallbacks.set(conversationId, new Set());
-        }
-
-        // Add callback
-        this.typingCallbacks.get(conversationId)!.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = `typing-${conversationId}`;
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                `/topic/conversations/${conversationId}/typing`,
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body) as TypingStatus;
-                    console.log('⌨️ Typing status:', data);
-
-                    // Notify all callbacks
-                    this.typingCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in typing callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to typing: ${conversationId}`);
-        }
-
-        // Return unsubscribe function
-        return () => {
-            this.typingCallbacks.get(conversationId)?.delete(callback);
-
-            // If no more callbacks, unsubscribe
-            if (this.typingCallbacks.get(conversationId)?.size === 0) {
-                this.unsubscribeFromTyping(conversationId);
-            }
-        };
-    }
-
-    /**
-     * Unsubscribe from typing
-     */
-    private unsubscribeFromTyping(conversationId: string): void {
-        const subscriptionKey = `typing-${conversationId}`;
-        const subscription = this.chatSubscriptions.get(subscriptionKey);
-
-        if (subscription) {
-            subscription.unsubscribe();
-            this.chatSubscriptions.delete(subscriptionKey);
-            this.typingCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from typing: ${conversationId}`);
-        }
+        return subscriptionManager.subscribe<TypingStatus>(
+            `typing-${conversationId}`,
+            `/topic/conversations/${conversationId}/typing`,
+            callback,
+            MessageHandler.jsonParser
+        );
     }
 
     /**
      * Subscribe to read receipts
+     * Uses SubscriptionManager for generic subscription handling
      */
     subscribeToReadReceipts(
         conversationId: string,
         callback: ReadCallback
     ): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to read receipts.');
-            return () => { };
-        }
-
-        // Initialize callbacks set if not exists
-        if (!this.readCallbacks.has(conversationId)) {
-            this.readCallbacks.set(conversationId, new Set());
-        }
-
-        // Add callback
-        this.readCallbacks.get(conversationId)!.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = `read-${conversationId}`;
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                `/topic/conversations/${conversationId}/read`,
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageRead;
-                    console.log('📖 Read receipt:', data);
-
-                    // Notify all callbacks
-                    this.readCallbacks.get(conversationId)?.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in read callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log(`📡 Subscribed to read receipts: ${conversationId}`);
-        }
-
-        // Return unsubscribe function
-        return () => {
-            this.readCallbacks.get(conversationId)?.delete(callback);
-
-            // If no more callbacks, unsubscribe
-            if (this.readCallbacks.get(conversationId)?.size === 0) {
-                this.unsubscribeFromReadReceipts(conversationId);
-            }
-        };
-    }
-
-    /**
-     * Unsubscribe from read receipts
-     */
-    private unsubscribeFromReadReceipts(conversationId: string): void {
-        const subscriptionKey = `read-${conversationId}`;
-        const subscription = this.chatSubscriptions.get(subscriptionKey);
-
-        if (subscription) {
-            subscription.unsubscribe();
-            this.chatSubscriptions.delete(subscriptionKey);
-            this.readCallbacks.delete(conversationId);
-            console.log(`🔕 Unsubscribed from read receipts: ${conversationId}`);
-        }
+        return subscriptionManager.subscribe<MessageRead>(
+            `read-${conversationId}`,
+            `/topic/conversations/${conversationId}/read`,
+            callback,
+            MessageHandler.jsonParser
+        );
     }
 
     /**
      * Subscribe to user status
+     * Uses SubscriptionManager for generic subscription handling
      */
     subscribeToUserStatus(callback: UserStatusCallback): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to user status.');
-            return () => { };
-        }
-
-        // Add callback
-        this.userStatusCallbacks.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = 'user-status';
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                '/topic/user-status',
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body) as UserStatus;
-                    console.log('👤 User status:', data);
-
-                    // Notify all callbacks
-                    this.userStatusCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in user status callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to user status');
-        }
-
-        // Return unsubscribe function
-        return () => {
-            this.userStatusCallbacks.delete(callback);
-        };
+        return subscriptionManager.subscribe<UserStatus>(
+            'user-status',
+            '/topic/user-status',
+            callback,
+            MessageHandler.jsonParser
+        );
     }
 
     /**
      * Subscribe to personal notifications (messages when offline)
+     * Uses SubscriptionManager for generic subscription handling
      */
     subscribeToPersonalNotifications(callback: MessageCallback): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to personal notifications.');
-            return () => { };
-        }
-
-        // Add callback
-        this.personalNotificationCallbacks.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = 'personal-notifications';
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                '/user/queue/messages',
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body) as MessageResponse;
-                    console.log('📬 Personal notification:', data);
-
-                    // Notify all callbacks
-                    this.personalNotificationCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in personal notification callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to personal notifications');
-        }
-
-        // Return unsubscribe function
-        return () => {
-            this.personalNotificationCallbacks.delete(callback);
-        };
+        return subscriptionManager.subscribe<MessageResponse>(
+            'personal-notifications',
+            '/user/queue/messages',
+            callback,
+            MessageHandler.jsonParser
+        );
     }
 
     /**
      * Subscribe to system messages
+     * Uses SubscriptionManager for generic subscription handling
      */
-    subscribeToSystemMessages(callback: (message: any) => void): () => void {
-        if (!this.stompClient?.connected) {
-            console.warn('WebSocket not connected. Cannot subscribe to system messages.');
-            return () => { };
+    subscribeToSystemMessages(callback: SystemMessageCallback): () => void {
+        return subscriptionManager.subscribe<any>(
+            'system-messages',
+            '/user/queue/system',
+            callback,
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
+     * ✅ NEW: Subscribe to ACK channel
+     */
+    private subscribeToAckChannel(): void {
+        subscriptionManager.subscribe<any>(
+            'message-ack',
+            '/user/queue/ack',
+            (ack) => {
+                this.emit('message-ack', ack);
+            },
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
+     * ✅ NEW: Subscribe to Error channel
+     */
+    private subscribeToErrorChannel(): void {
+        subscriptionManager.subscribe<any>(
+            'message-error',
+            '/user/queue/errors',
+            (error) => {
+                console.error('❌ [WebSocket] Error received:', error);
+                this.emit('message-error', error);
+            },
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
+     * ✅ NEW: Event emitter
+     */
+    on(event: string, handler: Function): () => void {
+        if (!this.eventHandlers.has(event)) {
+            this.eventHandlers.set(event, new Set());
         }
-
-        // Add callback
-        this.systemMessageCallbacks.add(callback);
-
-        // Subscribe if not already subscribed
-        const subscriptionKey = 'system-messages';
-        if (!this.chatSubscriptions.has(subscriptionKey)) {
-            const subscription = this.stompClient.subscribe(
-                '/user/queue/system',
-                (message: IMessage) => {
-                    const data = JSON.parse(message.body);
-                    console.log('🔔 System message:', data);
-
-                    // Notify all callbacks
-                    this.systemMessageCallbacks.forEach((cb) => {
-                        try {
-                            cb(data);
-                        } catch (error) {
-                            console.error('Error in system message callback:', error);
-                        }
-                    });
-                }
-            );
-
-            this.chatSubscriptions.set(subscriptionKey, subscription);
-            console.log('📡 Subscribed to system messages');
-        }
+        this.eventHandlers.get(event)!.add(handler);
 
         // Return unsubscribe function
         return () => {
-            this.systemMessageCallbacks.delete(callback);
+            this.eventHandlers.get(event)?.delete(handler);
         };
     }
 
     /**
+     * ✅ NEW: Emit event
+     */
+    private emit(event: string, data: any): void {
+        const handlers = this.eventHandlers.get(event);
+        if (handlers) {
+            handlers.forEach(handler => handler(data));
+        }
+    }
+
+    /**
+     * ✅ NEW: Subscribe to ALL user's conversations
+     * Called after WebSocket connects
+     */
+    async subscribeAllConversations(): Promise<void> {
+        try {
+            // Get all conversations from API
+            const response = await chatApi.getConversations(0, 100);
+            const conversations = response.results || [];
+            const conversationIds = conversations.map(c => c.id);
+            
+            // Subscribe to each conversation
+            conversationIds.forEach(id => {
+                subscriptionManager.subscribe<MessageResponse>(
+                    `conversation-${id}`,
+                    `/topic/conversations/${id}`,
+                    (message) => this.handleGlobalMessage(message),
+                    MessageHandler.jsonParser
+                );
+            });
+            
+            console.info(`✅ Subscribed to ${conversationIds.length} conversations`);
+        } catch (error) {
+            console.error('❌ Failed to subscribe to conversations:', error);
+        }
+    }
+
+    /**
+     * ✅ NEW: Handle incoming message for ANY conversation
+     */
+    private handleGlobalMessage(message: MessageResponse): void {
+        // Emit event for hooks to listen
+        this.emit('conversation-message', message);
+    }
+
+    /**
+     * ✅ NEW: Subscribe to a NEW conversation (when user creates one)
+     */
+    subscribeNewConversation(conversationId: string): void {
+        subscriptionManager.subscribe<MessageResponse>(
+            `conversation-${conversationId}`,
+            `/topic/conversations/${conversationId}`,
+            (message) => this.handleGlobalMessage(message),
+            MessageHandler.jsonParser
+        );
+    }
+
+    /**
      * Send message via WebSocket
+     * ✅ UPDATED: Removed callbacks - use event emitter instead
+     * ✅ UPDATED: Add Authorization header
      */
     sendMessage(message: {
         conversationId: string;
@@ -558,17 +409,22 @@ class WebSocketService {
         repliedToMessageId?: string;
         attachmentId?: string;
     }): void {
-        if (!this.stompClient?.connected) {
+        const client = connectionManager.getClient();
+        if (!client?.connected) {
             console.error('❌ WebSocket not connected. Cannot send message.');
+            this.emit('message-error', { error: 'WebSocket not connected' });
             return;
         }
 
-        this.stompClient.publish({
-            destination: '/app/chat.send',
-            body: JSON.stringify(message),
-        });
-
-        console.log('📤 Sent message via WebSocket:', message);
+        try {
+            client.publish({
+                destination: '/app/chat.send',
+                body: JSON.stringify(message),
+            });
+        } catch (error: any) {
+            console.error('❌ WebSocket send error:', error);
+            this.emit('message-error', { error: error.message || 'Failed to send message' });
+        }
     }
 
     /**
@@ -579,12 +435,13 @@ class WebSocketService {
         isTyping: boolean,
         userName: string
     ): void {
-        if (!this.stompClient?.connected) {
+        const client = connectionManager.getClient();
+        if (!client?.connected) {
             console.warn('WebSocket not connected. Cannot send typing status.');
             return;
         }
 
-        this.stompClient.publish({
+        client.publish({
             destination: '/app/chat.typing',
             body: JSON.stringify({
                 conversationId,
@@ -593,20 +450,19 @@ class WebSocketService {
                 timestamp: new Date().toISOString(),
             }),
         });
-
-        console.log(`⌨️ Sent typing status: ${isTyping ? 'typing' : 'stopped'}`);
     }
 
     /**
      * Mark messages as read
      */
     markAsRead(conversationId: string, messageIds: string[]): void {
-        if (!this.stompClient?.connected) {
+        const client = connectionManager.getClient();
+        if (!client?.connected) {
             console.warn('WebSocket not connected. Cannot mark as read.');
             return;
         }
 
-        this.stompClient.publish({
+        client.publish({
             destination: '/app/chat.read',
             body: JSON.stringify({
                 conversationId,
@@ -614,32 +470,6 @@ class WebSocketService {
                 timestamp: new Date().toISOString(),
             }),
         });
-
-        console.log('📖 Marked messages as read:', messageIds);
-    }
-
-    /**
-     * Cleanup all chat subscriptions
-     */
-    cleanupChatSubscriptions(): void {
-        console.log('🧹 Cleaning up chat subscriptions...');
-
-        // Unsubscribe all chat subscriptions
-        this.chatSubscriptions.forEach((subscription, key) => {
-            subscription.unsubscribe();
-            console.log(`🔕 Unsubscribed from ${key}`);
-        });
-
-        // Clear all maps and sets
-        this.chatSubscriptions.clear();
-        this.messageCallbacks.clear();
-        this.typingCallbacks.clear();
-        this.readCallbacks.clear();
-        this.userStatusCallbacks.clear();
-        this.personalNotificationCallbacks.clear();
-        this.systemMessageCallbacks.clear();
-
-        console.log('✅ Chat subscriptions cleaned up');
     }
 }
 

@@ -1,4 +1,4 @@
-
+import { useEffect } from "react";
 import ChatTab from "./chat-tab";
 import ContactTab from "./contact-tab";
 import GroupTab from "./group-tab";
@@ -8,14 +8,49 @@ import SettingsTab from "./settings-tab";
 import StatusTab from "./status-tab";
 import { useLocation } from "react-router";
 import { all_routes } from "../../../feature-module/router/all_routes";
+import { useSidebarResize } from "@/hooks/useSidebarResize";
+import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
+import ResizeHandle from "./ResizeHandle";
 
 const ChatSidebar = () => {
   const routes = all_routes;
   const location = useLocation();
+  
+  // Resize & Collapse hooks
+  const { sidebarWidth, isResizing, handleMouseDown, handleDoubleClick } = useSidebarResize();
+  const { isCollapsed, toggleCollapse } = useSidebarCollapse();
+
+  // Add resizing class to prevent text selection
+  useEffect(() => {
+    const sidebar = document.querySelector('.sidebar-group');
+    if (sidebar) {
+      if (isResizing) {
+        sidebar.classList.add('resizing');
+      } else {
+        sidebar.classList.remove('resizing');
+      }
+    }
+  }, [isResizing]);
+
   return (
     <>
       {/* sidebar group */}
-      <div className="sidebar-group">
+      <div 
+        className={`sidebar-group ${isCollapsed ? 'collapsed' : ''}`}
+        style={{
+          width: isCollapsed ? '0px' : `${sidebarWidth}px`,
+          minWidth: isCollapsed ? '0px' : undefined,
+          overflow: isCollapsed ? 'hidden' : undefined,
+          transition: isCollapsed ? 'width 0.3s ease' : 'none',
+        }}
+      >
+        {!isCollapsed && (
+          <ResizeHandle
+            onMouseDown={handleMouseDown}
+            onDoubleClick={handleDoubleClick}
+            isResizing={isResizing}
+          />
+        )}
         <div className="tab-content">
           <div
             className={`tab-pane fade ${

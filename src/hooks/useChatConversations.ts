@@ -3,14 +3,16 @@
  * Quản lý danh sách conversations
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '@/apis/chat/chat.api';
 import type {
     IConversation,
     CreateConversationRequest,
     ConversationFilter,
+    MessageResponse,
 } from '@/apis/chat/chat.type';
+import websocketService from '@/core/services/websocket.service';
 
 interface UseChatConversationsOptions {
     pageSize?: number;
@@ -65,8 +67,9 @@ export const useChatConversations = ({
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
             
-            // Auto select new conversation
+            // ✅ NEW: Subscribe to new conversation immediately
             if (response.data?.id) {
+                websocketService.subscribeNewConversation(response.data.id);
                 setSelectedConversationId(response.data.id);
             }
         },
@@ -216,6 +219,39 @@ export const useChatConversations = ({
     if (!selectedConversationId || !Array.isArray(results)) return undefined;
     return results.find((c: IConversation) => c.id === selectedConversationId);
   };
+
+  // ✅ NEW: Listen to messages for ALL conversations to update previews and unread counts
+  useEffect(() => {
+    const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
+      // Update conversation preview and unread count in React Query cache
+      queryClient.setQueryData(
+        ['chat', 'conversations', page, filter],
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          
+          return {
+            ...oldData,
+            results: oldData.results.map((conv: IConversation) => {
+              if (conv.id === message.conversationId) {
+                return {
+                  ...conv,
+                  lastMessage: message.content,
+                  lastMessageTime: message.createdAt,
+                  // Increment unread if not current conversation
+                  unreadCount: conv.id === selectedConversationId 
+                    ? conv.unreadCount 
+                    : (conv.unreadCount || 0) + 1
+                };
+              }
+              return conv;
+            })
+          };
+        }
+      );
+    });
+    
+    return () => unsubscribe();
+  }, [selectedConversationId, queryClient, page, filter]);
 
   return {
     // Data

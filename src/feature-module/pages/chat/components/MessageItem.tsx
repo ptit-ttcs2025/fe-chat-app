@@ -49,6 +49,53 @@ const MessageItem = ({
 }: MessageItemProps) => {
   const showDateMarker = shouldShowDateMarker(message, previousMessage);
 
+  // ✅ Render status icon
+  const renderStatusIcon = () => {
+    if (!isOwnMessage || !message.status) return null;
+
+    const iconStyle = {
+      marginLeft: '4px',
+      fontSize: '14px',
+    };
+
+    switch (message.status) {
+      case 'sending':
+        return (
+          <i 
+            className="ti ti-loader" 
+            style={{ ...iconStyle, color: '#3b82f6', animation: 'spin 1s linear infinite' }}
+            title="Đang gửi..."
+          />
+        );
+      case 'sent':
+        return (
+          <i 
+            className="ti ti-check" 
+            style={{ ...iconStyle, color: '#10b981' }}
+            title="Đã gửi"
+          />
+        );
+      case 'delivered':
+        return (
+          <i 
+            className="ti ti-checks" 
+            style={{ ...iconStyle, color: '#10b981' }}
+            title="Đã nhận"
+          />
+        );
+      case 'failed':
+        return (
+          <i 
+            className="ti ti-x" 
+            style={{ ...iconStyle, color: '#ef4444' }}
+            title="Gửi thất bại"
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       {/* Date Marker */}
@@ -406,6 +453,8 @@ const MessageItem = ({
                 }}>
                   {formatTime(message.createdAt)}
                 </span>
+                {/* ✅ NEW: Message status indicator */}
+                {isOwnMessage && renderStatusIcon()}
                 {isOwnMessage && message.readCount > 0 && (
                   <span className="msg-read success" style={{ 
                     marginLeft: '2px', 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { rehydrateAuth, setCredentials } from '@/slices/auth/reducer';
+import { setDark } from '@/core/data/redux/commonSlice';
 import authStorage from '@/lib/authStorage';
 import { authApis } from '@/apis/auth/auth.api';
 import websocketService from '@/core/services/websocket.service';
@@ -13,6 +14,7 @@ import { environment } from '../../environment';
  * - Rehydrate auth state từ cookies + sessionStorage
  * - Nếu có token nhưng không có user → Tự động fetch user từ API
  * - Kết nối WebSocket khi user đã đăng nhập
+ * - Khôi phục dark mode từ localStorage
  */
 export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const dispatch = useDispatch();
@@ -20,31 +22,32 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
 
     useEffect(() => {
         const initializeAuth = async () => {
-            console.log('🚀 AppInitializer mounted - Starting auth rehydration...');
-            
             // ✅ Rehydrate auth state từ cookies + sessionStorage
             dispatch(rehydrateAuth());
             
+            // ✅ Khôi phục dark mode từ localStorage
+            const darkMode = localStorage.getItem("darkMode");
+            if (darkMode === "enabled") {
+                dispatch(setDark(true));
+            } else {
+                dispatch(setDark(false));
+            }
+
             // ✅ Kiểm tra: Nếu có token nhưng không có user → Fetch từ API
             const accessToken = authStorage.getAccessToken();
             const user = authStorage.getUser();
             
             if (accessToken && !user) {
-                console.log('⚠️ Has token but no user - Fetching user from API...');
-                
                 try {
                     // Gọi API để lấy user info
                     const userInfo = await authApis.me();
                     const refreshToken = authStorage.getRefreshToken();
-                    
                     // Lưu lại toàn bộ auth data
                     dispatch(setCredentials({
                         user: userInfo,
                         accessToken,
                         refreshToken: refreshToken || '',
                     }));
-                    
-                    console.log('✅ User fetched and auth restored:', userInfo.username);
                 } catch (error) {
                     console.error('❌ Failed to fetch user - Clearing invalid token');
                     // Token không hợp lệ → Xóa toàn bộ
@@ -52,7 +55,6 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             }
             
-            console.log('✅ AppInitializer completed');
         };
         
         initializeAuth();
@@ -62,15 +64,10 @@ export const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (user && accessToken) {
             const wsUrl = environment.wsUrl;
-            console.log('🔌 [AppInitializer] Connecting WebSocket');
-            console.log('   - Username:', user.username);
-            console.log('   - User ID:', user.id);
-            console.log('   - WS URL:', wsUrl);
             websocketService.connect(wsUrl, accessToken, user.id);
         } else {
             // Disconnect nếu user đăng xuất
             if (websocketService.getConnectionStatus()) {
-                console.log('🔌 [AppInitializer] Disconnecting WebSocket');
                 websocketService.disconnect();
             }
         }

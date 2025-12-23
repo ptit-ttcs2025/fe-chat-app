@@ -1,0 +1,19 @@
+/**
+ * Message Queue Status Icons
+ * Animations và styles cho message status indicators
+ */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Apply animation to sending icon */
+.ti-loader {
+  display: inline-block;
+}
+

@@ -6,6 +6,12 @@
  * - Initial load: Lấy N tin nhắn mới nhất
  * - Scroll up: Load older messages với beforeMessageId
  * - Performance: ~30ms consistent (vs 500ms+ với offset pagination)
+ * 
+ * ✅ NEW: Explicit ACK với Simple Pending Tracker
+ * - Backend gửi ACK qua /user/queue/ack
+ * - Simple Map để track pending messages
+ * - Timeout detection (10s) → REST API fallback
+ * - No complex queue, no throttling
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -18,8 +24,9 @@ import type {
     MarkAsReadRequest,
     CursorInfo,
 } from '@/apis/chat/chat.type';
-import { useConversationMessages } from './useWebSocketChat';
 import { UNREAD_KEYS } from './useUnreadMessages';
+import websocketService from '@/core/services/websocket.service';
+import { environment } from '@/environment';
 
 interface UseChatMessagesOptions {
     conversationId: string | null;
@@ -47,6 +54,10 @@ export const useChatMessages = ({
     const [apiType, setApiType] = useState<'cursor' | 'pagination'>('cursor'); // Track API type being used
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const hasMarkedAsReadRef = useRef(false); // Track đã mark as read chưa
+
+    // ✅ NEW: Simple Pending Tracker
+    // Map: tempId -> { timeoutId, content, conversationId }
+    const pendingMessages = useRef<Map<string, { timeoutId: NodeJS.Timeout; content: string; conversationId: string }>>(new Map());
 
     // Query key
     const queryKey = ['chat', 'messages', conversationId];
@@ -91,7 +102,6 @@ export const useChatMessages = ({
                 }
                 
                 // Nếu response không có messages field
-                console.warn('⚠️ Cursor API response missing messages field:', response);
                 throw new Error('Invalid cursor API response format');
             } catch (error: any) {
                 console.error('❌ Cursor API error:', error);
@@ -146,20 +156,140 @@ export const useChatMessages = ({
         }
     }, [messagesData]);
 
+    // Helper: Scroll to bottom - định nghĩa trước để tránh lỗi reference
+    const scrollToBottom = useCallback((instant: boolean = false) => {
+        requestAnimationFrame(() => {
+            const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
+            if (!chatBody) return;
+            
+            const scrollHeight = chatBody.scrollHeight;
+            const clientHeight = chatBody.clientHeight;
+            const maxScroll = scrollHeight - clientHeight;
+            
+            if (instant) {
+                chatBody.scrollTop = Math.max(0, maxScroll);
+            } else {
+                chatBody.scrollTo({
+                    top: Math.max(0, maxScroll),
+                    behavior: 'smooth'
+                });
+            }
+        });
+        
+        if (messagesEndRef.current) {
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ 
+                    behavior: instant ? 'instant' : 'smooth',
+                    block: 'end',
+                    inline: 'nearest'
+                });
+            }, 50);
+        }
+    }, []);
+
+    // ✅ NEW: Subscribe to ACK events  
+    // ACK chỉ dùng để log, actual confirmation là từ broadcast
+    useEffect(() => {
+        const unsubscribeAck = websocketService.on('message-ack', () => {
+            // ACK confirms backend received message
+            // Actual delivery confirmation comes from broadcast
+        });
+
+        const unsubscribeError = websocketService.on('message-error', (error: any) => {
+            console.error('❌ [useChatMessages] Error received:', error);
+            // Mark all pending messages as failed
+            pendingMessages.current.forEach((pending, tempId) => {
+                setMessages(prev =>
+                    prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: 'Gửi thất bại' } : m)
+                );
+                clearTimeout(pending.timeoutId);
+            });
+            pendingMessages.current.clear();
+        });
+
+        return () => {
+            unsubscribeAck();
+            unsubscribeError();
+        };
+    }, [conversationId]);
+
     // Handle real-time messages từ WebSocket
     const handleNewMessage = useCallback(
         (message: MessageResponse) => {
-            setMessages((prev) => {
-                // Check if message already exists (prevent duplicates)
-                const exists = prev.some((m) => m.id === message.id);
-                if (exists) return prev;
+            // Check if this is our own message (implicit ACK via broadcast)
+            if (message.senderId === currentUserId) {
+                // Tìm pending message matching với broadcast message
+                let foundTempId: string | null = null;
+                
+                pendingMessages.current.forEach((pending, tempId) => {
+                    if (pending.content === message.content && 
+                        pending.conversationId === message.conversationId) {
+                        foundTempId = tempId;
+                    }
+                });
+                
+                if (foundTempId) {
+                    // Update status: sending → delivered
+                    // Replace optimistic message with real one
+                    setMessages(prev =>
+                        prev.map(m => m.id === foundTempId ? { ...message, status: 'delivered' } : m)
+                    );
+                    
+                    // Clear pending
+                    const pending = pendingMessages.current.get(foundTempId);
+                    if (pending) {
+                        clearTimeout(pending.timeoutId);
+                        pendingMessages.current.delete(foundTempId);
+                    }
+                } else {
+                    // Message không match với pending nào, có thể từ device khác
+                    setMessages(prev => {
+                        const exists = prev.find(m => m.id === message.id);
+                        if (exists) return prev;
+                        return [...prev, { ...message, status: 'delivered' }];
+                    });
+                }
+                
+                return;
+            }
 
-                // Add new message to the end
+            setMessages((prev) => {
+                // 1. Check duplicate bằng real ID
+                const existingIndex = prev.findIndex((m) => m.id === message.id);
+                if (existingIndex !== -1) {
+                    return prev;
+                }
+
+                // 2. ✅ FIX: Tìm và replace optimistic message của chính mình
+                // CHỈ áp dụng cho message từ currentUser để tránh replace nhầm
+                if (message.senderId === currentUserId) {
+                    // Tìm optimistic message có content GIỐNG NHAU
+                    // Dùng timestamp để match chính xác hơn (trong vòng 5 giây)
+                    const messageTime = new Date(message.createdAt).getTime();
+                    
+                    const optimisticMatchIndex = prev.findIndex(m => {
+                        if (!m.id.startsWith('optimistic-')) return false;
+                        if (m.content !== message.content) return false;
+                        
+                        // Check timestamp trong vòng 5 giây
+                        const optimisticTime = new Date(m.createdAt).getTime();
+                        const timeDiff = Math.abs(messageTime - optimisticTime);
+                        return timeDiff < 5000; // 5 seconds tolerance
+                    });
+
+                    if (optimisticMatchIndex !== -1) {
+                        const newMessages = [...prev];
+                        newMessages[optimisticMatchIndex] = message;
+                        return newMessages;
+                    }
+                }
+
+                // 3. Add new message (from others or no optimistic match)
                 return [...prev, message];
             });
 
-            // Scroll to bottom
-            scrollToBottom();
+            // ✅ FIX: XÓA scrollToBottom() - để ChatBody tự động scroll qua useEffect
+            // Tránh conflict giữa 2 scroll mechanisms
 
             // Auto mark as read if message from others
             if (
@@ -181,15 +311,102 @@ export const useChatMessages = ({
         [autoMarkAsRead, currentUserId, queryClient]
     );
 
-    // Subscribe to real-time messages
-    useConversationMessages(conversationId, handleNewMessage, !!conversationId);
+    // ✅ NEW: Subscribe to real-time messages globally (all conversations)
+    // Replaced useConversationMessages which only subscribed to one conversation at a time
+    useEffect(() => {
+        if (!conversationId) return;
 
-    // Mutation: Send message
+        const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
+            // Only process messages for current conversation
+            if (message.conversationId === conversationId) {
+                handleNewMessage(message);
+            }
+            // Messages for other conversations are handled by useChatConversations
+        });
+
+        return () => unsubscribe();
+    }, [conversationId, handleNewMessage]);
+
+    // ✅ NEW: Send message với pending tracker
     const sendMessageMutation = useMutation({
-        mutationFn: (data: SendMessageRequest) => chatApi.sendMessage(data),
-        onSuccess: () => {
-            // Message sẽ được thêm qua WebSocket subscription
-            scrollToBottom();
+        mutationFn: async (data: SendMessageRequest) => {
+            const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            // Optimistic update UI
+            const optimisticMessage: IMessage = {
+                id: tempId,
+                conversationId: data.conversationId,
+                content: data.content,
+                senderId: currentUserId || '',
+                senderName: 'Bạn',
+                type: data.type || 'TEXT',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                isDeleted: false,
+                readCount: 0,
+                readByUserIds: [],
+                pinned: false,
+                status: 'sending', // Status: sending → sent (ACK) → delivered (broadcast)
+                attachment: undefined,
+            };
+
+            setMessages((prev) => [...prev, optimisticMessage]);
+            scrollToBottom(true);
+
+            // Check if WebSocket is connected
+            if (!websocketService.getConnectionStatus()) {
+                console.warn('⚠️ WebSocket offline, using REST API');
+                // Fallback to REST API immediately
+                const response = await chatApi.sendMessage(data);
+                
+                // Replace optimistic message with real one
+                setMessages((prev) =>
+                    prev.map(m => m.id === tempId ? { ...response.data, status: 'delivered' } : m)
+                );
+                
+                return response.data;
+            }
+
+            // Send via WebSocket
+            websocketService.sendMessage({
+                conversationId: data.conversationId,
+                content: data.content,
+                type: data.type,
+                repliedToMessageId: data.repliedToMessageId,
+                attachmentId: data.attachmentId,
+            });
+
+            // Track pending with timeout
+            const timeoutId = setTimeout(async () => {
+                console.warn(`⏱️ [useChatMessages] Message timeout: ${tempId}`);
+                
+                // Fallback to REST API
+                try {
+                    const response = await chatApi.sendMessage(data);
+                    
+                    // Replace optimistic message
+                    setMessages((prev) =>
+                        prev.map(m => m.id === tempId ? { ...response.data, status: 'delivered' } : m)
+                    );
+                    
+                    pendingMessages.current.delete(tempId);
+                } catch (error) {
+                    console.error('❌ REST API fallback failed:', error);
+                    
+                    // Mark as failed
+                    setMessages((prev) =>
+                        prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: 'Gửi tin nhắn thất bại' } : m)
+                    );
+                }
+            }, environment.websocket.ackTimeout || 10000);
+
+            pendingMessages.current.set(tempId, { 
+                timeoutId, 
+                content: data.content,
+                conversationId: data.conversationId 
+            });
+
+            return { id: tempId } as any;
         },
         onError: (error) => {
             console.error('❌ Failed to send message:', error);
@@ -397,40 +614,6 @@ export const useChatMessages = ({
         }
     }, [conversationId, cursor, pageSize, isLoadingMore, apiType, currentPage]);
 
-    // Helper: Scroll to bottom - sử dụng scrollTop để đảm bảo scroll
-    const scrollToBottom = useCallback((instant: boolean = false) => {
-        // Sử dụng requestAnimationFrame để đảm bảo DOM đã render
-        requestAnimationFrame(() => {
-            const chatBody = document.querySelector('#middle .chat-body.chat-page-group') as HTMLElement;
-            if (!chatBody) return;
-            
-            // Scroll đến cuối cùng - không cộng thêm footerHeight vì paddingBottom đã được set trong CSS
-            const scrollHeight = chatBody.scrollHeight;
-            const clientHeight = chatBody.clientHeight;
-            const maxScroll = scrollHeight - clientHeight;
-            
-            if (instant) {
-                chatBody.scrollTop = Math.max(0, maxScroll);
-            } else {
-                chatBody.scrollTo({
-                    top: Math.max(0, maxScroll),
-                    behavior: 'smooth'
-                });
-            }
-        });
-        
-        // Backup: Sử dụng scrollIntoView nếu có messagesEndRef
-        if (messagesEndRef.current) {
-            setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ 
-                    behavior: instant ? 'instant' : 'smooth',
-                    block: 'end',
-                    inline: 'nearest'
-                });
-            }, 50);
-        }
-    }, []);
-
     // Helper: Send message
     const sendMessage = useCallback(
         (content: string, type: 'TEXT' | 'IMAGE' | 'FILE' = 'TEXT') => {
@@ -481,7 +664,7 @@ export const useChatMessages = ({
         setCurrentPage(0);
         refetch();
     }, [refetch]);
-    
+
     return {
         // Data
         messages,

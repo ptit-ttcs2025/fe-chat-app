@@ -88,10 +88,18 @@ export const environment = {
     // WEBSOCKET CONFIGURATION
     // ===========================
     websocket: {
-        reconnectInterval: 1000, // 1 second
-        maxReconnectAttempts: 5,
-        heartbeatInterval: 30000, // 30 seconds
-        connectionTimeout: 10000, // 10 seconds
+        // ✅ Configurable via environment variables
+        reconnectInterval: Number(import.meta.env.VITE_WS_RECONNECT_INTERVAL) || 3000, // 3 seconds (faster reconnect)
+        maxReconnectAttempts: Number(import.meta.env.VITE_WS_MAX_RECONNECT) || 10, // Tăng từ 5 -> 10
+        heartbeatInterval: Number(import.meta.env.VITE_WS_HEARTBEAT) || 30000, // ✅ 30s (tối ưu cho production)
+        connectionTimeout: Number(import.meta.env.VITE_WS_TIMEOUT) || 15000, // ✅ 15s (tăng từ 10s)
+        
+        // ✅ NEW: ACK timeout for pending messages
+        ackTimeout: Number(import.meta.env.VITE_WS_ACK_TIMEOUT) || 10000, // 10s - timeout để chờ ACK từ backend
+
+        // ✅ SockJS Transport Options
+        transports: (import.meta.env.VITE_WS_TRANSPORTS || 'websocket,xhr-streaming').split(','),
+        enableDebugLogs: import.meta.env.VITE_WS_DEBUG === 'true',
 
         // Event types
         events: {

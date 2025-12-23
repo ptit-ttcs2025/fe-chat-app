@@ -56,36 +56,3 @@ const WebSocketInitializer: React.FC = () => {
 };
 
 export default WebSocketInitializer;
-
-/**
- * USAGE:
- * 
- * 1. Thêm vào AppInitializer.tsx:
- * 
- * import WebSocketInitializer from '@/core/common/WebSocketInitializer';
- * 
- * export const AppInitializer = () => {
- *   return (
- *     <>
- *       <WebSocketInitializer />
- *       {// ... other initializers ...}
- *     </>
- *   );
- * };
- * 
- * 2. Hoặc thêm vào layout chính (feature.tsx):
- * 
- * import WebSocketInitializer from '@/core/common/WebSocketInitializer';
- * 
- * const Feature = () => {
- *   return (
- *     <>
- *       <WebSocketInitializer />
- *       <Header />
- *       <Outlet />
- *       <Footer />
- *     </>
- *   );
- * };
- */
-
