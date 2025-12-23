@@ -29,6 +29,7 @@ import "../src/assets/style/icon/feather/css/iconfont.css";
 import "../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js";
 import "./index.scss";
 import "antd/dist/reset.css";
+import "./assets/css/message-queue.css";
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

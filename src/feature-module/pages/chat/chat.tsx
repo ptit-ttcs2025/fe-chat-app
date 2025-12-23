@@ -4,7 +4,7 @@
  * Refactored: Tách thành các component nhỏ hơn để dễ quản lý
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 
 // Theme Components
@@ -23,6 +23,7 @@ import ChatHeader from "./components/ChatHeader";
 import ChatSearch from "./components/ChatSearch";
 import ChatBody from "./components/ChatBody";
 import ChatFooter from "./components/ChatFooter";
+import TypingIndicator from "./components/TypingIndicator";
 import { chatStyles } from "./styles/chatStyles";
 
 // Redux State Interface
@@ -208,29 +209,28 @@ const Chat = () => {
   // để tránh scroll khi load more messages
   
   // Filter messages when search keyword changes
-  useEffect(() => {
+  // ✅ FIXED: Dùng useMemo để tính toán, không cần useEffect
+  const filteredMessagesComputed = useMemo(() => {
     if (searchKeyword.trim()) {
-      const filtered = messages.filter(msg => 
+      return messages.filter(msg => 
         msg.content?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         msg.senderName?.toLowerCase().includes(searchKeyword.toLowerCase())
       );
-      setFilteredMessages(filtered);
-    } else {
-      // Luôn cập nhật filteredMessages với messages khi không có search keyword
-      setFilteredMessages(messages);
     }
+    return messages;
   }, [searchKeyword, messages]);
+
+  // ✅ FIXED: Chỉ update state khi computed value thực sự thay đổi (so sánh IDs)
+  const prevFilteredIdsRef = useRef<string>('');
   
-  // Đảm bảo filteredMessages được khởi tạo ngay khi messages thay đổi
   useEffect(() => {
-    if (messages.length > 0) {
-      if (!searchKeyword.trim()) {
-      setFilteredMessages(messages);
-      }
-    } else {
-      setFilteredMessages([]);
+    const currentIds = filteredMessagesComputed.map(m => m.id).sort().join(',');
+    
+    if (currentIds !== prevFilteredIdsRef.current) {
+      prevFilteredIdsRef.current = currentIds;
+      setFilteredMessages(filteredMessagesComputed);
     }
-  }, [messages.length, searchKeyword]);
+  }, [filteredMessagesComputed]);
   
   // Focus input when conversation changes
   // NOTE: Scroll to bottom được xử lý trong ChatBody component
@@ -280,6 +280,7 @@ const Chat = () => {
   }, [typingUsers.length, selectedConversation]);
   
   // Fetch pinned messages when conversation changes
+  // ✅ FIXED: Loại bỏ messages khỏi dependency để tránh infinite loop
   useEffect(() => {
     const fetchPinnedMessages = async () => {
       if (!selectedConversation?.id) {
@@ -310,20 +311,33 @@ const Chat = () => {
     };
     
     fetchPinnedMessages();
-  }, [selectedConversation?.id, messages]);
+    // ✅ FIXED: Chỉ depend on conversationId, không depend on messages
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation?.id]);
   
   // Sync pinned messages từ messages array khi messages thay đổi
-  // Merge với existing pinned messages từ API (để hiển thị cả tin nhắn ghim của người khác)
+  // ✅ FIXED: Dùng useMemo để tránh infinite loop
+  const pinnedFromMessagesMemo = useMemo(() => {
+    if (messages.length === 0) return [];
+    return messages.filter(m => m.pinned);
+  }, [messages]);
+
+  // ✅ FIXED: Chỉ update khi pinned messages thực sự thay đổi
+  const prevPinnedIdsRef = useRef<string>('');
+  
   useEffect(() => {
-    if (messages.length > 0) {
-      const pinnedFromMessages = messages.filter(m => m.pinned);
+    const currentPinnedIds = pinnedFromMessagesMemo.map(m => m.id).sort().join(',');
+    
+    // Chỉ update nếu IDs thay đổi
+    if (currentPinnedIds !== prevPinnedIdsRef.current) {
+      prevPinnedIdsRef.current = currentPinnedIds;
       
       setPinnedMessages(prev => {
         // Tạo Map từ existing pinned messages (từ API)
         const existingMap = new Map(prev.map(p => [p.id, p]));
         
         // Cập nhật với pinned messages từ local messages
-        pinnedFromMessages.forEach(msg => {
+        pinnedFromMessagesMemo.forEach(msg => {
           existingMap.set(msg.id, msg);
         });
         
@@ -342,7 +356,9 @@ const Chat = () => {
         return merged;
       });
     }
-  }, [messages]);
+    // ✅ FIXED: Chỉ depend on memoized pinned messages, không depend on full messages array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedFromMessagesMemo]);
   
   // ==================== Handlers ====================
   
@@ -592,6 +608,7 @@ const Chat = () => {
         style={{
           display: 'flex',
           flexDirection: 'column',
+          flex: 1, // Take remaining space after sidebar
           height: '100vh',
           maxHeight: '100vh',
           overflow: 'hidden',
@@ -646,6 +663,7 @@ const Chat = () => {
             onDeleteMessage={handleDeleteMessage}
             onPinnedMessageClick={handlePinnedMessageClick}
             onUnpin={(messageId) => handleTogglePin(messageId, true)}
+            typingUsers={typingUsers}
             // Cursor pagination props
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
@@ -659,26 +677,30 @@ const Chat = () => {
           zIndex: 100,
           position: 'relative',
         }}>
-        <ChatFooter
-          footerRef={footerRef}
-          typingUsers={typingUsers}
-          selectedConversation={selectedConversation}
-          inputMessage={inputMessage}
-          inputRef={inputRef}
-          imageInputRef={imageInputRef}
-          fileInputRef={fileInputRef}
-          isUploading={isUploading}
-          isSending={isSending}
-          onInputChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          onSendMessage={handleSendMessage}
-          onImageSelect={handleImageSelect}
-          onFileSelect={handleFileSelect}
-          onTriggerImageInput={triggerImageInput}
-          onTriggerFileInput={triggerFileInput}
-          footerHeight={footerHeight}
-          onEmojiSelect={(emoji) => setInputMessage(prev => prev + emoji)}
-        />
+          {/* Typing Indicator - Positioned absolutely above footer */}
+          {typingUsers.length > 0 && (
+            <TypingIndicator typingUsers={typingUsers} />
+          )}
+          
+          <ChatFooter
+            footerRef={footerRef}
+            selectedConversation={selectedConversation}
+            inputMessage={inputMessage}
+            inputRef={inputRef}
+            imageInputRef={imageInputRef}
+            fileInputRef={fileInputRef}
+            isUploading={isUploading}
+            isSending={isSending}
+            onInputChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onSendMessage={handleSendMessage}
+            onImageSelect={handleImageSelect}
+            onFileSelect={handleFileSelect}
+            onTriggerImageInput={triggerImageInput}
+            onTriggerFileInput={triggerFileInput}
+            footerHeight={footerHeight}
+            onEmojiSelect={(emoji) => setInputMessage(prev => prev + emoji)}
+          />
         </div>
       </div>
       {/* /Chat */}

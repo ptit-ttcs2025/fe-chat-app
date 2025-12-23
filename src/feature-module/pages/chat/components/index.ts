@@ -13,4 +13,5 @@ export { default as TypingIndicator } from './TypingIndicator';
 export { default as EmptyState } from './EmptyState';
 export { default as DateMarker } from './DateMarker';
 export { formatDateMarker } from './DateMarker';
+export { default as NewMessagesBadge } from './NewMessagesBadge';
 

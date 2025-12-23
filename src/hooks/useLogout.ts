@@ -25,11 +25,8 @@ export const useLogout = () => {
 
     const handleLogout = useCallback(async () => {
         try {
-            console.log('🚪 Starting logout process...');
-
             // 1. Disconnect WebSocket trước
             WebSocketService.disconnect();
-            console.log('✅ WebSocket disconnected');
 
             // 2. Clear Redux state
             // 2a. Clear auth state (tokens, user info)
@@ -37,22 +34,17 @@ export const useLogout = () => {
             
             // 2b. Clear common state (UI settings, sidebar, etc.)
             dispatch(resetCommonState());
-            console.log('✅ Redux state cleared');
 
             // 3. Clear localStorage và sessionStorage
             // (Giữ lại theme và language settings)
             clearAllUserStorage();
-            console.log('✅ Storage cleared');
 
             // 4. Clear React Query cache
             // Reset toàn bộ cache để không còn data cũ
             queryClient.clear();
-            console.log('✅ React Query cache cleared');
 
             // 5. Navigate về trang login
             navigate(all_routes.signin, { replace: true });
-
-            console.log('✅ Đăng xuất thành công - Tất cả state đã được xóa');
         } catch (error) {
             console.error('❌ Lỗi khi đăng xuất:', error);
             

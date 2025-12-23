@@ -13,7 +13,48 @@ import type {
 } from '@/apis/chat/chat.type';
 
 /**
- * Hook để subscribe conversation messages
+ * Hook để check WebSocket connection status
+ * ✅ FIXED: Dùng ref để track status và tránh infinite loop
+ */
+export const useWebSocketStatus = () => {
+    const [isConnected, setIsConnected] = React.useState(() => 
+        websocketService.getConnectionStatus()
+    );
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const prevStatusRef = useRef<boolean>(websocketService.getConnectionStatus());
+
+    useEffect(() => {
+        // Cleanup existing interval
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+
+        // Check connection status periodically với debounce
+        intervalRef.current = setInterval(() => {
+            const connected = websocketService.getConnectionStatus();
+            
+            // ✅ FIXED: Chỉ update nếu thực sự thay đổi (dùng ref để track)
+            if (prevStatusRef.current !== connected) {
+                prevStatusRef.current = connected;
+                setIsConnected(connected);
+            }
+        }, 3000); // Tăng lên 3s để giảm frequency hơn nữa
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, []); // Empty deps
+
+    return isConnected;
+};
+
+/**
+ * Hook để listen messages (NO LONGER SUBSCRIBES)
+ * Subscription is handled globally in WebSocketService
+ * This hook now only listens to the global event
  */
 export const useConversationMessages = (
     conversationId: string | null,
@@ -27,18 +68,17 @@ export const useConversationMessages = (
         onMessageRef.current = onMessage;
     }, [onMessage]);
 
+    // ✅ Just listen to the global event, don't subscribe
     useEffect(() => {
         if (!conversationId || !enabled) return;
 
-        // Subscribe with stable callback reference
-        const unsubscribe = websocketService.subscribeToConversation(
-            conversationId,
-            (message) => onMessageRef.current(message)
-        );
+        const unsubscribe = websocketService.on('conversation-message', (message: MessageResponse) => {
+            if (message.conversationId === conversationId) {
+                onMessageRef.current(message);
+            }
+        });
 
-        return () => {
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }, [conversationId, enabled]);
 };
 
@@ -51,6 +91,7 @@ export const useTypingStatus = (
     enabled: boolean = true
 ) => {
     const onTypingRef = useRef(onTyping);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -58,7 +99,7 @@ export const useTypingStatus = (
     }, [onTyping]);
 
     useEffect(() => {
-        if (!conversationId || !enabled) return;
+        if (!conversationId || !enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToTyping(
             conversationId,
@@ -68,7 +109,7 @@ export const useTypingStatus = (
         return () => {
             unsubscribe();
         };
-    }, [conversationId, enabled]);
+    }, [conversationId, enabled, isConnected]);
 };
 
 /**
@@ -80,6 +121,7 @@ export const useReadReceipts = (
     enabled: boolean = true
 ) => {
     const onReadRef = useRef(onRead);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -87,7 +129,7 @@ export const useReadReceipts = (
     }, [onRead]);
 
     useEffect(() => {
-        if (!conversationId || !enabled) return;
+        if (!conversationId || !enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToReadReceipts(
             conversationId,
@@ -97,7 +139,7 @@ export const useReadReceipts = (
         return () => {
             unsubscribe();
         };
-    }, [conversationId, enabled]);
+    }, [conversationId, enabled, isConnected]);
 };
 
 /**
@@ -108,6 +150,7 @@ export const useUserStatus = (
     enabled: boolean = true
 ) => {
     const onStatusRef = useRef(onStatus);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -115,7 +158,7 @@ export const useUserStatus = (
     }, [onStatus]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToUserStatus(
             (status) => onStatusRef.current(status)
@@ -124,7 +167,7 @@ export const useUserStatus = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -135,6 +178,7 @@ export const usePersonalNotifications = (
     enabled: boolean = true
 ) => {
     const onNotificationRef = useRef(onNotification);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -142,7 +186,7 @@ export const usePersonalNotifications = (
     }, [onNotification]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToPersonalNotifications(
             (message) => onNotificationRef.current(message)
@@ -151,7 +195,7 @@ export const usePersonalNotifications = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -162,6 +206,7 @@ export const useSystemMessages = (
     enabled: boolean = true
 ) => {
     const onMessageRef = useRef(onMessage);
+    const isConnected = useWebSocketStatus();
 
     // Update ref when callback changes
     useEffect(() => {
@@ -169,7 +214,7 @@ export const useSystemMessages = (
     }, [onMessage]);
 
     useEffect(() => {
-        if (!enabled) return;
+        if (!enabled || !isConnected) return;
 
         const unsubscribe = websocketService.subscribeToSystemMessages(
             (message) => onMessageRef.current(message)
@@ -178,7 +223,7 @@ export const useSystemMessages = (
         return () => {
             unsubscribe();
         };
-    }, [enabled]);
+    }, [enabled, isConnected]);
 };
 
 /**
@@ -273,26 +318,5 @@ export const useTypingTimeout = (
         startTyping,
         stopTyping,
     };
-};
-
-/**
- * Hook để check WebSocket connection status
- */
-export const useWebSocketStatus = () => {
-    const [isConnected, setIsConnected] = React.useState(
-        websocketService.getConnectionStatus()
-    );
-
-    useEffect(() => {
-        // Check connection status periodically
-        const interval = setInterval(() => {
-            const connected = websocketService.getConnectionStatus();
-            setIsConnected(connected);
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    return isConnected;
 };
 

@@ -8,7 +8,9 @@
     "npm": "10.x"
   },
   "scripts": {
+    "predev": "node scripts/clean-vite-config.js",
     "dev": "vite --mode development",
+    "predev:prod": "node scripts/clean-vite-config.js",
     "dev:prod": "vite --mode production",
     "prebuild": "node scripts/copy-assets.js",
     "build": "vite build --mode production",

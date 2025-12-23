@@ -13,8 +13,6 @@ const KEYS_TO_KEEP = [
  * Clear localStorage ngoại trừ các keys được giữ lại
  */
 export const clearUserDataFromStorage = (): void => {
-    console.log('🧹 Clearing user data from localStorage...');
-    
     // Lưu các keys cần giữ lại
     const keysToKeep: { [key: string]: string | null } = {};
     KEYS_TO_KEEP.forEach(key => {
@@ -33,17 +31,13 @@ export const clearUserDataFromStorage = (): void => {
             localStorage.setItem(key, value);
         }
     });
-
-    console.log('✅ LocalStorage cleared (kept theme/language settings)');
 };
 
 /**
  * Clear sessionStorage hoàn toàn
  */
 export const clearSessionStorage = (): void => {
-    console.log('🧹 Clearing sessionStorage...');
     sessionStorage.clear();
-    console.log('✅ SessionStorage cleared');
 };
 
 /**
