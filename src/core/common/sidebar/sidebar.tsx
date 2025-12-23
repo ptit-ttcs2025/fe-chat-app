@@ -1,12 +1,12 @@
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import ImageWithBasePath from "../imageWithBasePath";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { Tooltip } from "antd";
 import { setDark } from "../../data/redux/commonSlice";
-import { useLogout } from '../../../hooks/useLogout';
-import { useTotalUnreadCount } from '@/hooks/useUnreadMessages';
+import { useLogout } from "../../../hooks/useLogout";
+import { useTotalUnreadCount } from "@/hooks/useUnreadMessages";
 
 const Sidebar = () => {
   const routes = all_routes;
@@ -44,7 +44,7 @@ const Sidebar = () => {
         <div className="menu-wrap">
           <div className="main-menu">
             <ul className="nav">
-              <Tooltip title="Chat" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Tin nhắn" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to={routes.index}
@@ -76,7 +76,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Contacts" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Danh bạ" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -87,7 +87,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Group" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Cộng đồng" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -103,7 +103,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Status" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Trạng thái" placement="right" color={"#6338F6 "}>
                 <li>
                   {/* {location.pathname.includes(routes.status) || location.pathname.includes(routes.myStatus) || location.pathname.includes(routes.userStatus) ? (
                     <Link
@@ -148,23 +148,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Calls" placement="right" color={"#6338F6 "}>
-                <li>
-                  <Link
-                    to="#"
-                    className={
-                      location.pathname.includes(routes.allCalls)
-                        ? "active"
-                        : ""
-                    }
-                    data-bs-toggle="tab"
-                    data-bs-target="#call-menu"
-                  >
-                    <i className="ti ti-phone-call" />
-                  </Link>
-                </li>
-              </Tooltip>
-              <Tooltip title="Profile" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Hồ sơ" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -175,7 +159,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Settings" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Cài đặt" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -225,16 +209,16 @@ const Sidebar = () => {
                       className="rounded-circle"
                     />
                   </Link>
-                    <div className="dropdown-menu dropdown-menu-end p-3">
-                        <Link
-                            to="#"
-                            className="dropdown-item"
-                            onClick={handleLogout}
-                        >
-                            <i className="ti ti-logout-2 me-2" />
-                            Logout
-                        </Link>
-                    </div>
+                  <div className="dropdown-menu dropdown-menu-end p-3">
+                    <Link
+                      to="#"
+                      className="dropdown-item"
+                      onClick={handleLogout}
+                    >
+                      <i className="ti ti-logout-2 me-2" />
+                      Logout
+                    </Link>
+                  </div>
                 </div>
               </li>
             </ul>
