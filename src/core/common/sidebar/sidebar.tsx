@@ -1,13 +1,13 @@
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import ImageWithBasePath from "../imageWithBasePath";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { Tooltip } from "antd";
 import { setDark } from "../../data/redux/commonSlice";
-import { useLogout } from '../../../hooks/useLogout';
-import { useTotalUnreadCount } from '@/hooks/useUnreadMessages';
-import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
+import { useLogout } from "../../../hooks/useLogout";
+import { useTotalUnreadCount } from "@/hooks/useUnreadMessages";
+import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
 
 const Sidebar = () => {
   const routes = all_routes;
@@ -16,7 +16,7 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const [, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
-  const { data: totalUnreadCount } = useTotalUnreadCount();
+  const { data: totalUnreadCount = 0 } = useTotalUnreadCount();
   const { isCollapsed, toggleCollapse } = useSidebarCollapse();
 
   // Smart Toggle Handler: Expand sidebar if collapsed when clicking an icon
@@ -46,13 +46,13 @@ const Sidebar = () => {
             <ImageWithBasePath src="assets/img/logo.svg" alt="Logo" />
           </Link>
         </div>
-        
+
         {/* No separate Expand Button - clicking any icon expands the sidebar */}
-        
+
         <div className="menu-wrap">
           <div className="main-menu">
             <ul className="nav">
-              <Tooltip title="Chat" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Tin nhắn" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to={routes.index}
@@ -85,7 +85,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Contacts" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Bạn bè" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -97,7 +97,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Group" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Hội nhóm" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -114,29 +114,14 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Calls" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Trạng thái" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
                     className={
-                      location.pathname.includes(routes.allCalls)
-                        ? "active"
-                        : ""
-                    }
-                    data-bs-toggle="tab"
-                    data-bs-target="#call-menu"
-                    onClick={handleIconClick}
-                  >
-                    <i className="ti ti-phone" />
-                  </Link>
-                </li>
-              </Tooltip>
-              <Tooltip title="Status" placement="right" color={"#6338F6 "}>
-                <li>
-                  <Link
-                    to="#"
-                    className={
-                      location.pathname.includes(routes.status) || location.pathname.includes(routes.myStatus) || location.pathname.includes(routes.userStatus)
+                      location.pathname.includes(routes.status) ||
+                      location.pathname.includes(routes.myStatus) ||
+                      location.pathname.includes(routes.userStatus)
                         ? "active"
                         : ""
                     }
@@ -148,7 +133,7 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Settings" placement="right" color={"#6338F6 "}>
+              <Tooltip title="Cài đặt" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
@@ -164,48 +149,57 @@ const Sidebar = () => {
           </div>
           {/* Profile & Logout Section - Compact Icon Style */}
           <div className="profile-menu d-flex flex-column align-items-center gap-3 pb-4 w-100 mt-auto">
-            
             {/* Profile Avatar */}
             <Tooltip title="Hồ sơ" placement="right" color={"#6338F6"}>
               <div className="profile-img">
-                <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={handleIconClick}>
+                <Link
+                  to={routes.profileSettings}
+                  className="profile-img-link d-block"
+                  onClick={handleIconClick}
+                >
                   <ImageWithBasePath
                     src="assets/img/profiles/avatar-05.jpg"
                     alt="image"
                     className="rounded-circle"
-                    style={{ width: '40px', height: '40px', objectFit: 'cover', border: '2px solid transparent' }}
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      objectFit: "cover",
+                      border: "2px solid transparent",
+                    }}
                   />
                 </Link>
               </div>
             </Tooltip>
-            
+
             {/* Logout Button */}
             <Tooltip title="Đăng xuất" placement="right" color={"#ff4d4f"}>
-              <button 
+              <button
                 className="btn btn-link p-0 d-flex align-items-center justify-content-center"
                 onClick={(e) => {
                   e.preventDefault();
                   handleLogout();
                 }}
-                style={{ 
-                  width: '40px', 
-                  height: '40px', 
-                  color: '#9ca3af',
-                  transition: 'all 0.2s',
-                  border: 'none',
-                  background: 'transparent'
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  color: "#9ca3af",
+                  transition: "all 0.2s",
+                  border: "none",
+                  background: "transparent",
+                  textDecoration: "none", // Remove underline
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#ff4d4f';
-                  e.currentTarget.style.background = '#ff4d4f15';
-                  e.currentTarget.style.borderRadius = '8px';
+                  e.currentTarget.style.color = "#ff4d4f";
+                  e.currentTarget.style.background = "#ff4d4f15";
+                  e.currentTarget.style.borderRadius = "8px";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#9ca3af';
-                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = "#9ca3af";
+                  e.currentTarget.style.background = "transparent";
                 }}
               >
-                <i className="ti ti-logout-2" style={{ fontSize: '22px' }} />
+                <i className="ti ti-logout-2" style={{ fontSize: "22px" }} />
               </button>
             </Tooltip>
           </div>
