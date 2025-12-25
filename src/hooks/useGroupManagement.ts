@@ -7,23 +7,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupApi } from '@/apis/group/group.api';
+import websocketService from '@/core/services/websocket.service';
 import type {
-  IGroup,
   IGroupMember,
   CreateGroupRequest,
   UpdateGroupRequest,
-  AddMembersRequest,
   GroupMemberFilter,
 } from '@/apis/group/group.type';
 
 interface UseGroupManagementOptions {
   groupId: string | null;
   autoFetchMembers?: boolean;  // Tự động fetch members khi có groupId
+  autoFetchGroup?: boolean;     // Tự động fetch group info - OPTIONAL, default false to avoid 500 error
 }
 
 export const useGroupManagement = ({
   groupId,
   autoFetchMembers = true,
+  autoFetchGroup = false, // Default to false to avoid API 500 error, use conversation data instead
 }: UseGroupManagementOptions) => {
   const queryClient = useQueryClient();
   const [members, setMembers] = useState<IGroupMember[]>([]);
@@ -36,7 +37,8 @@ export const useGroupManagement = ({
   // QUERIES
   // ===========================
 
-  // Fetch group info
+  // Fetch group info - DISABLED by default to avoid API 500 error
+  // Use conversation data instead for group info
   const {
     data: groupData,
     isLoading: isLoadingGroup,
@@ -49,7 +51,7 @@ export const useGroupManagement = ({
       const response = await groupApi.getGroup(groupId);
       return response.data;
     },
-    enabled: !!groupId,
+    enabled: !!groupId && autoFetchGroup, // Only fetch if explicitly enabled
     staleTime: 30000, // 30 seconds
   });
 
@@ -91,6 +93,13 @@ export const useGroupManagement = ({
       // Add to query cache
       if (response.data) {
         queryClient.setQueryData(['group', response.data.id], response.data);
+        
+        // Subscribe to WebSocket if conversationId is available in response
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const conversationId = (response.data as any).conversationId;
+        if (conversationId) {
+          websocketService.subscribeNewConversation(conversationId);
+        }
       }
     },
     onError: (error) => {

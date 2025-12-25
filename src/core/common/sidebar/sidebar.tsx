@@ -101,11 +101,6 @@ const Sidebar = () => {
                 <li>
                   <Link
                     to="#"
-                    className={
-                      location.pathname.includes(routes.groupChat)
-                        ? "active"
-                        : ""
-                    }
                     data-bs-toggle="tab"
                     data-bs-target="#group-menu"
                     onClick={handleIconClick}

@@ -179,12 +179,13 @@ export const userRoutes = [
         route: Route,
         title:'Chat'
     },
-    {
-        path: route.groupChat,
-        element: <GroupChat />,
-        route: Route,
-        title:'Group'
-    },
+    // DEPRECATED: Group chat now unified with /chat
+    // {
+    //     path: route.groupChat,
+    //     element: <GroupChat />,
+    //     route: Route,
+    //     title:'Group'
+    // },
     {
         path: route.status,
         element: <Status />,

@@ -30,8 +30,6 @@ const GroupChatHeader = ({
   members,
   onlineMembersCount,
   onToggleSearch,
-  onShowMembers,
-  onShowEditGroup,
   isAdmin,
   showSearch,
   searchKeyword,
@@ -155,10 +153,8 @@ const GroupChatHeader = ({
                       <Link
                         to="#"
                         className="dropdown-item"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onShowEditGroup();
-                        }}
+                        data-bs-toggle="modal"
+                        data-bs-target="#edit-group"
                       >
                         <i className="ti ti-edit me-2" />
                         Chỉnh sửa nhóm
@@ -168,10 +164,8 @@ const GroupChatHeader = ({
                       <Link
                         to="#"
                         className="dropdown-item"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onShowMembers();
-                        }}
+                        data-bs-toggle="modal"
+                        data-bs-target="#group-info"
                       >
                         <i className="ti ti-users me-2" />
                         Quản lý thành viên

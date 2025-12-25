@@ -17,7 +17,7 @@ export const all_routes = {
   //Chat
   index: "/index",
   chat: "/chat",
-  groupChat: "/group-chat",
+  // groupChat: "/group-chat", // DEPRECATED: Now unified with /chat
   allCalls: "/all-calls",
   status: "/status",
   myStatus: "/my-status",

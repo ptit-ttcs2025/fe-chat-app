@@ -3,7 +3,7 @@
  * Hiển thị danh sách conversations từ API thay vì dữ liệu tĩnh
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
@@ -52,7 +52,9 @@ const ChatTab = () => {
   // Local state
   const [activeTab, setActiveTab] = useState('All Chats');
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [pageSize, setPageSize] = useState(50); // Dynamic page size for scroll pagination
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Sidebar collapse state
   const { isCollapsed, toggleCollapse } = useSidebarCollapse();
 
@@ -83,8 +85,9 @@ const ChatTab = () => {
     togglePin: togglePinConversation,
     deleteConversation,
   } = useChatConversations({
-    pageSize: 50,
+    pageSize: pageSize, // Dynamic page size that increases on scroll
     autoRefresh: true,
+    // Removed type filter - fetch both ONE_TO_ONE and GROUP conversations
   });
   
   // Filter conversations based on tab and search
@@ -139,8 +142,8 @@ const ChatTab = () => {
     });
     
     return result;
-  }, [conversations, searchQuery, activeTab]);
-  
+  }, [conversations, searchQuery, activeTab, unreadMap]);
+
   // Recent/Online users for swiper
   const recentUsers = useMemo(() => {
     return (conversations || [])
@@ -175,6 +178,26 @@ const ChatTab = () => {
     toggleMute(conversationId, !isMuted);
   }, [toggleMute]);
   
+  // Scroll-based pagination handler
+  const handleScroll = useCallback((e: Event) => {
+    const target = e.target as HTMLElement;
+    const { scrollTop, scrollHeight, clientHeight } = target;
+
+    // Load more when scroll near bottom (within 100px)
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+    if (isNearBottom && !isLoadingMore && !isLoading && conversations.length >= pageSize) {
+      setIsLoadingMore(true);
+      // Increase page size by 50 to load more conversations
+      setPageSize(prev => prev + 50);
+
+      // Reset loading state after 500ms
+      setTimeout(() => {
+        setIsLoadingMore(false);
+      }, 500);
+    }
+  }, [isLoadingMore, isLoading, conversations.length, pageSize]);
+
   // Format helpers
   const formatTime = (timestamp?: string) => {
     if (!timestamp) return '';
@@ -263,7 +286,7 @@ const ChatTab = () => {
 
     if (!conv.lastMessage) return 'Chưa có tin nhắn';
     
-    const { content, type, senderName, senderId } = conv.lastMessage;
+      const { content, type, senderId } = conv.lastMessage;
     const isOwnMessage = senderId === user?.id;
     const prefix = isOwnMessage ? 'Bạn: ' : '';
     
@@ -273,7 +296,7 @@ const ChatTab = () => {
       return `${prefix}📷 Hình ảnh`;
     } else if (type === 'FILE') {
       return `${prefix}📎 File`;
-    } else if (type === 'AUDIO') {
+    } else if (type === 'VOICE') {
       return `${prefix}🎵 Âm thanh`;
     } else if (type === 'VIDEO') {
       return `${prefix}🎬 Video`;
@@ -363,7 +386,7 @@ const ChatTab = () => {
           <li>
             <Link className="dropdown-item" to="#">
               <i className="ti ti-heart me-2" />
-              {conv.favourite ? 'Bỏ yêu thích' : 'Yêu thích'}
+              {conv.favorite ? 'Bỏ yêu thích' : 'Yêu thích'}
             </Link>
           </li>
           <li>
@@ -408,6 +431,9 @@ const ChatTab = () => {
               autoHideDelay: 1000,
             },
           }}
+          events={{
+            scroll: handleScroll,
+          }}
           style={{ maxHeight: '100vh' }}
         >
           <div className="">
@@ -416,7 +442,7 @@ const ChatTab = () => {
               <div className="header-title d-flex align-items-center justify-content-between">
                 <h4 className="mb-3 d-flex align-items-center gap-2">
                   <span>Chats</span>
-                  {totalUnreadCount > 0 && (
+                  {(totalUnreadCount ?? 0) > 0 && (
                     <span
                       className="badge rounded-pill"
                       style={{
@@ -425,7 +451,7 @@ const ChatTab = () => {
                         fontSize: '11px',
                       }}
                     >
-                      {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                      {(totalUnreadCount ?? 0) > 99 ? '99+' : totalUnreadCount}
                     </span>
                   )}
                 </h4>
@@ -637,6 +663,16 @@ const ChatTab = () => {
                       filteredConversations.map(renderConversationItem)
                     )}
                     
+                    {/* Load More Indicator */}
+                    {isLoadingMore && (
+                      <div className="text-center py-3">
+                        <div className="spinner-border spinner-border-sm text-primary" role="status">
+                          <span className="visually-hidden">Đang tải thêm...</span>
+                        </div>
+                        <p className="text-muted mt-2 mb-0 small">Đang tải thêm cuộc trò chuyện...</p>
+                      </div>
+                    )}
+
                     {/* Empty State */}
                     {!isLoading && filteredConversations.length === 0 && (
                       <div className="text-center py-5">

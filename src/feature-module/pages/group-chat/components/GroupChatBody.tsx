@@ -3,11 +3,12 @@
  * Hiển thị messages với sender info (name + avatar) vì là group chat
  */
 
-import { RefObject, useEffect, useCallback, useRef, useState } from "react";
+import { RefObject, useEffect, useCallback, useRef } from "react";
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 import { Link } from "react-router-dom";
 import ImageWithBasePath from "@/core/common/imageWithBasePath";
+import Avatar from "@/feature-module/pages/chat/components/Avatar";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
 import type { IGroupMember } from "@/apis/group/group.type";
 import PinnedMessages from "@/feature-module/pages/chat/components/PinnedMessages";
@@ -17,12 +18,10 @@ interface GroupChatBodyProps {
   pinnedMessages: IMessage[];
   members: IGroupMember[];
   isLoadingMessages: boolean;
-  searchKeyword: string;
   selectedConversation: IConversation | null;
   currentUserId?: string;
   userAvatarUrl?: string;
   userFullName?: string;
-  footerHeight: number;
   messagesEndRef: RefObject<HTMLDivElement | null>;
   onTogglePin: (messageId: string, currentlyPinned: boolean) => void;
   onDeleteMessage: (messageId: string) => void;
@@ -40,12 +39,10 @@ const GroupChatBody = ({
   pinnedMessages,
   members,
   isLoadingMessages,
-  searchKeyword,
   selectedConversation,
   currentUserId,
   userAvatarUrl,
   userFullName,
-  footerHeight: _footerHeight,
   messagesEndRef,
   onTogglePin,
   onDeleteMessage,
@@ -174,11 +171,38 @@ const GroupChatBody = ({
 
   return (
     <>
+      {/* Fix message bubble width and layout */}
+      <style>{`
+        .chat-body.chat-page-group .chats.chats-right .chat-content {
+          max-width: 70%;
+          width: fit-content;
+        }
+        
+        .chat-body.chat-page-group .chats .chat-content {
+          max-width: 70%;
+        }
+        
+        .chat-body.chat-page-group .message-content {
+          display: inline-block;
+          max-width: 100%;
+          word-wrap: break-word;
+        }
+        
+        .chat-body.chat-page-group .chats-right .chat-info {
+          display: flex;
+          justify-content: flex-end;
+        }
+        
+        .chat-body.chat-page-group .chats .chat-info {
+          display: flex;
+        }
+      `}</style>
+
       {/* Pinned Messages Bar */}
       {pinnedMessages.length > 0 && (
         <PinnedMessages
           pinnedMessages={pinnedMessages}
-          onPinnedMessageClick={onPinnedMessageClick}
+          onMessageClick={onPinnedMessageClick}
           onUnpin={onUnpin}
         />
       )}
@@ -221,7 +245,7 @@ const GroupChatBody = ({
 
           {/* Messages List */}
           <div className="messages">
-            {messages.map((message, index) => {
+            {messages.map((message) => {
               const isOwn = message.senderId === currentUserId;
               const sender = getMemberByUserId(message.senderId);
               const senderAvatar = isOwn
@@ -238,12 +262,11 @@ const GroupChatBody = ({
                 >
                   {!isOwn && (
                     <div className="chat-avatar">
-                      <ImageWithBasePath
-                        src={
-                          senderAvatar || "assets/img/avatar/avatar-default.png"
-                        }
+                      <Avatar
+                        src={senderAvatar}
+                        name={senderName}
                         className="rounded-circle"
-                        alt={senderName}
+                        size={40}
                       />
                     </div>
                   )}
@@ -372,12 +395,11 @@ const GroupChatBody = ({
                   </div>
                   {isOwn && (
                     <div className="chat-avatar">
-                      <ImageWithBasePath
-                        src={
-                          senderAvatar || "assets/img/avatar/avatar-default.png"
-                        }
+                      <Avatar
+                        src={userAvatarUrl}
+                        name={userFullName || "Bạn"}
                         className="rounded-circle dreams_chat"
-                        alt="Bạn"
+                        size={40}
                       />
                     </div>
                   )}

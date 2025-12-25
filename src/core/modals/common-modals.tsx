@@ -9,6 +9,7 @@ import VoiceAttend from './voice-attend'
 import VoiceCall from './voice-call'
 import VoiceGroup from './voice-group'
 import NewGroup from './new-group'
+import AddGroup from './add-group'
 import AddContact from './add-contact'
 import MuteUser from './mute-user'
 import BlockUser from './block-user'
@@ -17,12 +18,16 @@ import EditContact from './edit-contact'
 import InviteModal from './invite-modal'
 import FriendRequests from './friend-requests'
 import Notifications from './notifications'
+import { GroupCreationProvider } from '@/contexts/GroupCreationContext'
 
 const CommonModals = () => {
   return (
     <>
     <NewChat/>
-    <NewGroup/>
+    <GroupCreationProvider>
+      <NewGroup/>
+      <AddGroup/>
+    </GroupCreationProvider>
     <DeleteChat/>
     <DeleteAccount/>
     <VideoCall/>

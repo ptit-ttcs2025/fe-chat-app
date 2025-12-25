@@ -13,6 +13,7 @@ import ContactInfo from "../../../core/modals/contact-info-off-canva";
 // API & Hooks - Tích hợp real-time
 import { useChatMessages } from "@/hooks/useChatMessages";
 import { useChatConversations } from "@/hooks/useChatConversations";
+import { useGroupManagement } from "@/hooks/useGroupManagement";
 import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
 import websocketService from "@/core/services/websocket.service";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
@@ -25,6 +26,10 @@ import ChatBody from "./components/ChatBody";
 import ChatFooter from "./components/ChatFooter";
 import TypingIndicator from "./components/TypingIndicator";
 import { chatStyles } from "./styles/chatStyles";
+
+// Group Components (for unified handling)
+import GroupChatHeader from "../group-chat/components/GroupChatHeader";
+import GroupChatBody from "../group-chat/components/GroupChatBody";
 
 // Redux State Interface
 interface RootState {
@@ -69,12 +74,13 @@ const Chat = () => {
   // WebSocket connection
   const isWsConnected = useWebSocketStatus();
   
-  // Conversations list
+  // Conversations list (both ONE_TO_ONE and GROUP for unified chat)
   const {
     conversations,
   } = useChatConversations({
     pageSize: 50,
     autoRefresh: true,
+    // No type filter - handle both ONE_TO_ONE and GROUP
   });
   
   // Sync conversation from Redux
@@ -107,6 +113,24 @@ const Chat = () => {
     currentUserId: user?.id,
   });
   
+  // Group management hook (for GROUP conversations)
+  const {
+    group,
+    members,
+    // isLoadingMembers,
+    // addMembers: addMembersToGroup,
+    // removeMember: removeMemberFromGroup,
+    // updateGroup: updateGroupInfo,
+    isAdmin,
+    getOnlineMembersCount,
+  } = useGroupManagement({
+    groupId: selectedConversation?.type === 'GROUP' ? (selectedConversation?.groupId || null) : null,
+    autoFetchMembers: selectedConversation?.type === 'GROUP',
+  });
+
+  // Determine if current conversation is a group
+  const isGroupConversation = selectedConversation?.type === 'GROUP';
+
   // Pinned messages state
   const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
   
@@ -233,13 +257,13 @@ const Chat = () => {
   }, [filteredMessagesComputed]);
   
   // Focus input when conversation changes
-  // NOTE: Scroll to bottom được xử lý trong ChatBody component
+  // Focus input when conversation changes
   useEffect(() => {
     if (selectedConversation) {
       inputRef.current?.focus();
     }
-  }, [selectedConversation?.id]);
-  
+  }, [selectedConversation]);
+
   // Tính toán chiều cao footer động
   useEffect(() => {
     const updateFooterHeight = () => {
@@ -452,7 +476,7 @@ const Chat = () => {
         }, 100);
       }
     },
-    [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user, scrollToBottom]
+    [inputMessage, selectedConversation, isSending, sendMessageHook, sendTypingStatus, user]
   );
   
   const handleKeyDown = useCallback(
@@ -467,7 +491,6 @@ const Chat = () => {
   
   const handleDeleteMessage = useCallback(
     (messageId: string) => {
-      // eslint-disable-next-line no-alert
       if (globalThis.confirm("Bạn có chắc muốn xóa tin nhắn này?")) {
         deleteMessage(messageId);
       }
@@ -548,11 +571,13 @@ const Chat = () => {
   const handleImageSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file && file.type.startsWith('image/')) {
-        handleFileUpload(file, 'IMAGE');
+      if (file && file.type.startsWith("image/")) {
+        handleFileUpload(file, "IMAGE");
       }
       // Reset input
-      imageInputRef.current && (imageInputRef.current.value = '');
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
     },
     [handleFileUpload]
   );
@@ -565,7 +590,9 @@ const Chat = () => {
         handleFileUpload(file, 'FILE');
       }
       // Reset input
-      fileInputRef.current && (fileInputRef.current.value = '');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     },
     [handleFileUpload]
   );
@@ -622,16 +649,46 @@ const Chat = () => {
           zIndex: 10,
           position: 'relative',
         }}>
-          <ChatHeader 
-            selectedConversation={selectedConversation}
-            onToggleSearch={toggleSearch}
-          />
-          
-          <ChatSearch
-            showSearch={showSearch}
-            searchKeyword={searchKeyword}
-            onSearchChange={setSearchKeyword}
-          />
+          {isGroupConversation ? (
+            <GroupChatHeader
+              conversation={selectedConversation}
+              group={group}
+              members={members}
+              onlineMembersCount={getOnlineMembersCount()}
+              onToggleSearch={toggleSearch}
+              onShowMembers={() => {
+                // Trigger Bootstrap modal for members
+                const modal = document.querySelector('[data-bs-target="#group-members"]');
+                if (modal) {
+                  (modal as HTMLElement).click();
+                }
+              }}
+              onShowEditGroup={() => {
+                // Trigger Bootstrap modal for edit group
+                const modal = document.querySelector('[data-bs-target="#edit-group"]');
+                if (modal) {
+                  (modal as HTMLElement).click();
+                }
+              }}
+              isAdmin={isAdmin(user?.id || '')}
+              showSearch={showSearch}
+              searchKeyword={searchKeyword}
+              onSearchChange={setSearchKeyword}
+            />
+          ) : (
+            <>
+              <ChatHeader
+                selectedConversation={selectedConversation}
+                onToggleSearch={toggleSearch}
+              />
+
+              <ChatSearch
+                showSearch={showSearch}
+                searchKeyword={searchKeyword}
+                onSearchChange={setSearchKeyword}
+              />
+            </>
+          )}
         </div>
           
         {/* Body Section - Scrollable, takes remaining space */}
@@ -646,29 +703,52 @@ const Chat = () => {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <ChatBody
-            messages={messages}
-            filteredMessages={filteredMessages}
-            pinnedMessages={pinnedMessages}
-            isLoadingMessages={isLoadingMessages}
-            searchKeyword={searchKeyword}
-            selectedConversation={selectedConversation}
-            currentUserId={user?.id}
-            userAvatarUrl={user?.avatarUrl}
-            userFullName={user?.fullName}
-            userUsername={user?.username}
-            footerHeight={footerHeight}
-            messagesEndRef={messagesEndRef}
-            onTogglePin={handleTogglePin}
-            onDeleteMessage={handleDeleteMessage}
-            onPinnedMessageClick={handlePinnedMessageClick}
-            onUnpin={(messageId) => handleTogglePin(messageId, true)}
-            typingUsers={typingUsers}
-            // Cursor pagination props
-            hasMore={hasMore}
-            isLoadingMore={isLoadingMore}
-            onLoadMore={loadMoreMessages}
-          />
+          {isGroupConversation ? (
+            <GroupChatBody
+              messages={filteredMessages}
+              pinnedMessages={pinnedMessages}
+              members={members}
+              isLoadingMessages={isLoadingMessages}
+              selectedConversation={selectedConversation}
+              currentUserId={user?.id}
+              userAvatarUrl={user?.avatarUrl}
+              userFullName={user?.fullName}
+              messagesEndRef={messagesEndRef}
+              onTogglePin={handleTogglePin}
+              onDeleteMessage={handleDeleteMessage}
+              onPinnedMessageClick={handlePinnedMessageClick}
+              onUnpin={(messageId) => handleTogglePin(messageId, true)}
+              typingUsers={typingUsers}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMoreMessages}
+              isAdmin={isAdmin(user?.id || '')}
+            />
+          ) : (
+            <ChatBody
+              messages={messages}
+              filteredMessages={filteredMessages}
+              pinnedMessages={pinnedMessages}
+              isLoadingMessages={isLoadingMessages}
+              searchKeyword={searchKeyword}
+              selectedConversation={selectedConversation}
+              currentUserId={user?.id}
+              userAvatarUrl={user?.avatarUrl}
+              userFullName={user?.fullName}
+              userUsername={user?.username}
+              footerHeight={footerHeight}
+              messagesEndRef={messagesEndRef}
+              onTogglePin={handleTogglePin}
+              onDeleteMessage={handleDeleteMessage}
+              onPinnedMessageClick={handlePinnedMessageClick}
+              onUnpin={(messageId) => handleTogglePin(messageId, true)}
+              typingUsers={typingUsers}
+              // Cursor pagination props
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMoreMessages}
+            />
+          )}
         </div>
         
         {/* Footer Section - Fixed at bottom */}

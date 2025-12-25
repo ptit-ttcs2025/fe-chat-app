@@ -18,15 +18,10 @@ import { uploadImage, uploadFile, chatApi } from "@/apis/chat/chat.api";
 // Components
 import GroupChatHeader from "./components/GroupChatHeader";
 import GroupChatBody from "./components/GroupChatBody";
-import GroupChatFooter from "./components/GroupChatFooter";
+import ChatFooter from "../chat/components/ChatFooter"; // Using ChatFooter from 1-1 chat
 import TypingIndicator from "../chat/components/TypingIndicator";
 import { chatStyles } from "../chat/styles/chatStyles";
-
-// Modals
-import CreateGroupModal from "@/core/modals/create-group-modal";
-import AddMembersModal from "@/core/modals/add-members-modal";
-import EditGroupModal from "@/core/modals/edit-group-modal";
-import GroupMembersModal from "@/core/modals/group-members-modal";
+import CommonGroupModal from "@/core/modals/common-group-modal"; // Group modals (NewGroup, AddGroup, etc.)
 
 // Redux State Interface
 interface RootState {
@@ -59,12 +54,6 @@ const GroupChat = () => {
     useState<IConversation | null>(null);
   const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-
-  // Modal states
-  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
-  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
 
   // ==================== Refs ====================
   const inputRef = useRef<HTMLInputElement>(null);
@@ -557,7 +546,7 @@ const GroupChat = () => {
     async (memberIds: string[]) => {
       try {
         await addMembersToGroup(memberIds);
-        setShowAddMembersModal(false);
+        // Modal will be closed by template
       } catch (error) {
         console.error("❌ Error adding members:", error);
         alert("Không thể thêm thành viên. Vui lòng thử lại.");
@@ -581,10 +570,11 @@ const GroupChat = () => {
   );
 
   const handleUpdateGroup = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (data: any) => {
       try {
         await updateGroupInfo(data);
-        setShowEditGroupModal(false);
+        // Modal will be closed by template
       } catch (error) {
         console.error("❌ Error updating group:", error);
         alert("Không thể cập nhật nhóm. Vui lòng thử lại.");
@@ -651,8 +641,6 @@ const GroupChat = () => {
             members={members}
             onlineMembersCount={getOnlineMembersCount()}
             onToggleSearch={toggleSearch}
-            onShowMembers={() => setShowMembersModal(true)}
-            onShowEditGroup={() => setShowEditGroupModal(true)}
             isAdmin={isAdmin(user?.id || "")}
             showSearch={showSearch}
             searchKeyword={searchKeyword}
@@ -679,12 +667,10 @@ const GroupChat = () => {
             pinnedMessages={pinnedMessages}
             members={members}
             isLoadingMessages={isLoadingMessages}
-            searchKeyword={searchKeyword}
             selectedConversation={selectedConversation}
             currentUserId={user?.id}
             userAvatarUrl={user?.avatarUrl}
             userFullName={user?.fullName}
-            footerHeight={footerHeight}
             messagesEndRef={messagesEndRef}
             onTogglePin={handleTogglePin}
             onDeleteMessage={handleDeleteMessage}
@@ -710,7 +696,7 @@ const GroupChat = () => {
             <TypingIndicator typingUsers={typingUsers} />
           )}
 
-          <GroupChatFooter
+          <ChatFooter
             footerRef={footerRef as RefObject<HTMLDivElement>}
             selectedConversation={selectedConversation}
             inputMessage={inputMessage}
@@ -732,37 +718,8 @@ const GroupChat = () => {
         </div>
       </div>
 
-      {/* Modals */}
-      <CreateGroupModal
-        show={showCreateGroupModal}
-        onHide={() => setShowCreateGroupModal(false)}
-      />
-      <AddMembersModal
-        show={showAddMembersModal}
-        onHide={() => setShowAddMembersModal(false)}
-        groupId={selectedConversation?.groupId || ""}
-        currentMembers={members}
-        onAddMembers={handleAddMembers}
-      />
-      <EditGroupModal
-        show={showEditGroupModal}
-        onHide={() => setShowEditGroupModal(false)}
-        group={group}
-        onUpdate={handleUpdateGroup}
-      />
-      <GroupMembersModal
-        show={showMembersModal}
-        onHide={() => setShowMembersModal(false)}
-        groupId={selectedConversation?.groupId || ""}
-        members={members}
-        isLoadingMembers={isLoadingMembers}
-        isAdmin={isAdmin(user?.id || "")}
-        onRemoveMember={handleRemoveMember}
-        onAddMembers={() => {
-          setShowMembersModal(false);
-          setShowAddMembersModal(true);
-        }}
-      />
+      {/* Group Modals (NewGroup, AddGroup, EditGroup, etc.) */}
+      <CommonGroupModal />
     </>
   );
 };

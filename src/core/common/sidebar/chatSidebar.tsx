@@ -66,9 +66,7 @@ const ChatSidebar = () => {
           </div>
           {/* /Contact */}
           {/* Group */}
-          <div className={`tab-pane fade ${
-              location.pathname.includes(routes.groupChat) ? "active show" : ""
-            }`} id="group-menu">
+          <div className="tab-pane fade" id="group-menu">
             <GroupTab />
           </div>
           {/* /Group */}

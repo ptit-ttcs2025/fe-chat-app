@@ -1,12 +1,125 @@
-
-import ImageWithBasePath from "../imageWithBasePath";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
+import { useChatConversations } from "@/hooks/useChatConversations";
+import ImageFallback from "@/components/ImageFallback";
+import type { IConversation } from "@/apis/chat/chat.type";
+import { setSelectedConversation } from "@/core/data/redux/commonSlice";
 
 const GroupTab = () => {
   const routes = all_routes;
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  // State for search
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch only GROUP conversations
+  const { conversations, isLoading } = useChatConversations({
+    pageSize: 50,
+    autoRefresh: true,
+    type: "GROUP", // Only fetch group conversations
+  });
+
+  // Filter conversations based on search
+  const filteredConversations = conversations.filter((conv) =>
+    conv.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Handle conversation click
+  const handleConversationClick = (conversation: IConversation, e: React.MouseEvent) => {
+    e.preventDefault();
+    // Dispatch Redux action to set selected conversation
+    dispatch(setSelectedConversation(conversation.id));
+    // Navigate to unified chat page (not group-chat)
+    navigate(routes.chat);
+  };
+
+  // Format time
+  const formatTime = (timestamp?: string) => {
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) {
+      return date.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
+    } else if (days === 1) {
+      return "Hôm qua";
+    } else if (days < 7) {
+      return `${days} ngày trước`;
+    } else {
+      return date.toLocaleDateString("vi-VN");
+    }
+  };
+
+  // Get avatar display
+  const getAvatarDisplay = (conversation: IConversation) => {
+    if (conversation.avatarUrl) {
+      return (
+        <ImageFallback
+          src={conversation.avatarUrl}
+          alt={conversation.name || "Group"}
+          type="group-avatar"
+          className="rounded-circle"
+        />
+      );
+    }
+
+    // Generate initials from group name
+    const initials = conversation.name
+      ?.split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'G';
+
+    return (
+      <span className="avatar-title fs-14 fw-medium">{initials}</span>
+    );
+  };
+
+  // Get last message preview
+  const getLastMessagePreview = (conversation: IConversation) => {
+    const lastMsg = conversation.lastMessage;
+
+    if (!lastMsg) {
+      return <p className="text-muted">Chưa có tin nhắn</p>;
+    }
+
+    // Handle different message types
+    switch (lastMsg.type) {
+      case 'IMAGE':
+        return (
+          <p>
+            <i className="ti ti-photo me-2" />
+            Ảnh
+          </p>
+        );
+      case 'FILE':
+        return (
+          <p>
+            <i className="ti ti-file me-2" />
+            File
+          </p>
+        );
+      case 'VOICE':
+        return (
+          <p>
+            <i className="ti ti-microphone me-2" />
+            Tin nhắn thoại
+          </p>
+        );
+      default:
+        return <p>{lastMsg.content}</p>;
+    }
+  };
+
   return (
     <>
       {/* Chats sidebar */}
@@ -65,6 +178,8 @@ const GroupTab = () => {
                     type="text"
                     className="form-control"
                     placeholder="Tìm kiếm liên hệ hoặc tin nhắn"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   <span className="input-group-text">
                     <i className="ti ti-search" />
@@ -82,890 +197,78 @@ const GroupTab = () => {
             {/* /Left Chat Title */}
             <div className="chat-users-wrap">
               <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-01.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>The Dream Team</h6>
-                      <p>
-                        <span className="animate-typing">
-                          đang nhập
-                          <span className="dot mx-1" />
-                          <span className="dot me-1" />
-                          <span className="dot" />
-                        </span>
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-pin me-2" />
-                        <span className="count-message fs-12 fw-semibold">
-                          12
-                        </span>
+                {filteredConversations.length === 0 && !isLoading && (
+                  <p className="text-muted text-center py-3">Không tìm thấy nhóm nào</p>
+                )}
+                {filteredConversations.map((conversation) => (
+                  <div key={conversation.id} className="position-relative">
+                    <Link
+                      to={routes.chat}
+                      className="chat-user-list"
+                      onClick={(e) => handleConversationClick(conversation, e)}
+                    >
+                      <div className="avatar avatar-lg online me-2">
+                        {getAvatarDisplay(conversation)}
                       </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-02.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>The Meme Team</h6>
-                      <p>Do you know which...</p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">06:12 AM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-pin me-2" />
-                        <i className="ti ti-checks text-success" />
+                      <div className="chat-user-info">
+                        <div className="chat-user-msg">
+                          <h6>{conversation.name}</h6>
+                          {getLastMessagePreview(conversation)}
+                        </div>
+                        <div className="chat-user-time">
+                          <span className="time">{formatTime(conversation.updatedAt)}</span>
+                          <div className="chat-pin">
+                            {conversation.pinned && (
+                              <i className="ti ti-pin me-2" />
+                            )}
+                            {conversation.unreadCount > 0 && (
+                              <span className="count-message fs-12 fw-semibold">
+                                {conversation.unreadCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    </Link>
+                    <div className="chat-dropdown">
+                      <Link className="#" to="#" data-bs-toggle="dropdown">
+                        <i className="ti ti-dots-vertical" />
+                      </Link>
+                      <ul className="dropdown-menu dropdown-menu-end p-3">
+                        <li>
+                          <Link className="dropdown-item" to="#">
+                            <i className="ti ti-box-align-right me-2" />
+                            Lưu trữ nhóm
+                          </Link>
+                        </li>
+                        <li>
+                          <Link className="dropdown-item" to="#">
+                            <i className="ti ti-volume-off me-2" />
+                            Tắt thông báo
+                          </Link>
+                        </li>
+                        <li>
+                          <Link className="dropdown-item" to="#">
+                            <i className="ti ti-logout-2 me-2" />
+                            Rời khỏi nhóm
+                          </Link>
+                        </li>
+                        <li>
+                          <Link className="dropdown-item" to="#">
+                            <i className="ti ti-pinned me-2" />
+                            Ghim nhóm
+                          </Link>
+                        </li>
+                        <li>
+                          <Link className="dropdown-item" to="#">
+                            <i className="ti ti-square-check me-2" />
+                            Đánh dấu chưa đọc
+                          </Link>
+                        </li>
+                      </ul>
                     </div>
                   </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-03.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Tech Talk Tribe</h6>
-                      <p>Haha oh man</p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">03:15 AM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-pin me-2" />
-                        <span className="count-message fs-12 fw-semibold">
-                          55
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg bg-pink avatar-rounded me-2">
-                    <span className="avatar-title fs-14 fw-medium">AG</span>
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Amfr_boys_Group</h6>
-                      <p>
-                        <i className="ti ti-photo me-2" />
-                        Ảnh
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">Yesterday</span>
-                      <div className="chat-pin">
-                        <span className="count-message fs-12 fw-semibold">
-                          5
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-04.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>The Academic Alliance</h6>
-                      <p className="text-success">
-                        <i className="ti ti-video-plus me-2" />
-                        Cuộc gọi video đến
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">Sunday</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-checks text-success" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-05.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>The Chill Zone</h6>
-                      <p>
-                        <i className="ti ti-photo me-2" />
-                        Ảnh
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">Wednesday</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-pin me-2" />
-                        <span className="count-message fs-12 fw-semibold">
-                          12
-                        </span>
-                        <i className="bx bx-check-double" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-06.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Squad Goals</h6>
-                      <p>
-                        <i className="ti ti-file me-2" />
-                        Tài liệu
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-checks text-success" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg bg-skyblue online avatar-rounded me-2">
-                    <span className="avatar-title fs-14 fw-medium">GU</span>
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Gustov_family</h6>
-                      <p>
-                        Please Check
-                        <span className="text-primary ms-1">@rev</span>
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">24 Jul 2024</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-heart-filled text-warning me-2" />
-                        <span className="count-message fs-12 fw-semibold">
-                          25
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-07.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Scholars Society</h6>
-                      <p className="text-danger">
-                        <i className="ti ti-video-off me-2" />
-                        Cuộc gọi video bị nhỡ
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-heart-filled text-warning me-2" />
-                        <i className="ti ti-checks text-success" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-08.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Travel Tribe</h6>
-                      <p>Hi How are you</p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <span className="count-message fs-12 fw-semibold">
-                          25
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-09.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Fitness Fanatics</h6>
-                      <p>Do you know which...</p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-heart-filled text-warning" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-10.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>The Quest Crew</h6>
-                      <p>Haha oh man</p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-pin me-2" />
-                        <i className="ti ti-checks text-success" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-11.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Game Changers</h6>
-                      <p>
-                        <i className="ti ti-map-pin-plus me-2" />
-                        Vị trí
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-checks text-success" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="chat-list">
-                <Link to={routes.groupChat} className="chat-user-list">
-                  <div className="avatar avatar-lg online me-2">
-                    <ImageWithBasePath
-                      src="assets/img/groups/group-12.jpg"
-                      className="rounded-circle"
-                      alt="image"
-                    />
-                  </div>
-                  <div className="chat-user-info">
-                    <div className="chat-user-msg">
-                      <h6>Movie Buffs</h6>
-                      <p>
-                        <i className="ti ti-video me-2" />
-                        Video
-                      </p>
-                    </div>
-                    <div className="chat-user-time">
-                      <span className="time">02:40 PM</span>
-                      <div className="chat-pin">
-                        <i className="ti ti-heart-filled text-warning me-2" />
-                        <span className="count-message fs-12 fw-semibold">
-                          25
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-                <div className="chat-dropdown">
-                  <Link className="#" to="#" data-bs-toggle="dropdown">
-                    <i className="ti ti-dots-vertical" />
-                  </Link>
-                  <ul className="dropdown-menu dropdown-menu-end p-3">
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-box-align-right me-2" />
-                        Lưu trữ nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-volume-off me-2" />
-                        Tắt thông báo
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-logout-2 me-2" />
-                        Rời khỏi nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-pinned me-2" />
-                        Ghim nhóm
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="#">
-                        <i className="ti ti-square-check me-2" />
-                        Đánh dấu chưa đọc
-                      </Link>
-                    </li>
-                  </ul>
-                </div>
+                ))}
               </div>
             </div>
           </div>
