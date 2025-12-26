@@ -1,4 +1,3 @@
-import { useContext } from 'react';
 import { useSidebarContext } from '@/contexts/SidebarContext';
 
 /**
@@ -8,14 +7,15 @@ import { useSidebarContext } from '@/contexts/SidebarContext';
 export const useSidebarCollapse = () => {
   try {
     return useSidebarContext();
-  } catch (error) {
+  } catch {
     // Fallback if context is not available (should not happen in production)
     console.warn('SidebarContext not available, using fallback');
     return {
       isCollapsed: false,
       toggleCollapse: () => console.warn('SidebarContext not initialized'),
       setIsCollapsed: () => {},
+      activeTab: null as string | null,
+      setActiveTab: (_: string | null) => {},
     };
   }
 };
-

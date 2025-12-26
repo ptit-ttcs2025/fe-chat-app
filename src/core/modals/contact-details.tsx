@@ -1,16 +1,27 @@
-
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { all_routes } from '../../feature-module/router/all_routes'
 import ImageWithBasePath from '../common/imageWithBasePath';
 import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
 import { useGetFriendDetail } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createConversation } from '@/apis/chat/chat.api';
+import { useDispatch } from 'react-redux';
+import { setSelectedConversation } from '@/core/data/redux/commonSlice';
+import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
 
 const ContactDetails = () => {
     const routes = all_routes;
+    const navigate = useNavigate();
+    const dispatch = useDispatch();
+    const queryClient = useQueryClient();
     const { selectedFriendId } = useSelectedFriend();
-    
+    const { setActiveTab, setIsCollapsed } = useSidebarCollapse();
+    const MySwal = withReactContent(Swal);
+
     // Cleanup modal on navigation
     useModalCleanup('contact-details');
     
@@ -19,6 +30,87 @@ const ContactDetails = () => {
         selectedFriendId || '',
         !!selectedFriendId
     );
+
+    // Create conversation mutation
+    const createConversationMutation = useMutation({
+        mutationFn: (otherMemberId: string) => createConversation(otherMemberId),
+        onSuccess: (response) => {
+            // Close loading modal FIRST
+            MySwal.close();
+
+            // Invalidate conversations list
+            queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+
+            // Close contact details modal
+            const modal = document.getElementById('contact-details');
+            if (modal) {
+                const bsModal = (window as any).bootstrap?.Modal?.getInstance(modal);
+                bsModal?.hide();
+            }
+
+            // Select new conversation
+            if (response.data) {
+                dispatch(setSelectedConversation(response.data.id));
+
+                // Switch to chat tab and open sidebar
+                setActiveTab('chat');
+                setIsCollapsed(false);
+
+                // Navigate to chat
+                navigate(routes.chat);
+
+                // Show success message
+                MySwal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: 'Đã tạo hội thoại mới!',
+                    timer: 1500,
+                    showConfirmButton: false,
+                });
+            }
+        },
+        onError: (error: any) => {
+            // Close loading modal
+            MySwal.close();
+
+            MySwal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: error?.response?.data?.message || 'Không thể tạo hội thoại. Vui lòng thử lại.',
+                confirmButtonColor: '#6338F6',
+            });
+        },
+    });
+
+    // Handle start chat
+    const handleStartChat = async () => {
+        if (!selectedFriendId) return;
+
+        // Show loading
+        MySwal.fire({
+            title: 'Đang xử lý...',
+            text: 'Vui lòng đợi trong giây lát',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                MySwal.showLoading();
+            },
+        });
+
+        try {
+            // Create conversation
+            createConversationMutation.mutate(selectedFriendId);
+        } catch (error) {
+            MySwal.close();
+            MySwal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.',
+                confirmButtonColor: '#6338F6',
+            });
+        }
+    };
 
     // Format date
     const formatDate = (dateString?: string | null) => {
@@ -167,9 +259,31 @@ const ContactDetails = () => {
                       </div>
                     </div>
                 <div className="contact-actions d-flex align-items-center mb-3">
-                  <Link to={routes.chat} className="me-2">
-                    <i className="ti ti-message" />
-                  </Link>
+                  <button
+                    type="button"
+                    className="btn btn-icon btn-light me-2"
+                    onClick={handleStartChat}
+                    disabled={createConversationMutation.isPending}
+                    title="Nhắn tin"
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid #e5e7eb',
+                      background: '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {createConversationMutation.isPending ? (
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    ) : (
+                      <i className="ti ti-message" style={{ fontSize: '18px' }} />
+                    )}
+                  </button>
                   <Link
                     to="#"
                     className="me-2"

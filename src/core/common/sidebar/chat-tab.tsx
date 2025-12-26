@@ -179,8 +179,15 @@ const ChatTab = () => {
   }, [toggleMute]);
   
   // Scroll-based pagination handler
-  const handleScroll = useCallback((e: Event) => {
-    const target = e.target as HTMLElement;
+  const handleScroll = useCallback((instance: any) => {
+    // OverlayScrollbars passes instance object, not Event
+    const { target } = instance.elements();
+
+    // Safety check: ensure element exists
+    if (!target) {
+      return;
+    }
+
     const { scrollTop, scrollHeight, clientHeight } = target;
 
     // Load more when scroll near bottom (within 100px)

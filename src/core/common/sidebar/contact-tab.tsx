@@ -1,6 +1,5 @@
-
 import ImageWithBasePath from '../imageWithBasePath'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 import { useState, useMemo, useEffect } from 'react';
@@ -10,14 +9,10 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
 import { useTotalUnreadCount, useUnreadSummary } from '@/hooks/useUnreadMessages';
 import { useChatConversations } from '@/hooks/useChatConversations';
-import { useDispatch } from 'react-redux';
-import { setSelectedConversation } from '@/core/data/redux/commonSlice';
 import type { IConversation } from '@/apis/chat/chat.type';
 import type { UnreadConversation } from '@/types/unread';
 
 const ContactTab = () => {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   
@@ -163,17 +158,11 @@ const ContactTab = () => {
     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   };
 
-  // Handle click on friend to open chat
+  // Handle click on friend to open contact details modal
   const handleFriendClick = (friendId: string) => {
-    const data = friendDataMap[friendId];
-    if (data?.conversation) {
-      // Có conversation sẵn -> mở chat
-      dispatch(setSelectedConversation(data.conversation.id));
-      navigate('/chat');
-    } else {
-      // Chưa có conversation -> vẫn mở modal contact details như cũ
-      setSelectedFriendId(friendId);
-    }
+    // Always open modal to show friend details
+    // User can click "Message" icon inside modal to start chat
+    setSelectedFriendId(friendId);
   };
 
   return (
@@ -325,7 +314,6 @@ const ContactTab = () => {
                     <h6 className="mb-2">{letter}</h6>
                     {groupedFriends[letter].map((friend) => {
                       const data = friendDataMap[friend.friendId];
-                      const hasConversation = !!data?.conversation;
                       const lastMessagePreview = getLastMessagePreview(friend.friendId);
                       const lastMessageTime = formatLastMessageTime(friend.friendId);
                       const unreadCount = data?.unreadInfo?.unreadCount || data?.conversation?.unreadCount || 0;
@@ -334,17 +322,10 @@ const ContactTab = () => {
                         <div className="chat-list" key={friend.userId}>
                           <Link
                             to="#"
-                            data-bs-toggle={hasConversation ? undefined : "modal"}
-                            data-bs-target={hasConversation ? undefined : "#contact-details"}
+                            data-bs-toggle="modal"
+                            data-bs-target="#contact-details"
                             className="chat-user-list"
-                            onClick={(e) => {
-                              if (hasConversation) {
-                                e.preventDefault();
-                                handleFriendClick(friend.friendId);
-                              } else {
-                                setSelectedFriendId(friend.friendId);
-                              }
-                            }}
+                            onClick={() => handleFriendClick(friend.friendId)}
                           >
                             <div className={`avatar avatar-lg ${friend.isOnline ? 'online' : 'offline'} me-2`}>
                               {isValidUrl(friend.avatarUrl) && friend.avatarUrl ? (
