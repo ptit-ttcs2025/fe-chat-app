@@ -4,6 +4,8 @@ interface SidebarContextType {
   isCollapsed: boolean;
   toggleCollapse: () => void;
   setIsCollapsed: (value: boolean) => void;
+  activeTab: string | null;
+  setActiveTab: (tab: string | null) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({
   };
 
   const [isCollapsed, setIsCollapsed] = useState(getSavedState);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
 
   // Save to localStorage
   useEffect(() => {
@@ -50,7 +53,7 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({
   }, [shortcutKey, toggleCollapse]);
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, toggleCollapse, setIsCollapsed }}>
+    <SidebarContext.Provider value={{ isCollapsed, toggleCollapse, setIsCollapsed, activeTab, setActiveTab }}>
       {children}
     </SidebarContext.Provider>
   );
@@ -63,4 +66,3 @@ export const useSidebarContext = (): SidebarContextType => {
   }
   return context;
 };
-

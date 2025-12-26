@@ -17,12 +17,43 @@ const Sidebar = () => {
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
   const { data: totalUnreadCount } = useTotalUnreadCount();
-  const { isCollapsed, toggleCollapse } = useSidebarCollapse();
+  const { isCollapsed, toggleCollapse, activeTab, setActiveTab } = useSidebarCollapse();
 
-  // Smart Toggle Handler: Expand sidebar if collapsed when clicking an icon
-  const handleIconClick = () => {
+  /**
+   * IntelliJ/WebStorm-style Toggle Handler
+   * - Click on inactive tab: Open sidebar and switch tab
+   * - Click on active tab: Toggle sidebar (collapse/expand)
+   */
+  const handleIconClick = (tabName: string, tabTarget: string) => {
     if (isCollapsed) {
+      // Sidebar is closed -> Open it and set active tab
       toggleCollapse();
+      setActiveTab(tabName);
+
+      // Manually activate Bootstrap tab
+      setTimeout(() => {
+        const tabElement = document.querySelector(`[data-bs-target="${tabTarget}"]`);
+        if (tabElement) {
+          const tab = new (window as any).bootstrap.Tab(tabElement);
+          tab.show();
+        }
+      }, 50);
+    } else {
+      // Sidebar is open
+      if (activeTab === tabName) {
+        // Clicking same tab -> Close sidebar (like IntelliJ)
+        toggleCollapse();
+      } else {
+        // Clicking different tab -> Just switch tab
+        setActiveTab(tabName);
+
+        // Manually activate Bootstrap tab
+        const tabElement = document.querySelector(`[data-bs-target="${tabTarget}"]`);
+        if (tabElement) {
+          const tab = new (window as any).bootstrap.Tab(tabElement);
+          tab.show();
+        }
+      }
     }
   };
 
@@ -47,8 +78,6 @@ const Sidebar = () => {
           </Link>
         </div>
         
-        {/* No separate Expand Button - clicking any icon expands the sidebar */}
-        
         <div className="menu-wrap">
           <div className="main-menu">
             <ul className="nav">
@@ -64,7 +93,10 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#chat-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('chat', '#chat-menu');
+                    }}
                   >
                     <span className="position-relative d-inline-flex align-items-center justify-content-center">
                       <i className="ti ti-message-2-heart" />
@@ -91,7 +123,10 @@ const Sidebar = () => {
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#contact-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('contact', '#contact-menu');
+                    }}
                   >
                     <i className="ti ti-user-shield" />
                   </Link>
@@ -103,7 +138,10 @@ const Sidebar = () => {
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#group-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('group', '#group-menu');
+                    }}
                   >
                     <i className="ti ti-users-group" />
                   </Link>
@@ -120,7 +158,10 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#call-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('call', '#call-menu');
+                    }}
                   >
                     <i className="ti ti-phone" />
                   </Link>
@@ -137,7 +178,10 @@ const Sidebar = () => {
                     }
                     data-bs-toggle="tab"
                     data-bs-target="#status-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('status', '#status-menu');
+                    }}
                   >
                     <i className="ti ti-chart-donut-2" />
                   </Link>
@@ -149,7 +193,10 @@ const Sidebar = () => {
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#setting-menu"
-                    onClick={handleIconClick}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleIconClick('setting', '#setting-menu');
+                    }}
                   >
                     <i className="ti ti-settings" />
                   </Link>
@@ -163,7 +210,7 @@ const Sidebar = () => {
             {/* Profile Avatar */}
             <Tooltip title="Hồ sơ" placement="right" color={"#6338F6"}>
               <div className="profile-img">
-                <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={handleIconClick}>
+                <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={() => handleIconClick('profile', '')}>
                   <ImageWithBasePath
                     src="assets/img/profiles/avatar-05.jpg"
                     alt="image"

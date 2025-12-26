@@ -680,7 +680,6 @@ const GroupChat = () => {
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
             onLoadMore={loadMoreMessages}
-            isAdmin={isAdmin(user?.id || "")}
           />
         </div>
 

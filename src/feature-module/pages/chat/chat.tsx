@@ -722,7 +722,6 @@ const Chat = () => {
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
               onLoadMore={loadMoreMessages}
-              isAdmin={isAdmin(user?.id || '')}
             />
           ) : (
             <ChatBody

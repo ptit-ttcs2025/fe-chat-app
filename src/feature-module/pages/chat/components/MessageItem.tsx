@@ -470,30 +470,6 @@ const MessageItem = ({
           </div>
         </div>
         
-        {isOwnMessage && (
-          <div className="chat-avatar" style={{ 
-            flexShrink: 0, 
-            width: '36px', 
-            height: '36px',
-            minWidth: '36px',
-            minHeight: '36px',
-            maxWidth: '36px',
-            maxHeight: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '0',
-            padding: 0,
-            overflow: 'visible',
-          }}>
-            <Avatar
-              src={userAvatarUrl}
-              name={userFullName || userUsername}
-              size={36}
-              className="rounded-circle dreams_chat"
-            />
-          </div>
-        )}
       </div>
     </>
   );

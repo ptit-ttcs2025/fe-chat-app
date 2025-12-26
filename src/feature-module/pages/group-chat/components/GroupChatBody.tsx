@@ -1,22 +1,20 @@
 /**
  * Group Chat Body Component
  * Hiển thị messages với sender info (name + avatar) vì là group chat
+ * Updated to use MessageItem component for consistent UI with 1-1 chat
  */
 
-import { RefObject, useEffect, useCallback, useRef } from "react";
-import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
-import "overlayscrollbars/overlayscrollbars.css";
-import { Link } from "react-router-dom";
-import ImageWithBasePath from "@/core/common/imageWithBasePath";
-import Avatar from "@/feature-module/pages/chat/components/Avatar";
+import { RefObject, useEffect, useCallback, useRef, useState } from "react";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
 import type { IGroupMember } from "@/apis/group/group.type";
+import MessageItem from "@/feature-module/pages/chat/components/MessageItem";
 import PinnedMessages from "@/feature-module/pages/chat/components/PinnedMessages";
+import NewMessagesBadge from "@/feature-module/pages/chat/components/NewMessagesBadge";
 
 interface GroupChatBodyProps {
   messages: IMessage[];
   pinnedMessages: IMessage[];
-  members: IGroupMember[];
+  members: IGroupMember[]; // Keep for future features, not used in rendering now
   isLoadingMessages: boolean;
   selectedConversation: IConversation | null;
   currentUserId?: string;
@@ -31,13 +29,12 @@ interface GroupChatBodyProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
-  isAdmin?: boolean;
 }
 
 const GroupChatBody = ({
   messages,
   pinnedMessages,
-  members,
+  members: _members, // Reserved for future use
   isLoadingMessages,
   selectedConversation,
   currentUserId,
@@ -52,19 +49,20 @@ const GroupChatBody = ({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
-  isAdmin = false,
 }: GroupChatBodyProps) => {
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const loadMoreThrottleRef = useRef<boolean>(false);
   const prevConversationIdRef = useRef<string | null>(null);
+  const initialLoadDoneRef = useRef<boolean>(false);
 
-  // Helper: Get member by userId
-  const getMemberByUserId = useCallback(
-    (userId: string) => {
-      return members.find((m) => m.userId === userId);
-    },
-    [members]
-  );
+  // Refs for tracking scroll position
+  const isAtBottomRef = useRef<boolean>(true);
+  const lastMessageCountRef = useRef<number>(0);
+
+  // States for scroll badge
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
 
   // Helper: Scroll to bottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -73,18 +71,36 @@ const GroupChatBody = ({
         top: chatBodyRef.current.scrollHeight,
         behavior,
       });
+      // Reset tracking
+      isAtBottomRef.current = true;
+      setUnreadCount(0);
+      setShowScrollButton(false);
+      lastMessageCountRef.current = messages.length;
     }
-  }, []);
+  }, [messages.length]);
 
   // Handle scroll events - Load more when scroll to top
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
       const target = e.target as HTMLDivElement;
-      const { scrollTop } = target;
+      const { scrollTop, scrollHeight, clientHeight } = target;
+
+      // Check if at bottom
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isAtBottomRef.current = isAtBottom;
+
+      // Show scroll button if scrolled up
+      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 300;
+      setShowScrollButton(isScrolledUp || unreadCount > 0);
+
+      if (isAtBottom) {
+        if (unreadCount > 0) setUnreadCount(0);
+        lastMessageCountRef.current = messages.length;
+      }
 
       // Load more when scroll near top
       if (
-        scrollTop < 200 &&
+        scrollTop < 150 &&
         hasMore &&
         !isLoadingMore &&
         !loadMoreThrottleRef.current &&
@@ -93,50 +109,85 @@ const GroupChatBody = ({
         loadMoreThrottleRef.current = true;
         onLoadMore();
 
-        // Reset throttle after 1s
+        // Reset throttle after 500ms
         setTimeout(() => {
           loadMoreThrottleRef.current = false;
-        }, 1000);
+        }, 500);
       }
     },
-    [hasMore, isLoadingMore, onLoadMore]
+    [hasMore, isLoadingMore, onLoadMore, unreadCount, messages.length]
   );
 
-  // Auto scroll to bottom on conversation change
+  // Reset states on conversation change
+  useEffect(() => {
+    if (selectedConversation?.id !== prevConversationIdRef.current) {
+      prevConversationIdRef.current = selectedConversation?.id || null;
+      initialLoadDoneRef.current = false;
+      setUnreadCount(0);
+      setShowScrollButton(false);
+      isAtBottomRef.current = true;
+      lastMessageCountRef.current = 0;
+    }
+  }, [selectedConversation?.id]);
+
+  // Handle initial load scroll
   useEffect(() => {
     if (
-      selectedConversation?.id &&
-      selectedConversation.id !== prevConversationIdRef.current
+      !initialLoadDoneRef.current &&
+      !isLoadingMessages &&
+      selectedConversation &&
+      messages.length > 0
     ) {
-      prevConversationIdRef.current = selectedConversation.id;
-      // Delay để đảm bảo messages đã load
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         scrollToBottom("auto");
-      }, 100);
+        initialLoadDoneRef.current = true;
+        lastMessageCountRef.current = messages.length;
+      }, 150);
+      return () => clearTimeout(timer);
     }
-  }, [selectedConversation?.id, scrollToBottom]);
+  }, [isLoadingMessages, selectedConversation, messages.length, scrollToBottom]);
 
-  // Auto scroll to bottom khi có tin nhắn mới
+  // Handle new messages
   useEffect(() => {
-    if (messages.length > 0 && !isLoadingMore) {
-      // Scroll to bottom khi có tin nhắn mới
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.senderId === currentUserId) {
-        // Tin nhắn của mình - scroll ngay lập tức
-        setTimeout(() => {
-          scrollToBottom("auto");
-        }, 100);
+    if (!initialLoadDoneRef.current) return;
+
+    const currentCount = messages.length;
+    const prevCount = lastMessageCountRef.current;
+
+    if (currentCount > prevCount) {
+      if (!isLoadingMore) {
+        // New messages appended
+        if (isAtBottomRef.current) {
+          scrollToBottom("smooth");
+        } else {
+          // User scrolled up, show badge
+          setUnreadCount((prev) => prev + (currentCount - prevCount));
+          setShowScrollButton(true);
+        }
       }
     }
-  }, [messages.length, currentUserId, isLoadingMore, scrollToBottom]);
+
+    lastMessageCountRef.current = currentCount;
+  }, [messages.length, isLoadingMore, scrollToBottom]);
 
   // Empty state
   if (!selectedConversation) {
     return (
-      <div className="chat-body chat-page-group">
+      <div
+        className="chat-body-wrapper"
+        style={{
+          width: "100%",
+          flex: "1 1 auto",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
         <div
           className="d-flex align-items-center justify-content-center"
-          style={{ height: "100%" }}
+          style={{ height: "100%", width: "100%" }}
         >
           <div className="text-center">
             <i
@@ -156,10 +207,21 @@ const GroupChatBody = ({
   // Loading state
   if (isLoadingMessages && messages.length === 0) {
     return (
-      <div className="chat-body chat-page-group">
+      <div
+        className="chat-body-wrapper"
+        style={{
+          width: "100%",
+          flex: "1 1 auto",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
         <div
           className="d-flex align-items-center justify-content-center"
-          style={{ height: "100%" }}
+          style={{ height: "100%", width: "100%" }}
         >
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Đang tải...</span>
@@ -170,267 +232,221 @@ const GroupChatBody = ({
   }
 
   return (
-    <>
-      {/* Fix message bubble width and layout */}
-      <style>{`
-        .chat-body.chat-page-group .chats.chats-right .chat-content {
-          max-width: 70%;
-          width: fit-content;
-        }
-        
-        .chat-body.chat-page-group .chats .chat-content {
-          max-width: 70%;
-        }
-        
-        .chat-body.chat-page-group .message-content {
-          display: inline-block;
-          max-width: 100%;
-          word-wrap: break-word;
-        }
-        
-        .chat-body.chat-page-group .chats-right .chat-info {
-          display: flex;
-          justify-content: flex-end;
-        }
-        
-        .chat-body.chat-page-group .chats .chat-info {
-          display: flex;
-        }
-      `}</style>
-
-      {/* Pinned Messages Bar */}
-      {pinnedMessages.length > 0 && (
-        <PinnedMessages
-          pinnedMessages={pinnedMessages}
-          onMessageClick={onPinnedMessageClick}
-          onUnpin={onUnpin}
-        />
-      )}
-
-      {/* Messages Body */}
-      <OverlayScrollbarsComponent
-        options={{
-          scrollbars: {
-            autoHide: "scroll",
-            autoHideDelay: 1000,
-          },
+    <div
+      className="chat-body-wrapper"
+      style={{
+        width: "100%",
+        flex: "1 1 auto",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        ref={chatBodyRef}
+        className="chat-body chat-page-group"
+        onScroll={handleScroll}
+        style={{
+          width: "100%",
+          flex: "1 1 auto",
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+          overflowX: "hidden",
+          boxSizing: "border-box",
+          position: "relative",
         }}
-        style={{ maxHeight: "88vh" }}
       >
+        {/* Pinned Messages Section - Sticky ở đầu chat */}
+        {pinnedMessages.length > 0 && (
+          <div
+            className="pinned-messages-sticky"
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 50,
+              backgroundColor: "#fff",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <PinnedMessages
+              pinnedMessages={pinnedMessages}
+              onMessageClick={onPinnedMessageClick}
+              onUnpin={onUnpin}
+            />
+          </div>
+        )}
+
         <div
-          className="chat-body chat-page-group"
-          ref={chatBodyRef}
-          onScroll={handleScroll}
+          className="messages"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            flex: "1 1 auto",
+            minHeight: "min-content",
+            width: "100%",
+            position: "relative",
+            visibility: "visible",
+            opacity: 1,
+            padding: "16px 20px 20px 20px",
+            boxSizing: "border-box",
+          }}
         >
-          {/* Load More Indicator */}
+          {/* Loading More Indicator */}
           {isLoadingMore && (
-            <div className="text-center py-2">
-              <div className="spinner-border spinner-border-sm text-primary" role="status">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                padding: "16px",
+                gap: "8px",
+              }}
+            >
+              <div
+                className="spinner-border spinner-border-sm"
+                role="status"
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  borderWidth: "2px",
+                  color: "#667eea",
+                }}
+              >
                 <span className="visually-hidden">Đang tải...</span>
               </div>
+              <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                Đang tải tin nhắn cũ hơn...
+              </span>
             </div>
           )}
 
-          {hasMore && !isLoadingMore && (
-            <div className="text-center py-2">
+          {/* Has More Indicator */}
+          {hasMore && !isLoadingMore && !isLoadingMessages && messages.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                padding: "8px 16px",
+                marginBottom: "8px",
+              }}
+            >
               <button
-                className="btn btn-sm btn-light"
                 onClick={onLoadMore}
+                style={{
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "20px",
+                  padding: "8px 20px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 2px 8px rgba(102, 126, 234, 0.3)",
+                }}
               >
-                <i className="ti ti-arrow-up me-1" />
+                <i className="ti ti-arrow-up" style={{ fontSize: "14px" }} />
                 Tải thêm tin nhắn
               </button>
             </div>
           )}
 
-          {/* Messages List */}
-          <div className="messages">
-            {messages.map((message) => {
-              const isOwn = message.senderId === currentUserId;
-              const sender = getMemberByUserId(message.senderId);
-              const senderAvatar = isOwn
-                ? userAvatarUrl
-                : sender?.avatarUrl || message.senderAvatarUrl;
-              const senderName = isOwn
-                ? userFullName || "Bạn"
-                : sender?.displayName || message.senderName || "Unknown";
+          {/* Messages - Using MessageItem component for consistent UI */}
+          {messages.map((message, index) => {
+            const previousMessage = index > 0 ? messages[index - 1] : null;
+            const isOwnMessage = message.senderId === currentUserId;
 
-              return (
-                <div
-                  key={message.id}
-                  className={isOwn ? "chats chats-right" : "chats"}
-                >
-                  {!isOwn && (
-                    <div className="chat-avatar">
-                      <Avatar
-                        src={senderAvatar}
-                        name={senderName}
-                        className="rounded-circle"
-                        size={40}
-                      />
-                    </div>
-                  )}
-                  <div className="chat-content">
-                    <div
-                      className="chat-profile-name"
-                      style={{ textAlign: isOwn ? "right" : "left" }}
-                    >
-                      <h6>
-                        {senderName}
-                        <i className="ti ti-circle-filled fs-7 mx-2" />
-                        <span className="chat-time">
-                          {new Date(message.createdAt).toLocaleTimeString(
-                            "vi-VN",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </span>
-                        {isOwn && (
-                          <span className="msg-read success">
-                            <i className="ti ti-checks" />
-                          </span>
-                        )}
-                      </h6>
-                    </div>
-                    <div className="chat-info">
-                      <div className="message-content">
-                        {message.type === "TEXT" && <>{message.content}</>}
-                        {message.type === "IMAGE" && message.attachment && (
-                          <div className="chat-image">
-                            <ImageWithBasePath
-                              src={message.attachment.url}
-                              alt="Hình ảnh"
-                              className="img-fluid rounded"
-                            />
-                          </div>
-                        )}
-                        {message.type === "FILE" && message.attachment && (
-                          <div className="file-attach">
-                            <div className="d-flex align-items-center">
-                              <span className="file-icon bg-primary text-white">
-                                <i className="ti ti-file-text" />
-                              </span>
-                              <div className="ms-2 overflow-hidden">
-                                <h6 className="mb-1 text-truncate">
-                                  {message.attachment.fileName || message.content}
-                                </h6>
-                                <p className="text-muted mb-0 small">
-                                  {(message.attachment.fileSize / 1024).toFixed(2)} KB
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {message.type === "VOICE" && (
-                          <div className="file-attach">
-                            <div className="d-flex align-items-center">
-                              <span className="file-icon bg-info text-white">
-                                <i className="ti ti-microphone" />
-                              </span>
-                              <div className="ms-2 overflow-hidden">
-                                <h6 className="mb-1 text-truncate">Tin nhắn thoại</h6>
-                                <p className="text-muted mb-0 small">Audio</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="chat-actions">
-                        <Link className="#" to="#" data-bs-toggle="dropdown">
-                          <i className="ti ti-dots-vertical" />
-                        </Link>
-                        <ul className="dropdown-menu dropdown-menu-end p-3">
-                          <li>
-                            <Link
-                              className="dropdown-item"
-                              to="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                onTogglePin(message.id, message.pinned);
-                              }}
-                            >
-                              <i
-                                className={`ti ${
-                                  message.pinned ? "ti-pin-off" : "ti-pin"
-                                } me-2`}
-                              />
-                              {message.pinned ? "Bỏ ghim" : "Ghim tin nhắn"}
-                            </Link>
-                          </li>
-                          {isOwn && (
-                            <li>
-                              <Link
-                                className="dropdown-item text-danger"
-                                to="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  onDeleteMessage(message.id);
-                                }}
-                              >
-                                <i className="ti ti-trash me-2" />
-                                Xóa
-                              </Link>
-                            </li>
-                          )}
-                          {!isOwn && isAdmin && (
-                            <li>
-                              <Link
-                                className="dropdown-item text-danger"
-                                to="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  onDeleteMessage(message.id);
-                                }}
-                              >
-                                <i className="ti ti-trash me-2" />
-                                Xóa (Admin)
-                              </Link>
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                  {isOwn && (
-                    <div className="chat-avatar">
-                      <Avatar
-                        src={userAvatarUrl}
-                        name={userFullName || "Bạn"}
-                        className="rounded-circle dreams_chat"
-                        size={40}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            return (
+              <MessageItem
+                key={message.id}
+                message={message}
+                previousMessage={previousMessage}
+                isOwnMessage={isOwnMessage}
+                currentUserId={currentUserId}
+                userAvatarUrl={userAvatarUrl}
+                userFullName={userFullName}
+                userUsername={userFullName} // Use fullName as fallback
+                selectedConversation={selectedConversation}
+                onTogglePin={onTogglePin}
+                onDeleteMessage={onDeleteMessage}
+              />
+            );
+          })}
 
           {/* Typing Indicator */}
           {typingUsers.length > 0 && (
-            <div className="chats">
-              <div className="chat-avatar">
-                <div className="avatar avatar-sm">
+            <div className="chats" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginBottom: '8px',
+            }}>
+              <div className="chat-avatar" style={{
+                flexShrink: 0,
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <div className="avatar avatar-sm" style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#f3f4f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#9ca3af',
+                }}>
                   <i className="ti ti-dots" />
                 </div>
               </div>
               <div className="chat-content">
-                <div className="message-content">
-                  <div className="typing-indicator">
-                    <span>{typingUsers.join(", ")}</span> đang nhập...
-                  </div>
+                <div className="message-content" style={{
+                  padding: '8px 12px',
+                  background: '#f3f4f6',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  color: '#6b7280',
+                  fontStyle: 'italic',
+                }}>
+                  <span style={{ fontWeight: 500, color: '#667eea' }}>
+                    {typingUsers.join(", ")}
+                  </span> đang nhập...
                 </div>
               </div>
             </div>
           )}
 
           {/* Scroll anchor */}
-          <div ref={messagesEndRef} />
+          <div
+            ref={messagesEndRef}
+            style={{
+              height: "1px",
+              minHeight: "1px",
+              paddingTop: "20px",
+              marginTop: "10px",
+              marginBottom: "20px",
+              scrollMarginTop: "20px",
+            }}
+          />
         </div>
-      </OverlayScrollbarsComponent>
-    </>
+      </div>
+
+      {/* New Messages Badge */}
+      <NewMessagesBadge
+        show={showScrollButton}
+        unreadCount={unreadCount}
+        onScrollToBottom={() => scrollToBottom("smooth")}
+      />
+    </div>
   );
 };
 
