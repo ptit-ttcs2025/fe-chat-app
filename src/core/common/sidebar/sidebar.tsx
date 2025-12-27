@@ -133,6 +133,17 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
+              <Tooltip title="Hồ sơ" placement="right" color={"#6338F6 "}>
+                <li>
+                  <Link
+                    to="#"
+                    data-bs-toggle="tab"
+                    data-bs-target="#profile-menu"
+                  >
+                    <i className="ti ti-user-circle" />
+                  </Link>
+                </li>
+              </Tooltip>
               <Tooltip title="Cài đặt" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link

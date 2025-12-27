@@ -7,11 +7,12 @@
 // MESSAGE TYPES
 // ===========================
 
-export type MessageType = 'TEXT' | 'IMAGE' | 'FILE' | 'VOICE' | 'VIDEO';
+export type MessageType = "TEXT" | "IMAGE" | "FILE" | "VOICE" | "VIDEO";
 
 export interface MessageAttachment {
   id: string;
   url: string;
+  thumbnailUrl?: string;
   fileType: string;
   fileSize: number;
   mimeType: string;
@@ -21,7 +22,7 @@ export interface MessageAttachment {
 // ===========================
 // MESSAGE STATUS (for queue tracking)
 // ===========================
-export type MessageStatus = 'pending' | 'sending' | 'sent' | 'failed';
+export type MessageStatus = "pending" | "sending" | "sent" | "failed";
 
 export interface IMessage {
   id: string;
@@ -40,7 +41,7 @@ export interface IMessage {
   repliedToMessage?: IMessage;
   attachment?: MessageAttachment;
   isDeleted?: boolean;
-  
+
   // ✅ Queue tracking fields (client-side only)
   status?: MessageStatus;
   retryCount?: number;
@@ -51,41 +52,44 @@ export interface IMessage {
 // CONVERSATION TYPES
 // ===========================
 
-export type ConversationType = 'PRIVATE' | 'GROUP';
+export type ConversationType = "PRIVATE" | "GROUP";
 
 export interface IConversation {
   id: string;
   name?: string;
   type: ConversationType;
   avatarUrl?: string;
-  
+
   // Last message info
   lastMessage?: IMessage;
   lastMessageTimestamp?: string; // Format: "dd/MM/yyyy HH:mm"
-  
+
   // Status flags
   unreadCount: number;
-  muted: boolean;    // API trả về "muted" không phải "isMuted"
-  pinned: boolean;   // API trả về "pinned" không phải "isPinned"
+  muted: boolean; // API trả về "muted" không phải "isMuted"
+  pinned: boolean; // API trả về "pinned" không phải "isPinned"
   archived: boolean;
   favorite: boolean; // API trả về "favorite" không phải "favourite"
-  
+
+  // 1-1 specific fields
+  peerUserId?: string;
+
   // Group specific fields
   groupId?: string;
   adminId?: string;
   description?: string;
   isPublic?: boolean;
   isSendMessageAllowed?: boolean;
-  
+
   // Participants (for PRIVATE conversations)
   participants?: IParticipant[];
   isOnline?: boolean;
   typing?: boolean;
-  
+
   // Timestamps
   createdAt?: string;
   updatedAt?: string;
-  
+
   // Legacy fields (for backward compatibility)
   isActive?: boolean;
   isMuted?: boolean;
@@ -93,12 +97,35 @@ export interface IConversation {
   deleted?: boolean;
 }
 
+// ===========================
+// MEDIA QUERY TYPES
+// ===========================
+
+export interface MediaQueryParams {
+  conversationId: string;
+  type: "IMAGE" | "FILE";
+  page?: number;
+  size?: number;
+}
+
+export interface MediaMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatarUrl?: string;
+  type: MessageType;
+  attachment: MessageAttachment;
+  createdAt: string;
+  content?: string;
+}
+
 export interface IParticipant {
   id: string;
   userId: string;
   userName: string;
   userAvatarUrl?: string;
-  role?: 'ADMIN' | 'MEMBER';
+  role?: "ADMIN" | "MEMBER";
   isOnline: boolean;
   lastSeenAt?: string;
   joinedAt: string;
@@ -109,7 +136,7 @@ export interface IParticipant {
 // ===========================
 
 export interface TypingStatus {
-  type: 'TYPING_STATUS';
+  type: "TYPING_STATUS";
   conversationId: string;
   userId: string;
   userName: string;
@@ -118,7 +145,7 @@ export interface TypingStatus {
 }
 
 export interface MessageRead {
-  type: 'MESSAGE_READ';
+  type: "MESSAGE_READ";
   conversationId: string;
   userId: string;
   userName: string;
@@ -128,7 +155,7 @@ export interface MessageRead {
 }
 
 export interface UserStatus {
-  type: 'USER_STATUS';
+  type: "USER_STATUS";
   userId: string;
   userName: string;
   isOnline: boolean;
@@ -145,7 +172,7 @@ export interface MessageResponse extends IMessage {
 
 export interface SendMessageRequest {
   conversationId: string;
-  content: string;
+  content?: string;
   type?: MessageType;
   repliedToMessageId?: string;
   attachmentId?: string;
@@ -177,14 +204,14 @@ export interface SearchMessagesRequest {
 // Pagination response (theo API_DOCUMENTATION.md)
 export interface PaginatedResponse<T> {
   meta: {
-    pageNumber: number;      // Current page (0-based)
-    pageSize: number;        // Items per page
-    totalElements: number;   // Total items
-    totalPages: number;      // Total pages
-    sortBy?: string;         // Sort field
-    isDescending?: boolean;  // Sort direction
+    pageNumber: number; // Current page (0-based)
+    pageSize: number; // Items per page
+    totalElements: number; // Total items
+    totalPages: number; // Total pages
+    sortBy?: string; // Sort field
+    isDescending?: boolean; // Sort direction
   };
-  results: T[];             // Array of items
+  results: T[]; // Array of items
 }
 
 // ===========================
@@ -192,27 +219,27 @@ export interface PaginatedResponse<T> {
 // ===========================
 
 export interface CursorInfo {
-  hasMore: boolean;           // Còn tin nhắn cũ hơn để load
-  hasNewer: boolean;          // Còn tin nhắn mới hơn
-  oldestMessageId: string | null;    // ID tin nhắn cũ nhất (dùng cho scroll up)
-  newestMessageId: string | null;    // ID tin nhắn mới nhất (dùng cho load newer)
-  count: number;              // Số tin nhắn trong response hiện tại
-  pageSize: number;           // Page size được request
+  hasMore: boolean; // Còn tin nhắn cũ hơn để load
+  hasNewer: boolean; // Còn tin nhắn mới hơn
+  oldestMessageId: string | null; // ID tin nhắn cũ nhất (dùng cho scroll up)
+  newestMessageId: string | null; // ID tin nhắn mới nhất (dùng cho load newer)
+  count: number; // Số tin nhắn trong response hiện tại
+  pageSize: number; // Page size được request
 }
 
 export interface CursorPaginatedResponse<T> {
-  messages: T[];              // Messages (sorted DESC - mới nhất trước)
-  cursor: CursorInfo;         // Cursor metadata
+  messages: T[]; // Messages (sorted DESC - mới nhất trước)
+  cursor: CursorInfo; // Cursor metadata
 }
 
 // API Response (theo API_DOCUMENTATION.md)
 export interface ApiResponse<T> {
-  statusCode: number;        // HTTP status code
-  message: string;           // Message mô tả kết quả
-  timestamp: string;         // ISO 8601 timestamp
-  path?: string;             // API path (optional)
-  data?: T;                  // Response data (optional)
-  errors?: ErrorDetail[];    // Validation errors (optional)
+  statusCode: number; // HTTP status code
+  message: string; // Message mô tả kết quả
+  timestamp: string; // ISO 8601 timestamp
+  path?: string; // API path (optional)
+  data?: T; // Response data (optional)
+  errors?: ErrorDetail[]; // Validation errors (optional)
 }
 
 export interface ErrorDetail {
@@ -239,18 +266,20 @@ export interface MessageActionResponse {
 // ===========================
 
 export interface FileUploadRequest {
-  file: File;
+  originalFile: File;
+  thumbnailFile?: File;
   conversationId: string;
-  type: 'IMAGE' | 'FILE' | 'VOICE' | 'VIDEO';
+  content?: string; // Optional message text to send with the file
 }
 
 export interface FileUploadResponse {
-  id: string;
-  url: string;
+  fileUrl: string;
+  thumbnailUrl?: string;
   fileType: string;
   fileSize: number;
   mimeType: string;
   fileName: string;
+  conversationId: string;
 }
 
 // ===========================
@@ -297,4 +326,3 @@ export interface MessageFilter {
   endDate?: string;
   isPinned?: boolean;
 }
-

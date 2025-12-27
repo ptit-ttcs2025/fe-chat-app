@@ -1,39 +1,44 @@
-import  { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
-import ImageWithBasePath from '../imageWithBasePath'
-import type { DatePickerProps } from 'antd';
-import { DatePicker } from 'antd';
-import LogoutModal from '../../modals/logout-modal';
+import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import ImageWithBasePath from "../imageWithBasePath";
+import type { DatePickerProps } from "antd";
+import { DatePicker } from "antd";
+import LogoutModal from "../../modals/logout-modal";
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
-type PasswordField =  'confirmPassword' | 'newpassword' | 'oldpassword';
-import { useLogout } from '../../../hooks/useLogout';
-import { useGetProfile, useUpdateProfile, useChangePassword, useUploadAvatar } from '../../../apis/user/user.api';
-import dayjs from 'dayjs';
-import { updateProfileSchema } from '../../../apis/user/user.schema';
-import { changePasswordSchema } from '../../../apis/user/user.schema';
-import { message } from 'antd';
+type PasswordField = "confirmPassword" | "newpassword" | "oldpassword";
+import { useLogout } from "../../../hooks/useLogout";
+import {
+  useGetProfile,
+  useUpdateProfile,
+  useChangePassword,
+  useUploadAvatar,
+} from "../../../apis/user/user.api";
+import dayjs from "dayjs";
+import { updateProfileSchema } from "../../../apis/user/user.schema";
+import { changePasswordSchema } from "../../../apis/user/user.schema";
+import { message } from "antd";
 
 const SettingsTab = () => {
   const [passwordVisibility, setPasswordVisibility] = useState({
     confirmPassword: false,
-    newpassword:false,
-    oldpassword:false
+    newpassword: false,
+    oldpassword: false,
   });
 
   const { handleLogout } = useLogout();
-  
+
   // State quản lý chế độ chỉnh sửa
   const [isEditing, setIsEditing] = useState(false);
-  
+
   // State quản lý form data
   const [formData, setFormData] = useState({
-    fullName: '',
-    gender: '',
+    fullName: "",
+    gender: "",
     dob: null as dayjs.Dayjs | null,
-    email: '',
-    bio: '',
-    avatarUrl: '',
+    email: "",
+    bio: "",
+    avatarUrl: "",
   });
 
   // State quản lý lỗi
@@ -41,21 +46,23 @@ const SettingsTab = () => {
 
   // State quản lý chế độ chỉnh sửa password
   const [isEditingPassword, setIsEditingPassword] = useState(false);
-  
+
   // State quản lý password form data
   const [passwordData, setPasswordData] = useState({
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   // State quản lý lỗi password
-  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>(
+    {}
+  );
 
   // State cho avatar preview
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  
+
   // State để lưu file đã chọn (chưa upload)
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -74,12 +81,12 @@ const SettingsTab = () => {
   useEffect(() => {
     if (profile && !isEditing) {
       setFormData({
-        fullName: profile.fullName || '',
-        gender: profile.gender || '',
+        fullName: profile.fullName || "",
+        gender: profile.gender || "",
         dob: profile.dob ? dayjs(profile.dob) : null,
-        email: profile.email || '',
-        bio: profile.bio || '',
-        avatarUrl: profile.avatarUrl || '',
+        email: profile.email || "",
+        bio: profile.bio || "",
+        avatarUrl: profile.avatarUrl || "",
       });
       setAvatarPreview(null); // Reset preview khi load lại
       setErrors({});
@@ -90,7 +97,7 @@ const SettingsTab = () => {
   useEffect(() => {
     return () => {
       // Cleanup blob URL khi component unmount
-      if (avatarPreview && avatarPreview.startsWith('blob:')) {
+      if (avatarPreview && avatarPreview.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
       }
     };
@@ -103,15 +110,15 @@ const SettingsTab = () => {
     }));
   };
 
-  const onChange: DatePickerProps['onChange'] = (date) => {
+  const onChange: DatePickerProps["onChange"] = (date) => {
     if (isEditing) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        dob: date
+        dob: date,
       }));
       // Xóa lỗi khi người dùng thay đổi
       if (errors.dob) {
-        setErrors(prev => {
+        setErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors.dob;
           return newErrors;
@@ -122,13 +129,13 @@ const SettingsTab = () => {
 
   const handleInputChange = (field: string, value: string) => {
     if (isEditing) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [field]: value
+        [field]: value,
       }));
       // Xóa lỗi khi người dùng thay đổi
       if (errors[field]) {
-        setErrors(prev => {
+        setErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors[field];
           return newErrors;
@@ -144,26 +151,26 @@ const SettingsTab = () => {
   // Xử lý chọn file - dùng URL.createObjectURL() thay vì FileReader
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    
+
     if (!file) {
       return;
     }
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      message.error('Vui lòng chọn file ảnh');
+    if (!file.type.startsWith("image/")) {
+      message.error("Vui lòng chọn file ảnh");
       return;
     }
 
     // Validate file size (ví dụ: max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      message.error('Kích thước file không được vượt quá 5MB');
+      message.error("Kích thước file không được vượt quá 5MB");
       return;
     }
 
     // Revoke URL cũ nếu có
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
+    if (avatarPreview && avatarPreview.startsWith("blob:")) {
       URL.revokeObjectURL(avatarPreview);
     }
 
@@ -185,18 +192,21 @@ const SettingsTab = () => {
   const handleSaveClick = async () => {
     // ✅ Upload avatar TRƯỚC nếu có file mới được chọn
     let avatarUrlToUpdate = formData.avatarUrl;
-    
+
     if (selectedFile) {
       try {
         setUploadingAvatar(true);
         const uploadResult = await uploadAvatarMutation.mutateAsync({
           file: selectedFile,
-          folder: 'AVATARS'
+          folder: "AVATARS",
         });
         avatarUrlToUpdate = uploadResult.fileUrl;
         setSelectedFile(null); // Clear sau khi upload thành công
       } catch (error: any) {
-        const errorMessage = error?.response?.data?.message || error?.message || 'Upload ảnh thất bại';
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Upload ảnh thất bại";
         message.error(errorMessage);
         setUploadingAvatar(false);
         return; // Dừng lại nếu upload ảnh thất bại
@@ -239,19 +249,22 @@ const SettingsTab = () => {
       try {
         await updateProfileMutation.mutateAsync({
           id: profile.id,
-          data: result.data
+          data: result.data,
         });
-        message.success('Cập nhật thông tin thành công');
+        message.success("Cập nhật thông tin thành công");
         setIsEditing(false);
         // ✅ Cleanup blob URL sau khi save thành công
-        if (avatarPreview && avatarPreview.startsWith('blob:')) {
+        if (avatarPreview && avatarPreview.startsWith("blob:")) {
           URL.revokeObjectURL(avatarPreview);
         }
         setAvatarPreview(null);
       } catch (error: any) {
-        const errorMessage = error?.[0]?.message || error?.response?.data?.message || 'Cập nhật thông tin thất bại.';
+        const errorMessage =
+          error?.[0]?.message ||
+          error?.response?.data?.message ||
+          "Cập nhật thông tin thất bại.";
         message.error(errorMessage);
-        console.error('Error updating profile:', error);
+        console.error("Error updating profile:", error);
       }
     }
   };
@@ -260,19 +273,19 @@ const SettingsTab = () => {
     // Reset về dữ liệu gốc
     if (profile) {
       setFormData({
-        fullName: profile.fullName || '',
-        gender: profile.gender || '',
+        fullName: profile.fullName || "",
+        gender: profile.gender || "",
         dob: profile.dob ? dayjs(profile.dob) : null,
-        email: profile.email || '',
-        bio: profile.bio || '',
-        avatarUrl: profile.avatarUrl || '',
+        email: profile.email || "",
+        bio: profile.bio || "",
+        avatarUrl: profile.avatarUrl || "",
       });
     }
     setIsEditing(false);
     setErrors({});
-    
+
     // ✅ Cleanup blob URL khi cancel
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
+    if (avatarPreview && avatarPreview.startsWith("blob:")) {
       URL.revokeObjectURL(avatarPreview);
     }
     setSelectedFile(null);
@@ -281,13 +294,13 @@ const SettingsTab = () => {
 
   const handlePasswordInputChange = (field: string, value: string) => {
     if (isEditingPassword) {
-      setPasswordData(prev => ({
+      setPasswordData((prev) => ({
         ...prev,
-        [field]: value
+        [field]: value,
       }));
       // Xóa lỗi khi người dùng thay đổi
       if (passwordErrors[field]) {
-        setPasswordErrors(prev => {
+        setPasswordErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors[field];
           return newErrors;
@@ -323,19 +336,19 @@ const SettingsTab = () => {
     // Gọi API đổi mật khẩu
     try {
       await changePasswordMutation.mutateAsync(result.data);
-      message.success('Đổi mật khẩu thành công');
+      message.success("Đổi mật khẩu thành công");
       setIsEditingPassword(false);
       // Reset form
       setPasswordData({
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: '',
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
       });
     } catch (error: any) {
       // Xử lý lỗi từ API
-      const errorMessage = error?.[0].message || 'Đổi mật khẩu thất bại';
+      const errorMessage = error?.[0].message || "Đổi mật khẩu thất bại";
       message.error(errorMessage);
-      
+
       // Nếu có lỗi cụ thể cho từng field, có thể set vào passwordErrors
       if (error?.response?.data?.errors) {
         setPasswordErrors(error.response.data.errors);
@@ -346,46 +359,46 @@ const SettingsTab = () => {
   const handlePasswordCancel = () => {
     setIsEditingPassword(false);
     setPasswordData({
-      oldPassword: '',
-      newPassword: '',
-      confirmPassword: '',
+      oldPassword: "",
+      newPassword: "",
+      confirmPassword: "",
     });
     setPasswordErrors({});
   };
 
-  const [showModal, setShowModal] = useState(false)
+  const [showModal, setShowModal] = useState(false);
 
   // Thêm hàm để disable các ngày không hợp lệ
   const disabledDate = (current: dayjs.Dayjs | null) => {
     if (!current) return false;
-    
+
     // Disable các ngày trong tương lai
-    if (current.isAfter(dayjs(), 'day')) {
+    if (current.isAfter(dayjs(), "day")) {
       return true;
     }
-    
+
     // Disable các ngày mà người dùng chưa đủ 18 tuổi
-    const eighteenYearsAgo = dayjs().subtract(18, 'year');
-    if (current.isAfter(eighteenYearsAgo, 'day')) {
+    const eighteenYearsAgo = dayjs().subtract(18, "year");
+    if (current.isAfter(eighteenYearsAgo, "day")) {
       return true;
     }
-    
+
     return false;
   };
 
   return (
     <>
-        {/* Profile sidebar */}
-        <div className="sidebar-content active slimscroll">
+      {/* Profile sidebar */}
+      <div className="sidebar-content active slimscroll">
         <OverlayScrollbarsComponent
-            options={{
-              scrollbars: {
-                autoHide: 'scroll',
-                autoHideDelay: 1000,
-              },
-            }}
-            style={{ maxHeight: '100vh' }}
-          >
+          options={{
+            scrollbars: {
+              autoHide: "scroll",
+              autoHideDelay: 1000,
+            },
+          }}
+          style={{ maxHeight: "100vh" }}
+        >
           <div className="slimscroll">
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
@@ -422,10 +435,10 @@ const SettingsTab = () => {
                         <h2 className="accordion-header">
                           <Link
                             to="#"
-                            className="accordion-button"
+                            className="accordion-button collapsed"
                             data-bs-toggle="collapse"
                             data-bs-target="#chatuser-collapse"
-                            aria-expanded="true"
+                            aria-expanded="false"
                             aria-controls="chatuser-collapse"
                           >
                             <i className="ti ti-user me-2" />
@@ -434,7 +447,7 @@ const SettingsTab = () => {
                         </h2>
                         <div
                           id="chatuser-collapse"
-                          className="accordion-collapse collapse show"
+                          className="accordion-collapse collapse"
                           data-bs-parent="#account-setting"
                         >
                           <div className="accordion-body">
@@ -442,7 +455,12 @@ const SettingsTab = () => {
                               <div className="d-flex justify-content-center align-items-center">
                                 <span className="set-pro avatar avatar-xxl rounded-circle mb-3 p-1">
                                   <ImageWithBasePath
-                                    src={avatarPreview || formData.avatarUrl || profile?.avatarUrl || "assets/img/profiles/avatar-16.jpg"}
+                                    src={
+                                      avatarPreview ||
+                                      formData.avatarUrl ||
+                                      profile?.avatarUrl ||
+                                      "assets/img/profiles/avatar-16.jpg"
+                                    }
                                     className="rounded-circle"
                                     alt="user"
                                   />
@@ -453,19 +471,28 @@ const SettingsTab = () => {
                                     accept="image/*"
                                     onChange={handleFileSelect}
                                     disabled={!isEditing || uploadingAvatar}
-                                    style={{ display: 'none' }}
+                                    style={{ display: "none" }}
                                   />
                                   {/* Icon click để chọn file */}
-                                  <span 
-                                    className="add avatar avatar-sm d-flex justify-content-center align-items-center" 
-                                    style={{ 
-                                      cursor: (isEditing && !uploadingAvatar) ? 'pointer' : 'not-allowed',
-                                      opacity: (isEditing && !uploadingAvatar) ? 1 : 0.5
+                                  <span
+                                    className="add avatar avatar-sm d-flex justify-content-center align-items-center"
+                                    style={{
+                                      cursor:
+                                        isEditing && !uploadingAvatar
+                                          ? "pointer"
+                                          : "not-allowed",
+                                      opacity:
+                                        isEditing && !uploadingAvatar ? 1 : 0.5,
                                     }}
                                     onClick={handleAvatarClick}
                                   >
                                     {uploadingAvatar ? (
-                                      <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />
+                                      <i
+                                        className="ti ti-loader-2"
+                                        style={{
+                                          animation: "spin 1s linear infinite",
+                                        }}
+                                      />
                                     ) : (
                                       <i className="ti ti-plus rounded-circle d-flex justify-content-center align-items-center" />
                                     )}
@@ -474,120 +501,166 @@ const SettingsTab = () => {
                               </div>
                               <div className="row">
                                 <div className="col-lg-12">
-                                 <div className="mb-3">
-                                  <label className='form-label fs-14 mb-2'>Họ và tên</label>
-                                   <div className="input-icon position-relative">
-                                    <input
-                                      type="text"
-                                      value={formData.fullName}
-                                      onChange={(e) => handleInputChange('fullName', e.target.value)}
-                                      disabled={!isEditing}
-                                      className="form-control"
-                                    />
-                                    <span className="icon-addon">
-                                      <i className="ti ti-user" />
-                                    </span>
+                                  <div className="mb-3">
+                                    <label className="form-label fs-14 mb-2">
+                                      Họ và tên
+                                    </label>
+                                    <div className="input-icon position-relative">
+                                      <input
+                                        type="text"
+                                        value={formData.fullName}
+                                        onChange={(e) =>
+                                          handleInputChange(
+                                            "fullName",
+                                            e.target.value
+                                          )
+                                        }
+                                        disabled={!isEditing}
+                                        className="form-control"
+                                      />
+                                      <span className="icon-addon">
+                                        <i className="ti ti-user" />
+                                      </span>
+                                    </div>
+                                    {errors.fullName && (
+                                      <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
+                                        <i
+                                          className="ti ti-alert-circle me-1"
+                                          style={{ fontSize: "0.75rem" }}
+                                        />
+                                        {errors.fullName}
+                                      </small>
+                                    )}
                                   </div>
-                                  {errors.fullName && (
-                                    <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
-                                      {errors.fullName}
-                                    </small>
-                                  )}
-                                 </div>
                                 </div>
                                 <div className="col-lg-12">
                                   <div className="mb-3">
-                                    <label className='form-label fs-14 mb-2'>Giới tính</label>
+                                    <label className="form-label fs-14 mb-2">
+                                      Giới tính
+                                    </label>
                                     <div className="input-icon position-relative">
-                                    <select 
+                                      <select
                                         className="form-select"
                                         value={formData.gender}
-                                        onChange={(e) => handleInputChange('gender', e.target.value)}
+                                        onChange={(e) =>
+                                          handleInputChange(
+                                            "gender",
+                                            e.target.value
+                                          )
+                                        }
                                         disabled={!isEditing}
-                                        style={{paddingLeft: '0.75rem'}}
+                                        style={{ paddingLeft: "0.75rem" }}
                                       >
                                         <option value="MALE">Nam</option>
                                         <option value="FEMALE">Nữ</option>
-                                        <option value="UNKNOWN">Không rõ</option>
+                                        <option value="UNKNOWN">
+                                          Không rõ
+                                        </option>
                                       </select>
-                                    <span className="icon-addon">
-                                      <i className="ti ti-user-star" />
-                                    </span>
-                                  </div>
-                                  {errors.gender && (
-                                    <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
-                                      {errors.gender}
-                                    </small>
-                                  )}
+                                      <span className="icon-addon">
+                                        <i className="ti ti-user-star" />
+                                      </span>
+                                    </div>
+                                    {errors.gender && (
+                                      <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
+                                        <i
+                                          className="ti ti-alert-circle me-1"
+                                          style={{ fontSize: "0.75rem" }}
+                                        />
+                                        {errors.gender}
+                                      </small>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="col-lg-12">
                                   <div className="mb-3">
-                                    <label className='form-label fs-14 mb-2'>Ngày sinh</label>
+                                    <label className="form-label fs-14 mb-2">
+                                      Ngày sinh
+                                    </label>
                                     <div className="input-icon position-relative">
-                                    <DatePicker 
-                                      getPopupContainer={(trigger) => trigger.parentElement || document.body}  
-                                      className="form-control datetimepicker" 
-                                      onChange={onChange} 
-                                      value={formData.dob}
-                                      disabled={!isEditing}
-                                      format="DD/MM/YYYY"
-                                      placeholder='Chọn ngày sinh'
-                                      disabledDate={disabledDate}
-                                    />
-                                    <span className="icon-addon">
-                                      <i className="ti ti-calendar-event" />
-                                    </span>
-                                  </div>
-                                  {errors.dob && (
-                                    <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
-                                      {errors.dob}
-                                    </small>
-                                  )}
+                                      <DatePicker
+                                        getPopupContainer={(trigger) =>
+                                          trigger.parentElement || document.body
+                                        }
+                                        className="form-control datetimepicker"
+                                        onChange={onChange}
+                                        value={formData.dob}
+                                        disabled={!isEditing}
+                                        format="DD/MM/YYYY"
+                                        placeholder="Chọn ngày sinh"
+                                        disabledDate={disabledDate}
+                                      />
+                                      <span className="icon-addon">
+                                        <i className="ti ti-calendar-event" />
+                                      </span>
+                                    </div>
+                                    {errors.dob && (
+                                      <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
+                                        <i
+                                          className="ti ti-alert-circle me-1"
+                                          style={{ fontSize: "0.75rem" }}
+                                        />
+                                        {errors.dob}
+                                      </small>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="col-lg-12">
                                   <div className="mb-3">
-                                    <label className='form-label fs-14 mb-2'>Email</label>
+                                    <label className="form-label fs-14 mb-2">
+                                      Email
+                                    </label>
                                     <div className="input-icon position-relative">
                                       <input
                                         type="email"
                                         value={formData.email}
-                                        onChange={(e) => handleInputChange('email', e.target.value)}
+                                        onChange={(e) =>
+                                          handleInputChange(
+                                            "email",
+                                            e.target.value
+                                          )
+                                        }
                                         disabled={!isEditing}
                                         className="form-control"
                                       />
                                       <span className="icon-addon">
                                         <i className="ti ti-mail" />
                                       </span>
-                                  </div>
-                                  {errors.email && (
-                                    <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
-                                      {errors.email}
-                                    </small>
-                                  )}
+                                    </div>
+                                    {errors.email && (
+                                      <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
+                                        <i
+                                          className="ti ti-alert-circle me-1"
+                                          style={{ fontSize: "0.75rem" }}
+                                        />
+                                        {errors.email}
+                                      </small>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="col-lg-12">
                                   <div className="mb-3">
-                                    <label className='form-label fs-14 mb-2'>Mô tả</label>
-                                      <textarea
-                                        className="form-control"
-                                        value={formData.bio}
-                                        onChange={(e) => handleInputChange('bio', e.target.value)}
-                                        disabled={!isEditing}
-                                        rows={3}
-                                      />
-                                      {errors.bio && (
-                                        <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                          <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
-                                          {errors.bio}
-                                        </small>
-                                      )}
+                                    <label className="form-label fs-14 mb-2">
+                                      Mô tả
+                                    </label>
+                                    <textarea
+                                      className="form-control"
+                                      value={formData.bio}
+                                      onChange={(e) =>
+                                        handleInputChange("bio", e.target.value)
+                                      }
+                                      disabled={!isEditing}
+                                      rows={3}
+                                    />
+                                    {errors.bio && (
+                                      <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
+                                        <i
+                                          className="ti ti-alert-circle me-1"
+                                          style={{ fontSize: "0.75rem" }}
+                                        />
+                                        {errors.bio}
+                                      </small>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="col-lg-12 d-flex gap-2">
@@ -788,85 +861,141 @@ const SettingsTab = () => {
                             <div className="row">
                               <div className="col-lg-12">
                                 <div className="mb-3">
-                                  <label className="form-label fs-14 mb-2">Mật khẩu hiện tại</label>
+                                  <label className="form-label fs-14 mb-2">
+                                    Mật khẩu hiện tại
+                                  </label>
                                   <div className="input-icon position-relative">
                                     <input
-                                      type={passwordVisibility.oldpassword ? "text" : "password"}
+                                      type={
+                                        passwordVisibility.oldpassword
+                                          ? "text"
+                                          : "password"
+                                      }
                                       value={passwordData.oldPassword}
-                                      onChange={(e) => handlePasswordInputChange('oldPassword', e.target.value)}
+                                      onChange={(e) =>
+                                        handlePasswordInputChange(
+                                          "oldPassword",
+                                          e.target.value
+                                        )
+                                      }
                                       disabled={!isEditingPassword}
                                       className="form-control"
                                     />
                                     <span
                                       className={`ti toggle-passwords ${
-                                        passwordVisibility.oldpassword ? "ti-eye" : "ti-eye-off"
+                                        passwordVisibility.oldpassword
+                                          ? "ti-eye"
+                                          : "ti-eye-off"
                                       }`}
-                                      onClick={() => togglePasswordVisibility("oldpassword")}
+                                      onClick={() =>
+                                        togglePasswordVisibility("oldpassword")
+                                      }
                                     />
                                   </div>
                                   {passwordErrors.oldPassword && (
                                     <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
+                                      <i
+                                        className="ti ti-alert-circle me-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      />
                                       {passwordErrors.oldPassword}
                                     </small>
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div className="col-lg-12">
                                 <div className="mb-3">
-                                  <label className="form-label fs-14 mb-2">Mật khẩu mới</label>
+                                  <label className="form-label fs-14 mb-2">
+                                    Mật khẩu mới
+                                  </label>
                                   <div className="input-icon position-relative">
                                     <input
-                                      type={passwordVisibility.newpassword ? "text" : "password"}
+                                      type={
+                                        passwordVisibility.newpassword
+                                          ? "text"
+                                          : "password"
+                                      }
                                       value={passwordData.newPassword}
-                                      onChange={(e) => handlePasswordInputChange('newPassword', e.target.value)}
+                                      onChange={(e) =>
+                                        handlePasswordInputChange(
+                                          "newPassword",
+                                          e.target.value
+                                        )
+                                      }
                                       disabled={!isEditingPassword}
                                       className="form-control"
                                     />
                                     <span
                                       className={`ti toggle-passwords ${
-                                        passwordVisibility.newpassword ? "ti-eye" : "ti-eye-off"
+                                        passwordVisibility.newpassword
+                                          ? "ti-eye"
+                                          : "ti-eye-off"
                                       }`}
-                                      onClick={() => togglePasswordVisibility("newpassword")}
+                                      onClick={() =>
+                                        togglePasswordVisibility("newpassword")
+                                      }
                                     />
                                   </div>
                                   {passwordErrors.newPassword && (
                                     <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
+                                      <i
+                                        className="ti ti-alert-circle me-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      />
                                       {passwordErrors.newPassword}
                                     </small>
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div className="col-lg-12">
                                 <div className="mb-3">
-                                  <label className="form-label fs-14 mb-2">Xác nhận mật khẩu mới</label>
+                                  <label className="form-label fs-14 mb-2">
+                                    Xác nhận mật khẩu mới
+                                  </label>
                                   <div className="input-icon position-relative">
                                     <input
-                                      type={passwordVisibility.confirmPassword ? "text" : "password"}
+                                      type={
+                                        passwordVisibility.confirmPassword
+                                          ? "text"
+                                          : "password"
+                                      }
                                       value={passwordData.confirmPassword}
-                                      onChange={(e) => handlePasswordInputChange('confirmPassword', e.target.value)}
+                                      onChange={(e) =>
+                                        handlePasswordInputChange(
+                                          "confirmPassword",
+                                          e.target.value
+                                        )
+                                      }
                                       disabled={!isEditingPassword}
                                       className="form-control"
                                     />
                                     <span
                                       className={`ti toggle-passwords ${
-                                        passwordVisibility.confirmPassword ? "ti-eye" : "ti-eye-off"
+                                        passwordVisibility.confirmPassword
+                                          ? "ti-eye"
+                                          : "ti-eye-off"
                                       }`}
-                                      onClick={() => togglePasswordVisibility("confirmPassword")}
+                                      onClick={() =>
+                                        togglePasswordVisibility(
+                                          "confirmPassword"
+                                        )
+                                      }
                                     />
                                   </div>
                                   {passwordErrors.confirmPassword && (
                                     <small className="text-danger fs-13 fw-medium mt-1 d-flex align-items-center">
-                                      <i className="ti ti-alert-circle me-1" style={{fontSize: '0.75rem'}} />
+                                      <i
+                                        className="ti ti-alert-circle me-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      />
                                       {passwordErrors.confirmPassword}
                                     </small>
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div className="col-lg-12 d-flex gap-2">
                                 {isEditingPassword ? (
                                   <>
@@ -911,7 +1040,7 @@ const SettingsTab = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="d-flex justify-content-between align-items-center mb-3">
                         <h6 className="fs-14">
                           <i className="ti ti-shield text-gray me-2" />
@@ -1713,9 +1842,13 @@ const SettingsTab = () => {
                     <Link
                       to="#"
                       className="list-group-item"
-                      onClick={()=>setShowModal(true)}
+                      onClick={() => setShowModal(true)}
                     >
-                    <div className="profile-info" onClick={handleLogout} style={{ cursor: 'pointer' }}>
+                      <div
+                        className="profile-info"
+                        onClick={handleLogout}
+                        style={{ cursor: "pointer" }}
+                      >
                         <h6 className="text-danger">
                           <i className="ti ti-logout text-danger me-2" />
                           Đăng xuất
@@ -1733,13 +1866,12 @@ const SettingsTab = () => {
               {/* Others */}
             </div>
           </div>
-          </OverlayScrollbarsComponent>
-        </div>
-        {/* / Chats sidebar */}
-    <LogoutModal showModal={showModal} setShowModal={setShowModal}/>
-
+        </OverlayScrollbarsComponent>
+      </div>
+      {/* / Chats sidebar */}
+      <LogoutModal showModal={showModal} setShowModal={setShowModal} />
     </>
-  )
-}
+  );
+};
 
-export default SettingsTab
+export default SettingsTab;
