@@ -5,7 +5,7 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { groupApi } from '@/apis/group/group.api';
-import { uploadImage } from '@/apis/chat/chat.api';
+import { userApis } from '@/apis/user/user.api';
 import { useGroupCreation as useGroupContext } from '@/contexts/GroupCreationContext';
 import websocketService from '@/core/services/websocket.service';
 import type { CreateGroupRequest } from '@/apis/group/group.type';
@@ -95,9 +95,9 @@ export const useGroupCreationFlow = () => {
             type: groupData.avatarFile.type
           });
 
-          // Use temp conversation ID for upload
-          const uploadResult = await uploadImage(groupData.avatarFile, 'group-avatar-upload');
-          avatarUrl = uploadResult.data?.url; // Use 'url' property
+          // Upload to AVATARS folder (can be changed to GROUP_AVATARS if needed)
+          const uploadResult = await userApis.uploadAvatar(groupData.avatarFile, 'AVATARS');
+          avatarUrl = uploadResult.fileUrl; // userApis.uploadAvatar returns IUploadAvatarResponse with 'fileUrl' property
 
           console.log('✅ Avatar uploaded:', avatarUrl);
         } catch (uploadError: unknown) {
@@ -130,17 +130,17 @@ export const useGroupCreationFlow = () => {
       console.log('📦 API Response:', response);
 
       // ⭐ FIX: response is ApiResponse<IGroup>, so response.data is IGroup
-      const groupData = response.data;
+      const groupDataResponse = response.data;
 
-      if (!groupData) {
+      if (!groupDataResponse) {
         throw new Error('No group data in response');
       }
 
-      console.log('✅ Group created successfully:', groupData);
+      console.log('✅ Group created successfully:', groupDataResponse);
 
       // 5. Extract conversation ID (group API response includes conversationId)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const conversationId = (groupData as any).conversationId;
+      const conversationId = (groupDataResponse as any).conversationId;
 
       // 6. Subscribe to WebSocket for real-time messages
       if (conversationId) {
@@ -162,7 +162,7 @@ export const useGroupCreationFlow = () => {
 
       return {
         success: true,
-        groupId: groupData.id,
+        groupId: groupDataResponse.id,
         conversationId
       };
 
@@ -184,7 +184,7 @@ export const useGroupCreationFlow = () => {
     } finally {
       setIsCreating(false);
     }
-  }, [groupData, validate, queryClient, resetGroupData]);
+  }, [validate, queryClient, resetGroupData]);
 
   // Clear specific validation error
   const clearError = useCallback((field: keyof ValidationErrors) => {

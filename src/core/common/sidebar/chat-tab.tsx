@@ -27,6 +27,13 @@ import type { IConversation } from '@/apis/chat/chat.type';
 // Redux
 import { setSelectedConversation } from '@/core/data/redux/commonSlice';
 
+// OverlayScrollbars types
+interface OverlayScrollbarsInstance {
+  elements?: () => {
+    target?: HTMLElement;
+  };
+}
+
 interface RootState {
   common: {
     selectedConversationId: string | null;
@@ -179,9 +186,14 @@ const ChatTab = () => {
   }, [toggleMute]);
   
   // Scroll-based pagination handler
-  const handleScroll = useCallback((instance: any) => {
+  const handleScroll = useCallback((instance: OverlayScrollbarsInstance) => {
     // OverlayScrollbars passes instance object, not Event
-    const { target } = instance.elements();
+    const elements = instance?.elements?.();
+    if (!elements) {
+      return;
+    }
+
+    const { target } = elements;
 
     // Safety check: ensure element exists
     if (!target) {

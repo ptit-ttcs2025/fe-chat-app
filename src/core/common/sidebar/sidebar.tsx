@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import ImageWithBasePath from "../imageWithBasePath";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { Tooltip } from "antd";
@@ -9,15 +9,27 @@ import { useLogout } from "../../../hooks/useLogout";
 import { useTotalUnreadCount } from "@/hooks/useUnreadMessages";
 import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
 
+// Bootstrap Tab interface
+interface BootstrapTab {
+  show(): void;
+}
+
+interface WindowWithBootstrap extends Window {
+  bootstrap?: {
+    Tab: new (element: Element) => BootstrapTab;
+  };
+}
+
+declare const window: WindowWithBootstrap;
+
 const Sidebar = () => {
   const routes = all_routes;
   const location = useLocation();
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const [, setDarkMode] = useState(localStorage.getItem("darkMode"));
   const { handleLogout } = useLogout();
   const { data: totalUnreadCount = 0 } = useTotalUnreadCount();
-  const { isCollapsed, toggleCollapse } = useSidebarCollapse();
+  const { isCollapsed, toggleCollapse, activeTab, setActiveTab } = useSidebarCollapse();
 
   /**
    * IntelliJ/WebStorm-style Toggle Handler
@@ -33,8 +45,8 @@ const Sidebar = () => {
       // Manually activate Bootstrap tab
       setTimeout(() => {
         const tabElement = document.querySelector(`[data-bs-target="${tabTarget}"]`);
-        if (tabElement) {
-          const tab = new (window as any).bootstrap.Tab(tabElement);
+        if (tabElement && window.bootstrap) {
+          const tab = new window.bootstrap.Tab(tabElement);
           tab.show();
         }
       }, 50);
@@ -49,8 +61,8 @@ const Sidebar = () => {
 
         // Manually activate Bootstrap tab
         const tabElement = document.querySelector(`[data-bs-target="${tabTarget}"]`);
-        if (tabElement) {
-          const tab = new (window as any).bootstrap.Tab(tabElement);
+        if (tabElement && window.bootstrap) {
+          const tab = new window.bootstrap.Tab(tabElement);
           tab.show();
         }
       }
@@ -147,35 +159,34 @@ const Sidebar = () => {
                   </Link>
                 </li>
               </Tooltip>
-              <Tooltip title="Trạng thái" placement="right" color={"#6338F6 "}>
-                <li>
-                  <Link
-                    to="#"
-                    className={
-                      location.pathname.includes(routes.status) ||
-                      location.pathname.includes(routes.myStatus) ||
-                      location.pathname.includes(routes.userStatus)
-                        ? "active"
-                        : ""
-                    }
-                    data-bs-toggle="tab"
-                    data-bs-target="#call-menu"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleIconClick('call', '#call-menu');
-                    }}
-                  >
-                    <i className="ti ti-chart-donut-2" />
-                  </Link>
-                </li>
-              </Tooltip>
+              {/*<Tooltip title="Trạng thái" placement="right" color={"#6338F6 "}>*/}
+              {/*  <li>*/}
+              {/*    <Link*/}
+              {/*      to="#"*/}
+              {/*      className={*/}
+              {/*        location.pathname.includes(routes.status) ||*/}
+              {/*        location.pathname.includes(routes.myStatus) ||*/}
+              {/*        location.pathname.includes(routes.userStatus)*/}
+              {/*          ? "active"*/}
+              {/*          : ""*/}
+              {/*      }*/}
+              {/*      data-bs-toggle="tab"*/}
+              {/*      data-bs-target="#call-menu"*/}
+              {/*      onClick={(e) => {*/}
+              {/*        e.preventDefault();*/}
+              {/*        handleIconClick('call', '#call-menu');*/}
+              {/*      }}*/}
+              {/*    >*/}
+              {/*      <i className="ti ti-chart-donut-2" />*/}
+              {/*    </Link>*/}
+              {/*  </li>*/}
+              {/*</Tooltip>*/}
               <Tooltip title="Hồ sơ" placement="right" color={"#6338F6 "}>
                 <li>
                   <Link
                     to="#"
                     data-bs-toggle="tab"
                     data-bs-target="#profile-menu"
-                    data-bs-target="#status-menu"
                     onClick={(e) => {
                       e.preventDefault();
                       handleIconClick('status', '#status-menu');
@@ -262,3 +273,4 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+
