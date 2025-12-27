@@ -26,7 +26,7 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
             <i className="fas fa-arrow-left" />
           </Link>
         </div>
-        
+
         {selectedConversation ? (
           <>
             <div className="avatar avatar-lg online flex-shrink-0">
@@ -37,7 +37,7 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
               />
             </div>
             <div className="ms-2 overflow-hidden flex-grow-1">
-              <h6 className="text-truncate mb-0" style={{ maxWidth: '200px' }}>
+              <h6 className="text-truncate mb-0" style={{ maxWidth: "200px" }}>
                 {getConversationName(selectedConversation)}
               </h6>
               <span className="last-seen">Online</span>
@@ -46,10 +46,7 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
         ) : (
           <>
             <div className="avatar avatar-lg flex-shrink-0">
-              <Avatar
-                name="Select chat"
-                className="rounded-circle"
-              />
+              <Avatar name="Select chat" className="rounded-circle" />
             </div>
             <div className="ms-2 overflow-hidden">
               <h6>Chọn cuộc trò chuyện</h6>
@@ -58,7 +55,7 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
           </>
         )}
       </div>
-      
+
       <div className="chat-options">
         <ul>
           <li>
@@ -150,4 +147,3 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
 };
 
 export default ChatHeader;
-

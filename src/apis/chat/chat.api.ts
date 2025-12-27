@@ -1,9 +1,9 @@
 /**
- * Chat API Client  
+ * Chat API Client
  * REST API endpoints cho chat system (Updated theo API_DOCUMENTATION.md)
  */
 
-import http  from '@/lib/apiBase';
+import http from "@/lib/apiBase";
 import {
   SendMessageRequest,
   MarkAsReadRequest,
@@ -18,10 +18,12 @@ import {
   CursorPaginatedResponse,
   FileUploadResponse,
   ConversationFilter,
-} from './chat.type';
+  MediaQueryParams,
+  MediaMessage,
+} from "./chat.type";
 
 // API Base URI (baseURL đã có /api/v1 rồi)
-const URI = '';
+const URI = "";
 
 // ===========================
 // MESSAGE APIs
@@ -31,8 +33,13 @@ const URI = '';
  * Gửi tin nhắn mới
  * POST /api/v1/messages
  */
-export const sendMessage = async (data: SendMessageRequest): Promise<ApiResponse<IMessage>> => {
-  const response = await http.post<ApiResponse<IMessage>>(`${URI}/messages`, data);
+export const sendMessage = async (
+  data: SendMessageRequest
+): Promise<ApiResponse<IMessage>> => {
+  const response = await http.post<ApiResponse<IMessage>>(
+    `${URI}/messages`,
+    data
+  );
   return response.data;
 };
 
@@ -46,54 +53,58 @@ export const getMessages = async (
   size: number = 20,
   keyword?: string
 ): Promise<PaginatedResponse<IMessage>> => {
-  const response = await http.get(
-    `${URI}/messages`,
-    {
-      params: {
-        conversationId,
-        page,
-        size,
-        ...(keyword && { keyword }),
-      },
-    }
-  );
-  
+  const response = await http.get(`${URI}/messages`, {
+    params: {
+      conversationId,
+      page,
+      size,
+      ...(keyword && { keyword }),
+    },
+  });
+
   // console.log('📡 getMessages raw response:', response);
-  
+
   const responseAny = response as any;
-  
+
   // Nếu response đã là { meta, results } (đã unwrap)
   if (responseAny && Array.isArray(responseAny.results)) {
     return responseAny as PaginatedResponse<IMessage>;
   }
-  
+
   // Nếu response là { data: { meta, results } }
   if (responseAny?.data && Array.isArray(responseAny.data.results)) {
     return responseAny.data as PaginatedResponse<IMessage>;
   }
-  
+
   // Fallback - trả về empty
-  console.warn('⚠️ Unexpected messages response format:', response);
-  return { meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 }, results: [] };
+  console.warn("⚠️ Unexpected messages response format:", response);
+  return {
+    meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 },
+    results: [],
+  };
 };
 
 /**
  * Lấy một tin nhắn cụ thể
  */
-export const getMessage = async (messageId: string): Promise<ApiResponse<IMessage>> => {
-  const response = await http.get<ApiResponse<IMessage>>(`${URI}/messages/${messageId}`);
+export const getMessage = async (
+  messageId: string
+): Promise<ApiResponse<IMessage>> => {
+  const response = await http.get<ApiResponse<IMessage>>(
+    `${URI}/messages/${messageId}`
+  );
   return response.data;
 };
 
 /**
  * Lấy tin nhắn với Cursor-Based Pagination (Optimized for infinite scroll)
  * GET /api/v1/messages/cursor
- * 
+ *
  * @param conversationId - ID của conversation
  * @param size - Số lượng tin nhắn mỗi lần load (default: 50)
  * @param beforeMessageId - Load tin nhắn CŨ HƠN message này (scroll up)
  * @param afterMessageId - Load tin nhắn MỚI HƠN message này (refresh)
- * 
+ *
  * Performance: ~30ms consistent (vs 500ms+ với offset pagination khi page lớn)
  */
 export const getMessagesCursor = async (
@@ -102,32 +113,29 @@ export const getMessagesCursor = async (
   beforeMessageId?: string,
   afterMessageId?: string
 ): Promise<CursorPaginatedResponse<IMessage>> => {
-  const response = await http.get(
-    `${URI}/messages/cursor`,
-    {
-      params: {
-        conversationId,
-        size,
-        ...(beforeMessageId && { beforeMessageId }),
-        ...(afterMessageId && { afterMessageId }),
-      },
-    }
-  );
-  
+  const response = await http.get(`${URI}/messages/cursor`, {
+    params: {
+      conversationId,
+      size,
+      ...(beforeMessageId && { beforeMessageId }),
+      ...(afterMessageId && { afterMessageId }),
+    },
+  });
+
   const responseAny = response as any;
-  
+
   // Handle response format: { data: { messages, cursor } }
   if (responseAny?.data?.messages) {
     return responseAny.data as CursorPaginatedResponse<IMessage>;
   }
-  
+
   // Handle response format: { messages, cursor } (already unwrapped)
   if (responseAny?.messages) {
     return responseAny as CursorPaginatedResponse<IMessage>;
   }
-  
+
   // Fallback - empty response
-  console.warn('⚠️ Unexpected cursor messages response format:', response);
+  console.warn("⚠️ Unexpected cursor messages response format:", response);
   return {
     messages: [],
     cursor: {
@@ -137,7 +145,7 @@ export const getMessagesCursor = async (
       newestMessageId: null,
       count: 0,
       pageSize: size,
-    }
+    },
   };
 };
 
@@ -171,7 +179,10 @@ export const searchMessages = async (
 export const markMessagesAsRead = async (
   data: MarkAsReadRequest
 ): Promise<ApiResponse<void>> => {
-  const response = await http.post<ApiResponse<void>>(`${URI}/messages/read`, data);
+  const response = await http.post<ApiResponse<void>>(
+    `${URI}/messages/read`,
+    data
+  );
   return response.data;
 };
 
@@ -195,8 +206,12 @@ export const togglePinMessage = async (
 /**
  * Xóa tin nhắn
  */
-export const deleteMessage = async (messageId: string): Promise<ApiResponse<void>> => {
-  const response = await http.delete<ApiResponse<void>>(`${URI}/messages/${messageId}`);
+export const deleteMessage = async (
+  messageId: string
+): Promise<ApiResponse<void>> => {
+  const response = await http.delete<ApiResponse<void>>(
+    `${URI}/messages/${messageId}`
+  );
   return response.data;
 };
 
@@ -229,6 +244,44 @@ export const getPinnedMessages = async (
   return response.data;
 };
 
+/**
+ * Lấy media files (ảnh/file) trong conversation
+ * GET /api/v1/messages/media?conversationId={id}&type={IMAGE|FILE}&page={page}&size={size}
+ */
+export const getMediaMessages = async (
+  params: MediaQueryParams
+): Promise<PaginatedResponse<MediaMessage>> => {
+  const { conversationId, type, page = 0, size = 20 } = params;
+
+  const response = await http.get(`${URI}/messages/media`, {
+    params: {
+      conversationId,
+      type,
+      page,
+      size,
+    },
+  });
+
+  const responseAny = response as any;
+
+  // Nếu response đã là { meta, results }
+  if (responseAny && Array.isArray(responseAny.results)) {
+    return responseAny as PaginatedResponse<MediaMessage>;
+  }
+
+  // Nếu response là { data: { meta, results } }
+  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
+    return responseAny.data as PaginatedResponse<MediaMessage>;
+  }
+
+  // Fallback
+  console.warn("⚠️ Unexpected media response format:", response);
+  return {
+    meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 },
+    results: [],
+  };
+};
+
 // ===========================
 // CONVERSATION APIs
 // ===========================
@@ -241,40 +294,40 @@ export const getConversations = async (
   size: number = 20,
   filter?: ConversationFilter
 ): Promise<PaginatedResponse<IConversation>> => {
-  const response = await http.get(
-    `${URI}/conversations`,
-    {
-      params: {
-        page,
-        size,
-        ...filter,
-      },
-    }
-  );
-  
+  const response = await http.get(`${URI}/conversations`, {
+    params: {
+      page,
+      size,
+      ...filter,
+    },
+  });
+
   // Debug log để xem response format
   // console.log('📡 getConversations raw response:', response);
-  
+
   // Response có thể đã được unwrap bởi interceptor thành nhiều format khác nhau:
   // Format 1: { meta, results } - đã unwrap từ data
   // Format 2: { statusCode, data: { meta, results } } - full response
   // Format 3: { data: { meta, results } } - partial unwrap
-  
+
   const responseAny = response as any;
-  
+
   // Nếu response đã là { meta, results } (đã unwrap)
   if (responseAny && Array.isArray(responseAny.results)) {
     return responseAny as PaginatedResponse<IConversation>;
   }
-  
+
   // Nếu response là { data: { meta, results } }
   if (responseAny?.data && Array.isArray(responseAny.data.results)) {
     return responseAny.data as PaginatedResponse<IConversation>;
   }
-  
+
   // Fallback - trả về empty
-  console.warn('⚠️ Unexpected response format:', response);
-  return { meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 }, results: [] };
+  console.warn("⚠️ Unexpected response format:", response);
+  return {
+    meta: { pageNumber: 0, pageSize: 20, totalElements: 0, totalPages: 0 },
+    results: [],
+  };
 };
 
 /**
@@ -405,54 +458,32 @@ export const togglePinConversation = async (
 // ===========================
 
 /**
- * Upload file/image
+ * Send file/image
  */
-export const uploadFile = async (
+export const sendFile = async (
   data: FileUploadRequest
 ): Promise<ApiResponse<FileUploadResponse>> => {
   const formData = new FormData();
-  formData.append('file', data.file);
-  formData.append('conversationId', data.conversationId);
-  formData.append('type', data.type);
+  formData.append("originalFile", data.originalFile);
+  formData.append("conversationId", data.conversationId);
+  if (data.thumbnailFile) {
+    formData.append("thumbnailFile", data.thumbnailFile);
+  }
+  // Optional message content to send along with the file
+  if (data.content && data.content.trim().length > 0) {
+    formData.append("content", data.content.trim());
+  }
 
   const response = await http.post<ApiResponse<FileUploadResponse>>(
-    `${URI}/files/upload`,
+    `${URI}/messages/upload`,
     formData,
     {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     }
   );
   return response.data;
-};
-
-/**
- * Upload ảnh
- */
-export const uploadImage = async (
-  file: File,
-  conversationId: string
-): Promise<ApiResponse<FileUploadResponse>> => {
-  return uploadFile({
-    file,
-    conversationId,
-    type: 'IMAGE',
-  });
-};
-
-/**
- * Upload voice message
- */
-export const uploadVoice = async (
-  file: File,
-  conversationId: string
-): Promise<ApiResponse<FileUploadResponse>> => {
-  return uploadFile({
-    file,
-    conversationId,
-    type: 'VOICE',
-  });
 };
 
 // ===========================
@@ -463,7 +494,9 @@ export const uploadVoice = async (
  * Lấy số tin nhắn chưa đọc tổng
  */
 export const getTotalUnreadCount = async (): Promise<ApiResponse<number>> => {
-  const response = await http.get<ApiResponse<number>>(`${URI}/messages/unread/count`);
+  const response = await http.get<ApiResponse<number>>(
+    `${URI}/messages/unread/count`
+  );
   return response.data;
 };
 
@@ -495,6 +528,7 @@ export const chatApi = {
   deleteMessage,
   updateMessage,
   getPinnedMessages,
+  getMediaMessages,
 
   // Conversations
   getConversations,
@@ -509,9 +543,7 @@ export const chatApi = {
   togglePinConversation,
 
   // Files
-  uploadFile,
-  uploadImage,
-  uploadVoice,
+  sendFile,
 
   // Statistics
   getTotalUnreadCount,
@@ -519,4 +551,3 @@ export const chatApi = {
 };
 
 export default chatApi;
-
