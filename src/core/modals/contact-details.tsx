@@ -15,9 +15,6 @@ import withReactContent from 'sweetalert2-react-content';
 import type { IConversation } from '@/apis/chat/chat.type';
 import websocketService from '@/core/services/websocket.service';
 import { useState } from 'react';
-// ✨ NEW: Friend Nickname Feature
-import { NicknameEditor } from '@/components/NicknameEditor';
-import { useFriendNicknameWebSocket } from '@/hooks/useFriendNicknameWebSocket';
 
 const ContactDetails = () => {
     const routes = all_routes;
@@ -32,9 +29,6 @@ const ContactDetails = () => {
 
     // Cleanup modal on navigation
     useModalCleanup('contact-details');
-    
-    // ✨ NEW: Subscribe to friend nickname updates via WebSocket
-    useFriendNicknameWebSocket(true);
 
     // Fetch friend detail
     const { data: friendDetail, isLoading } = useGetFriendDetail(
@@ -284,23 +278,6 @@ const ContactDetails = () => {
             <>
               <div className="card bg-light shadow-none">
                 <div className="card-body pb-1">
-                  {/* ✨ NEW: Nickname Editor Section */}
-                  <div className="mb-3">
-                    <label className="form-label small text-muted mb-2">
-                      <i className="ti ti-tag me-1" />
-                      Biệt danh
-                    </label>
-                    <NicknameEditor
-                      friendId={selectedFriendId!}
-                      currentName={friendDetail.fullName}
-                      fullName={friendDetail.fullName}
-                      onUpdate={(newName) => {
-                        console.log('✅ Nickname updated in modal:', newName);
-                        // Query will auto-refetch via invalidation
-                      }}
-                    />
-                  </div>
-
                   <div className="d-flex align-items-center justify-content-between flex-wrap">
                     <div className="d-flex align-items-center mb-3">
                       <span className="avatar avatar-lg">

@@ -47,19 +47,66 @@ export const useFriendNicknameWebSocket = (enabled: boolean = true) => {
 
     // Stable callback reference for nickname updates
     const handleNicknameUpdate = useCallback((message: FriendNicknameUpdateMessage) => {
-        console.log('📡 Friend nickname update received:', {
+        console.log('📡 Friend nickname update received via WebSocket:', {
             friendId: message.friendId,
             newNickname: message.newNickname,
             timestamp: message.timestamp,
         });
 
-        // Invalidate queries to refetch with new nickname
+        // ✅ UPDATE CACHE DIRECTLY for instant UI update (before invalidation)
+
+        // 1. Update conversation list caches
+        queryClient.setQueriesData<any>({ queryKey: ['chat', 'conversations'] }, (old: any) => {
+            if (!old?.results) return old;
+
+            return {
+                ...old,
+                results: old.results.map((conv: any) => {
+                    // Update if this conversation involves the friend
+                    if (conv.peerUserId === message.friendId) {
+                        return {
+                            ...conv,
+                            name: message.newNickname,
+                            peerDisplayName: message.newNickname,
+                        };
+                    }
+                    return conv;
+                }),
+            };
+        });
+
+        // 2. Update conversation detail caches
+        queryClient.setQueriesData<any>({ queryKey: ['conversation-detail'] }, (old: any) => {
+            if (!old) return old;
+
+            if (old.peerUserId === message.friendId) {
+                return {
+                    ...old,
+                    peerDisplayName: message.newNickname,
+                    name: message.newNickname,
+                };
+            }
+            return old;
+        });
+
+        // 3. Invalidate queries for background refetch (with correct keys)
         queryClient.invalidateQueries({ queryKey: ['searchFriends'] });
         queryClient.invalidateQueries({ queryKey: ['friends'] });
         queryClient.invalidateQueries({ queryKey: ['friendDetail', message.friendId] });
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({
+            queryKey: ['chat', 'conversations'],
+            refetchType: 'active',
+        });
+        queryClient.invalidateQueries({
+            queryKey: ['conversation-detail'],
+            refetchType: 'active',
+        });
+        queryClient.invalidateQueries({
+            queryKey: ['chat', 'conversation'],
+            refetchType: 'active',
+        });
 
-        console.log('✅ Queries invalidated, UI will refresh with new nickname');
+        console.log('✅ WebSocket: Cache updated directly + queries invalidated for background refresh');
     }, [queryClient]);
 
     // Poll connection status periodically

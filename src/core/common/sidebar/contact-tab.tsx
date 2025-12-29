@@ -1,9 +1,5 @@
 /**
  * ContactTab - Optimized Friend List Sidebar
- * ✅ WebSocket real-time online status tracking
- * ✅ Performance optimized with React.memo()
- * ✅ Simplified UI: Avatar + Name + Status text only
- * ✅ Better UI spacing
  */
 
 import ImageWithBasePath from '../imageWithBasePath'
@@ -21,7 +17,6 @@ import type { UserStatus } from '@/apis/chat/chat.type';
 import { useFriendNicknameWebSocket } from '@/hooks/useFriendNicknameWebSocket';
 
 // ========== MEMOIZED FRIEND ITEM COMPONENT ==========
-// ✅ Performance optimization với memo()
 interface FriendItemProps {
   friend: IFriend & { wsOnline?: boolean };
   onFriendClick: (friendId: string) => void;

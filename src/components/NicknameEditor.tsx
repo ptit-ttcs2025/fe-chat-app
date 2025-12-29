@@ -89,24 +89,50 @@ export const NicknameEditor: React.FC<NicknameEditorProps> = ({
                 nickname: trimmedNickname,
             });
 
-            MySwal.fire({
+            // ✅ Handle both response structures:
+            // 1. Wrapped: { statusCode, message, data: { displayName, ... } }
+            // 2. Unwrapped: { displayName, userId, ... } (actual backend behavior)
+            let newDisplayName: string | undefined;
+            let successMessage: string | undefined;
+
+            if (result.data && result.data.displayName) {
+                // Wrapped response
+                newDisplayName = result.data.displayName;
+                successMessage = result.message;
+            } else if (result.displayName) {
+                // Unwrapped response (direct data)
+                newDisplayName = result.displayName;
+                successMessage = 'Cập nhật biệt danh thành công';
+            }
+
+            if (!newDisplayName) {
+                console.error('⚠️ Invalid response structure:', result);
+                throw new Error('Response không có dữ liệu hợp lệ');
+            }
+
+            // ✅ Show success alert
+            await MySwal.fire({
                 icon: 'success',
                 title: 'Thành công',
-                text: result.message || 'Cập nhật biệt danh thành công',
+                text: successMessage || 'Cập nhật biệt danh thành công',
                 timer: 2000,
                 showConfirmButton: false,
             });
 
-            // Notify parent component
-            onUpdate?.(result.data.displayName);
+            // ✅ Update UI
+            onUpdate?.(newDisplayName);
+            setNickname(newDisplayName);
             setIsEditing(false);
         } catch (error) {
-            MySwal.fire({
+            console.error('❌ Error updating nickname:', error);
+            await MySwal.fire({
                 icon: 'error',
                 title: 'Lỗi',
                 text: error instanceof Error && 'response' in error
                     ? (error.response as { data?: { message?: string } })?.data?.message || 'Không thể cập nhật biệt danh'
-                    : 'Không thể cập nhật biệt danh',
+                    : error instanceof Error
+                        ? error.message
+                        : 'Không thể cập nhật biệt danh',
                 confirmButtonText: 'OK',
             });
             // Revert to original on error
@@ -137,7 +163,26 @@ export const NicknameEditor: React.FC<NicknameEditorProps> = ({
                     nickname: '', // Empty string resets to fullName
                 });
 
-                MySwal.fire({
+                // ✅ Handle both response structures:
+                // 1. Wrapped: { statusCode, message, data: { displayName, ... } }
+                // 2. Unwrapped: { displayName, userId, ... } (actual backend behavior)
+                let newDisplayName: string | undefined;
+
+                if (response.data && response.data.displayName) {
+                    // Wrapped response
+                    newDisplayName = response.data.displayName;
+                } else if (response.displayName) {
+                    // Unwrapped response (direct data)
+                    newDisplayName = response.displayName;
+                }
+
+                if (!newDisplayName) {
+                    console.error('⚠️ Invalid response structure:', response);
+                    throw new Error('Response không có dữ liệu hợp lệ');
+                }
+
+                // ✅ Show success alert
+                await MySwal.fire({
                     icon: 'success',
                     title: 'Đã xóa biệt danh',
                     text: 'Tên đã được khôi phục về tên gốc',
@@ -145,16 +190,20 @@ export const NicknameEditor: React.FC<NicknameEditorProps> = ({
                     showConfirmButton: false,
                 });
 
-                onUpdate?.(response.data.displayName);
-                setNickname(response.data.displayName);
+                // ✅ Update UI
+                onUpdate?.(newDisplayName);
+                setNickname(newDisplayName);
                 setIsEditing(false);
             } catch (error) {
-                MySwal.fire({
+                console.error('❌ Error resetting nickname:', error);
+                await MySwal.fire({
                     icon: 'error',
                     title: 'Lỗi',
                     text: error instanceof Error && 'response' in error
                         ? (error.response as { data?: { message?: string } })?.data?.message || 'Không thể xóa biệt danh'
-                        : 'Không thể xóa biệt danh',
+                        : error instanceof Error
+                            ? error.message
+                            : 'Không thể xóa biệt danh',
                     confirmButtonText: 'OK',
                 });
             }
@@ -224,11 +273,11 @@ export const NicknameEditor: React.FC<NicknameEditorProps> = ({
                 <h6 className="mb-0" style={{ fontSize: '15px', fontWeight: '500' }}>
                     {currentName}
                 </h6>
-                {hasNickname && (
-                    <p className="mb-0 text-muted" style={{ fontSize: '12px' }}>
-                        Tên gốc: {fullName}
-                    </p>
-                )}
+                {/*{hasNickname && (*/}
+                {/*    <p className="mb-0 text-muted" style={{ fontSize: '12px' }}>*/}
+                {/*        Tên gốc: {fullName}*/}
+                {/*    </p>*/}
+                {/*)}*/}
             </div>
             <div className="d-flex gap-1">
                 <button

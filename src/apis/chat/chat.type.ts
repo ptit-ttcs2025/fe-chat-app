@@ -52,7 +52,9 @@ export interface IMessage {
 // CONVERSATION TYPES
 // ===========================
 
-export type ConversationType = "PRIVATE" | "GROUP";
+// Backend trả về: ONE_TO_ONE (1-1 chat) hoặc GROUP (nhóm chat)
+// PRIVATE là alias của ONE_TO_ONE để backward compatible
+export type ConversationType = "PRIVATE" | "ONE_TO_ONE" | "GROUP";
 
 export interface IConversation {
   id: string;
