@@ -1,11 +1,11 @@
-// Notifications Modal Styles - PTIT Theme
-// Beautiful, modern notification design inspired by Facebook/LinkedIn
+// Notifications Modal Styles - Clean & Minimal Design
+// Redesigned for better harmony with existing template UI
 @use "sass:color";
 
-// Theme Colors
+// ✅ Softer, more neutral colors
 $primary: #6338F6;
-$primary-light: #E3DBFD;
-$primary-dark: #5028E5;
+$primary-light: #F3F0FF;
+$primary-subtle: #E9E5FF;
 $success: #10B981;
 $danger: #EF4444;
 $info: #3B82F6;
@@ -15,30 +15,30 @@ $text-muted: #6B7280;
 $text-light: #9CA3AF;
 $border-color: #E5E7EB;
 $bg-hover: #F9FAFB;
-$bg-unread: #F0EDFF;
+$bg-unread: #FAFBFF;
 
 // Modal Container
 .notifications-modal {
-  max-width: 480px;
+  max-width: 420px; // ✅ Slightly smaller, less overwhelming
   width: 100%;
   margin: 0 auto;
 
   .modal-content {
     border: none;
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border-radius: 12px; // ✅ Smaller radius for subtle look
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08); // ✅ Softer shadow
     overflow: hidden;
   }
 }
 
-// Header
+// ✅ REDESIGNED Header - Clean & Simple
 .notifications-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid $border-color;
-  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+  background: white; // ✅ Simple white background
 
   .header-left {
     display: flex;
@@ -47,41 +47,41 @@ $bg-unread: #F0EDFF;
   }
 
   .header-icon {
-    font-size: 24px;
-    color: white;
+    font-size: 20px; // ✅ Smaller icon
+    color: $text-dark; // ✅ Dark gray instead of white
   }
 
   .modal-title {
-    font-size: 18px;
+    font-size: 16px; // ✅ Smaller font
     font-weight: 600;
-    color: white;
+    color: $text-dark; // ✅ Dark text
     margin: 0;
   }
 
   .badge-count {
-    background: white;
+    background: $primary-light; // ✅ Softer background
     color: $primary;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
-    min-width: 24px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    min-width: 20px;
     text-align: center;
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .btn-mark-all {
-    background: rgba(255, 255, 255, 0.2);
+    background: transparent; // ✅ Transparent
     border: none;
-    color: white;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    color: $text-muted; // ✅ Gray color
+    width: 32px;
+    height: 32px;
+    border-radius: 8px; // ✅ Rounded square
     display: flex;
     align-items: center;
     justify-content: center;
@@ -89,22 +89,22 @@ $bg-unread: #F0EDFF;
     transition: all 0.2s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: scale(1.05);
+      background: $bg-hover; // ✅ Subtle hover
+      color: $primary;
     }
 
     i {
-      font-size: 18px;
+      font-size: 16px;
     }
   }
 
   .btn-close-modal {
-    background: rgba(255, 255, 255, 0.2);
+    background: transparent;
     border: none;
-    color: white;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    color: $text-muted;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -112,12 +112,12 @@ $bg-unread: #F0EDFF;
     transition: all 0.2s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: rotate(90deg);
+      background: $bg-hover;
+      color: $text-dark;
     }
 
     i {
-      font-size: 18px;
+      font-size: 16px;
     }
   }
 }
@@ -185,24 +185,24 @@ $bg-unread: #F0EDFF;
 
 // Notifications List
 .notifications-list {
-  padding: 8px 0;
+  padding: 4px 0; // ✅ Tighter padding
 }
 
 .notification-item-wrapper {
-  padding: 0 12px;
-  
+  padding: 0 8px; // ✅ Smaller padding
+
   &:not(:last-child) {
-    margin-bottom: 4px;
+    margin-bottom: 2px; // ✅ Tighter spacing
   }
 }
 
-// Notification Card
+// ✅ SIMPLIFIED Notification Card
 .notification-card {
   display: flex;
   align-items: flex-start;
-  padding: 12px;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  padding: 10px 12px; // ✅ Smaller padding
+  border-radius: 8px; // ✅ Smaller radius
+  transition: all 0.15s ease; // ✅ Faster transition
   position: relative;
 
   &.clickable {
@@ -214,56 +214,56 @@ $bg-unread: #F0EDFF;
   }
 
   &.unread {
-    background: $bg-unread;
+    background: $bg-unread; // ✅ Very subtle unread background
 
     &:hover {
-      background: color.adjust($bg-unread, $lightness: -2%);
+      background: color.adjust($bg-unread, $lightness: -1%);
     }
   }
 }
 
-// Avatar
+// ✅ SIMPLIFIED Avatar
 .notification-avatar {
   position: relative;
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  margin-right: 12px;
+  width: 40px; // ✅ Smaller avatar
+  height: 40px;
+  margin-right: 10px;
 
   img {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     object-fit: cover;
   }
 
   .avatar-placeholder {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     font-weight: 600;
-    font-size: 18px;
+    font-size: 16px; // ✅ Smaller font
   }
 
   .notification-badge {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    width: 22px;
-    height: 22px;
+    width: 18px; // ✅ Smaller badge
+    height: 18px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); // ✅ Softer shadow
 
     i {
-      font-size: 11px;
+      font-size: 10px;
       color: white;
     }
 
@@ -304,8 +304,8 @@ $bg-unread: #F0EDFF;
 }
 
 .notification-text {
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px; // ✅ Smaller font
+  line-height: 1.5;
   color: $text-dark;
   
   strong {
@@ -320,24 +320,24 @@ $bg-unread: #F0EDFF;
 
 .notification-time {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 11px; // ✅ Smaller time
   color: $text-light;
   white-space: nowrap;
 }
 
 .notification-message {
-  font-size: 13px;
+  font-size: 12px;
   color: $text-muted;
   font-style: italic;
   margin: 6px 0;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 8px;
-  line-height: 1.4;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.03); // ✅ Lighter background
+  border-radius: 6px;
+  line-height: 1.5;
 }
 
 .notification-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: $text-muted;
   margin: 4px 0 0;
 
@@ -347,32 +347,32 @@ $bg-unread: #F0EDFF;
   }
 }
 
-// Actions
+// ✅ REDESIGNED Actions - Clean buttons
 .notification-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px; // ✅ Tighter gap
+  margin-top: 8px;
 
   button {
     flex: 1;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13px;
+    padding: 7px 14px; // ✅ Smaller padding
+    border-radius: 6px; // ✅ Smaller radius
+    font-size: 12px; // ✅ Smaller font
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
 
     &:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
     i {
-      font-size: 14px;
+      font-size: 13px;
     }
   }
 
@@ -382,21 +382,21 @@ $bg-unread: #F0EDFF;
     border: none;
 
     &:hover:not(:disabled) {
-      background: $primary-dark;
+      background: color.adjust($primary, $lightness: -5%); // ✅ Subtle hover
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba($primary, 0.3);
+      box-shadow: 0 2px 8px rgba($primary, 0.2); // ✅ Softer shadow
     }
   }
 
   .btn-reject {
-    background: transparent;
+    background: white; // ✅ White background
     color: $text-muted;
     border: 1px solid $border-color;
 
     &:hover:not(:disabled) {
-      background: #FEE2E2;
+      background: $bg-hover; // ✅ Subtle hover
       color: $danger;
-      border-color: #FECACA;
+      border-color: color.adjust($danger, $lightness: 30%);
     }
   }
 }
@@ -424,30 +424,30 @@ $bg-unread: #F0EDFF;
   text-align: center;
 
   .empty-icon {
-    width: 80px;
-    height: 80px;
+    width: 64px; // ✅ Smaller icon
+    height: 64px;
     border-radius: 50%;
-    background: $border-color;
+    background: $bg-hover; // ✅ Lighter background
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
 
     i {
-      font-size: 36px;
+      font-size: 32px; // ✅ Smaller
       color: $text-light;
     }
   }
 
   h5 {
-    font-size: 16px;
+    font-size: 15px; // ✅ Smaller
     font-weight: 600;
     color: $text-dark;
     margin: 0 0 8px;
   }
 
   p {
-    font-size: 14px;
+    font-size: 13px; // ✅ Smaller
     color: $text-muted;
     margin: 0;
     max-width: 240px;
@@ -461,27 +461,25 @@ $bg-unread: #F0EDFF;
   align-items: center;
   padding: 12px 20px !important;
   border-top: 1px solid $border-color;
-  background: $bg-hover;
+  background: $bg-hover; // ✅ Light background
 
   .notification-count {
-    font-size: 13px;
+    font-size: 12px; // ✅ Smaller
     color: $text-muted;
   }
 
   .btn-close-footer {
-    background: $primary;
-    color: white;
-    padding: 8px 20px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px; // ✅ Smaller
+    font-weight: 600;
+    color: $primary;
     text-decoration: none;
-    transition: all 0.2s ease;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
 
     &:hover {
-      background: $primary-dark;
-      color: white;
-      transform: translateY(-1px);
+      background: white; // ✅ Simple white hover
+      text-decoration: none;
     }
   }
 }

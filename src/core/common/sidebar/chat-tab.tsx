@@ -460,19 +460,7 @@ const ChatTab = () => {
             <div className="chat-search-header">
               <div className="header-title d-flex align-items-center justify-content-between">
                 <h4 className="mb-3 d-flex align-items-center gap-2">
-                  <span>Chats</span>
-                  {(totalUnreadCount ?? 0) > 0 && (
-                    <span
-                      className="badge rounded-pill"
-                      style={{
-                        background:
-                          'linear-gradient(135deg, #6338F6 0%, #764ba2 100%)',
-                        fontSize: '11px',
-                      }}
-                    >
-                      {(totalUnreadCount ?? 0) > 99 ? '99+' : totalUnreadCount}
-                    </span>
-                  )}
+                  <span>Tin nhắn</span>
                 </h4>
                 <div className="d-flex align-items-center mb-3 gap-1">
                   <CollapseButton 
@@ -612,7 +600,7 @@ const ChatTab = () => {
             <div className="sidebar-body chat-body" id="chatsidebar">
               {/* Title and Filter */}
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="chat-title">{activeTab}</h5>
+                <h5 className="chat-title">Tất cả hội thoại</h5>
                 <div className="dropdown">
                   <Link
                     to="#"
