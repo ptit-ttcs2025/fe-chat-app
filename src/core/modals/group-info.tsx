@@ -149,7 +149,7 @@ const GroupInfo = () => {
         data-bs-scroll="true"
         data-bs-backdrop="false"
         tabIndex={-1}
-        id="contact-profile"
+        id="group-info"
       >
         <div className="offcanvas-header border-bottom">
           <h4 className="offcanvas-title fw-semibold">Thông tin nhóm</h4>

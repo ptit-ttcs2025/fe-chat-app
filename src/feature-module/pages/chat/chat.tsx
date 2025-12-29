@@ -176,6 +176,8 @@ const Chat = () => {
         content:
           content && content.trim().length > 0 ? content.trim() : undefined,
       });
+
+      // Note: Message object sẽ được nhận qua WebSocket, không phải từ sendFile response
     },
     [selectedConversation]
   );

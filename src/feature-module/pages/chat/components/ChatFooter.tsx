@@ -277,9 +277,11 @@ const ChatFooter = ({
             style={{
               width: "100%",
               margin: "8px 0 12px",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+              overflowX: "auto",
+              overflowY: "hidden",
+              display: "flex",
               gap: "10px",
+              paddingBottom: "4px",
             }}
           >
             {pendingUploads.map((item) => (
@@ -288,153 +290,199 @@ const ChatFooter = ({
                 style={{
                   position: "relative",
                   border: "1px solid #e5e7eb",
-                  borderRadius: "10px",
+                  borderRadius: "12px",
                   background: "#f8fafc",
                   overflow: "hidden",
-                  minHeight: "110px",
                   display: "flex",
-                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "12px",
+                  minWidth: "320px",
+                  maxWidth: "420px",
+                  flexShrink: 0,
                 }}
               >
                 {item.kind === "image" ? (
-                  <div
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                      paddingTop: "70%",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <img
-                      src={item.serverUrl || item.previewUrl}
-                      alt={item.name}
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        background: "#e5e7eb",
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      padding: "12px",
-                      display: "flex",
-                      gap: "10px",
-                      alignItems: "center",
-                    }}
-                  >
+                  <>
+                    {/* Image Thumbnail - Larger size */}
                     <div
                       style={{
-                        width: "40px",
-                        height: "40px",
+                        position: "relative",
+                        width: "80px",
+                        height: "80px",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={item.serverUrl || item.previewUrl}
+                        alt={item.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          background: "#e5e7eb",
+                        }}
+                      />
+                    </div>
+                    {/* Image Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          color: "#111827",
+                          marginBottom: "4px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={item.name}
+                      >
+                        {item.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color:
+                            item.status === "error"
+                              ? "#dc2626"
+                              : item.status === "done"
+                              ? "#16a34a"
+                              : "#6b7280",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {item.status === "uploading" && "Đang tải lên..."}
+                        {item.status === "done" && `✓ Đã tải lên • ${formatFileSize(item.size)}`}
+                        {item.status === "error" && "✗ Lỗi tải lên"}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* File Icon */}
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
                         borderRadius: "10px",
                         background: "#e0e7ff",
                         color: "#4338ca",
                         display: "grid",
                         placeItems: "center",
-                        fontWeight: 700,
+                        fontSize: "24px",
+                        flexShrink: 0,
                       }}
                     >
                       📄
                     </div>
+                    {/* File Info - More space for name */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          fontSize: "13px",
+                          fontSize: "14px",
                           fontWeight: 600,
                           color: "#111827",
-                          whiteSpace: "nowrap",
+                          marginBottom: "4px",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
+                        title={item.name}
                       >
                         {item.name}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                        {formatFileSize(item.size)}
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color:
+                            item.status === "error"
+                              ? "#dc2626"
+                              : item.status === "done"
+                              ? "#16a34a"
+                              : "#6b7280",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {item.status === "uploading" && "Đang tải lên..."}
+                        {item.status === "done" && `✓ Đã tải lên • ${formatFileSize(item.size)}`}
+                        {item.status === "error" && "✗ Lỗi tải lên"}
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
-                <div
+                {/* Remove button */}
+                <button
+                  type="button"
+                  onClick={() => onRemovePending(item.id)}
                   style={{
-                    padding: "10px 12px 12px",
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "#f3f4f6",
+                    cursor: "pointer",
+                    color: "#6b7280",
                     display: "flex",
                     alignItems: "center",
-                    gap: "8px",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#fee2e2";
+                    e.currentTarget.style.color = "#dc2626";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#f3f4f6";
+                    e.currentTarget.style.color = "#6b7280";
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      color:
-                        item.status === "error"
-                          ? "#dc2626"
-                          : item.status === "done"
-                          ? "#16a34a"
-                          : "#6b7280",
-                      fontWeight: 600,
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {item.status === "uploading" && "Uploading..."}
-                    {item.status === "done" && "Đã tải lên"}
-                    {item.status === "error" && "Lỗi tải lên"}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "#9ca3af" }}>
-                    {formatFileSize(item.size)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemovePending(item.id)}
-                    style={{
-                      marginLeft: "auto",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      color: "#9ca3af",
-                      padding: "4px",
-                    }}
-                  >
-                    <i className="ti ti-x" />
-                  </button>
-                </div>
+                  <i className="ti ti-x" style={{ fontSize: "18px" }} />
+                </button>
 
+                {/* Error message */}
                 {item.status === "error" && item.error && (
                   <div
                     style={{
-                      padding: "0 12px 10px",
-                      fontSize: "12px",
+                      position: "absolute",
+                      bottom: "8px",
+                      left: item.kind === "image" ? "104px" : "72px",
+                      right: "48px",
+                      fontSize: "11px",
                       color: "#dc2626",
+                      background: "#fee2e2",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
                     }}
                   >
                     {item.error}
                   </div>
                 )}
 
+                {/* Loading overlay */}
                 {item.status === "uploading" && (
                   <div
                     style={{
                       position: "absolute",
                       inset: 0,
-                      background: "rgba(255,255,255,0.6)",
+                      background: "rgba(255,255,255,0.7)",
                       display: "grid",
                       placeItems: "center",
-                      backdropFilter: "blur(1px)",
+                      backdropFilter: "blur(2px)",
+                      borderRadius: "12px",
                     }}
                   >
                     <div
-                      className="spinner-border spinner-border-sm"
+                      className="spinner-border"
                       role="status"
                       style={{
-                        width: "18px",
-                        height: "18px",
-                        borderWidth: "2px",
+                        width: "24px",
+                        height: "24px",
+                        borderWidth: "3px",
                         color: "#667eea",
                       }}
                     >
