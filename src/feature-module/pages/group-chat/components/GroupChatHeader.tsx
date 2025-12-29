@@ -80,8 +80,9 @@ const GroupChatHeader = ({
           <div className="ms-2 overflow-hidden">
             <h6>{groupName}</h6>
             <p className="last-seen text-truncate">
-              {totalMembers} thành viên,{" "}
-              <span className="text-success">{onlineMembersCount} trực tuyến</span>
+              {totalMembers} thành viên
+                {/*,{" "}*/}
+              {/*<span className="text-success">{onlineMembersCount} trực tuyến</span>*/}
             </p>
           </div>
         </div>

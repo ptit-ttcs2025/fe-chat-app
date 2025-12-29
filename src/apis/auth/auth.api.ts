@@ -31,6 +31,7 @@ export const authApis = {
                 username: apiData.username,
                 email: apiData.email,
                 fullName: apiData.fullName,
+                role: apiData.role, // Include role if available
             }
         };
 
@@ -39,10 +40,19 @@ export const authApis = {
 
     /**
      * Get user profile
+     * Backend response: { statusCode, message, timestamp, path, data: { id, username, email, fullName, role, ... } }
      */
     me: async (): Promise<IAuthUser> => {
-        const response = await http.get<IAuthUser>(authUri.me);
-        return response.data;
+        const response = await http.get<{
+            statusCode: number;
+            message: string;
+            timestamp: string;
+            path: string;
+            data: IAuthUser;
+        }>(authUri.me);
+
+        // ✅ Return data from nested structure
+        return response.data.data;
     },
 
     /**
@@ -59,9 +69,9 @@ export const authApis = {
             throw new Error('No refresh token available');
         }
 
-        const response = await http.post(authUri.refresh, { 
+        const response = await http.post(authUri.refresh, {
             refreshToken,
-            accessToken 
+            accessToken
         }) as any;
 
         // ✅ Parse response theo cấu trúc backend: { statusCode, message, timestamp, path, data: { accessToken, ... } }
@@ -81,57 +91,55 @@ export const authApis = {
         };
     },
 
-    signup: async (payload: ISignupRequest): Promise<IAuthResponse>=> {
-        const response = await http.post<IAuthResponse>(authUri.signup, payload);
+    signup: async (payload: ISignupRequest): Promise<IAuthResponse> => {
+        const response = await http.post<ILoginResponse>(authUri.signup, payload);
 
-        if (response.data?.accessToken) {
-            authStorage.setAccessToken(response.data.accessToken);
-            authStorage.setRefreshToken(response.data.refreshToken);
-        }
+        const apiData = response.data;
 
-        return response.data;
+        // ✅ Transform sang IAuthResponse format
+        const authResponse: IAuthResponse = {
+            accessToken: apiData.accessToken,
+            refreshToken: apiData.refreshToken,
+            user: {
+                id: apiData.id,
+                username: apiData.username,
+                email: apiData.email,
+                fullName: apiData.fullName,
+                role: apiData.role,
+            }
+        };
 
+        return authResponse;
     },
 };
 
-// ==================== REACT QUERY HOOKS ====================
-
 /**
- * Hook login - Tự động lưu tokens vào cookies
+ * React Query Hook - Login mutation
  */
 export const useLogin = () => {
-    return useMutation({
-        mutationFn: async (payload: IAuth): Promise<IAuthResponse> => {
-            return authApis.login(payload);
-        },
+    return useMutation<IAuthResponse, AxiosError, IAuth>({
+        mutationFn: authApis.login,
     });
 };
 
 /**
- * Hook refresh token
- */
-export const useRefreshToken = () => {
-    return useMutation({
-        mutationFn: async (): Promise<{ accessToken: string; refreshToken: string }> => {
-            return authApis.refreshToken();
-        },
-    });
-};
-
-/**
- * Hook lấy thông tin user hiện tại
+ * React Query Hook - Get current user
  */
 export const useMe = () => {
     return useQuery<IAuthUser, AxiosError>({
-        queryKey: ['me'],
+        queryKey: ['auth', 'me'],
         queryFn: authApis.me,
         enabled: !!authStorage.getAccessToken(),
-        retry: false,
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 };
 
+/**
+ * React Query Hook - Signup mutation
+ */
 export const useSignup = () => {
-    return useMutation<IAuthResponse, AxiosError<{message: string}>, ISignupRequest>({
+    return useMutation<IAuthResponse, AxiosError, ISignupRequest>({
         mutationFn: authApis.signup,
     });
-}
+};
+

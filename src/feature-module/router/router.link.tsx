@@ -99,6 +99,10 @@ import AddLanguage from "../admin/pages/settings/system-settings/add-language";
 import LanguageWeb from "../admin/pages/settings/system-settings/language-web";
 import GdprSettings from "../admin/pages/settings/system-settings/gdpr";
 import AppearanceSettings from "../admin/pages/settings/theme-settings/appearance-settings";
+import MyReports from "../pages/report/MyReports";
+import AccountSuspended from "../pages/account-status/AccountSuspended";
+import AccountBanned from "../pages/account-status/AccountBanned";
+import ReportManagement from "../admin/pages/ReportManagement";
 import BackupSettings from "../admin/pages/settings/other-settings/backup";
 import BanAddress from "../admin/pages/settings/other-settings/ban-address";
 import ClearCache from "../admin/pages/settings/other-settings/clear-cache";
@@ -113,6 +117,7 @@ import AdminResetPassword from "../admin/authentication/reset-password";
 import AdminResetPasswordSuccess from "../admin/authentication/reset-password-success";
 import DataTables from "../uiInterface/table/data-tables";
 import TablesBasic from "../uiInterface/table/tables-basic";
+import { AdminGuard } from '../../core/guards/AdminGuard';
 
 
 const route = all_routes;
@@ -163,8 +168,19 @@ export const authRoutes = [
 ];
 
 export const adminRoutes = [
-
-]
+  {
+    path: route.dashboard,
+    element: <AdminDashboard />,
+    route: Route,
+    title:'Dashboard'
+  },
+  {
+    path: route.adminReports,
+    element: <ReportManagement />,
+    route: Route,
+    title:'Report Management'
+  },
+];
 
 export const userRoutes = [
     {
@@ -210,12 +226,24 @@ export const userRoutes = [
         route: Route,
         title:'Calls'
     },
-  {
-    path: route.dashboard,
-    element: <AdminDashboard />,
-    route: Route,
-    title:'Dashboard'
-  },
+    {
+        path: route.myReports,
+        element: <MyReports />,
+        route: Route,
+        title:'My Reports'
+    },
+    {
+        path: route.suspended,
+        element: <AccountSuspended />,
+        route: Route,
+        title:'Account Suspended'
+    },
+    {
+        path: route.banned,
+        element: <AccountBanned />,
+        route: Route,
+        title:'Account Banned'
+    },
   {
     path: route.clipboard,
     element: <ClipBoard />,

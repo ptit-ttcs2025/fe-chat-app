@@ -41,6 +41,12 @@ export const SidebarData = [
         ],
       },
       {
+        label: "Report Management",
+        link: route.adminReports,
+        showSubRoute: false,
+        icon: "ti ti-flag",
+      },
+      {
         label: "Group",
         link: route.group,
         showSubRoute: false,
@@ -355,3 +361,4 @@ export const SidebarData = [
     ],
   },
 ];
+

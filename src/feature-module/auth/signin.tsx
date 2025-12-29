@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/slices/auth/reducer';
 import { useLogin } from '@/apis/auth/auth.api';
+import { authApis } from '@/apis/auth/auth.api';
 import type { IAuth } from '@/apis/auth/auth.type';
 import { all_routes } from '@/feature-module/router/all_routes';
 import ImageWithBasePath from '@/core/common/imageWithBasePath';
@@ -34,6 +35,26 @@ const Signin: React.FC = () => {
 
     // Show/hide password
     const [showPassword, setShowPassword] = useState(false);
+
+    // ✅ Helper function to determine redirect path based on user role
+    const getRedirectPath = useCallback((user: any): string => {
+        // Priority 1: Use the intended path if exists
+        if (location.state?.from?.pathname) {
+            return location.state.from.pathname;
+        }
+
+        // Priority 2: Check user role
+        const userRole = user?.role || 'USER';
+
+        if (userRole === 'ROLE_ADMIN') {
+            console.log('🔐 Admin login detected, redirecting to dashboard');
+            return all_routes.dashboard;
+        }
+
+        // Priority 3: Default to chat for regular users
+        console.log('👤 Regular user login, redirecting to chat');
+        return all_routes.chat;
+    }, [location]);
 
     // Validate form fields
     const validateForm = useCallback((): boolean => {
@@ -67,26 +88,60 @@ const Signin: React.FC = () => {
     }, [errors, apiError]);
 
     // Handle form submit
-    const handleSubmit = useCallback((e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!validateForm()) return;
 
         login(formData, {
-            onSuccess: (response) => {
+            onSuccess: async (response) => {
                 console.log('✅ Đăng nhập thành công:', response);
-                
-                // ✅ Tokens đã được lưu vào cookies tự động trong authApis.login
-                // Chỉ cần dispatch để update Redux store và lưu user vào sessionStorage
-                dispatch(setCredentials({
-                    user: response.user,
-                    accessToken: response.accessToken,
-                    refreshToken: response.refreshToken,
-                }));
 
-                // Redirect to intended location or default to chat
-                const from = location.state?.from?.pathname || all_routes.chat;
-                navigate(from, { replace: true });
+                try {
+                    // ✅ Fetch user profile để lấy đầy đủ thông tin (bao gồm role)
+                    console.log('📡 Fetching user profile...');
+                    const profileResponse = await authApis.me();
+
+                    console.log('✅ Profile data:', profileResponse);
+
+                    // ✅ Lưu thông tin đầy đủ vào Redux (bao gồm role)
+                    const userWithRole = {
+                        ...response.user,
+                        role: profileResponse.role,  // ← Thêm role từ profile
+                        dob: profileResponse.dob,
+                        bio: profileResponse.bio,
+                        createdAt: profileResponse.createdAt,
+                    };
+
+                    dispatch(setCredentials({
+                        user: userWithRole,
+                        accessToken: response.accessToken,
+                        refreshToken: response.refreshToken,
+                    }));
+
+                    console.log('✅ User with role saved:', userWithRole);
+
+                    // ✅ Role-based redirect
+                    const redirectPath = getRedirectPath(userWithRole);
+                    navigate(redirectPath, { replace: true });
+                } catch (error) {
+                    console.error('❌ Failed to fetch profile:', error);
+                    // Fallback: lưu user info từ login response (có thể có role)
+                    const userWithFallbackRole = {
+                        ...response.user,
+                        role: response.user.role || 'USER', // Use role from login response if available
+                    };
+
+                    dispatch(setCredentials({
+                        user: userWithFallbackRole,
+                        accessToken: response.accessToken,
+                        refreshToken: response.refreshToken,
+                    }));
+
+                    // ✅ Role-based redirect for fallback
+                    const redirectPath = getRedirectPath(userWithFallbackRole);
+                    navigate(redirectPath, { replace: true });
+                }
             },
             onError: (error: any) => {
                 const errorMessage =
@@ -96,7 +151,7 @@ const Signin: React.FC = () => {
                 console.error('❌ Lỗi đăng nhập:', error);
             },
         });
-    }, [formData, validateForm, login, dispatch, navigate, location]);
+    }, [formData, validateForm, login, dispatch, navigate, getRedirectPath]);
 
     return (
         <div className="container-fuild">
@@ -161,19 +216,17 @@ const Signin: React.FC = () => {
                                                 {/* Password Field */}
                                                 <div className="mb-3">
                                                     <label className="form-label">Mật khẩu</label>
-                                                    <div className="input-icon position-relative">
+                                                    <div className="pass-group">
                                                         <input
                                                             type={showPassword ? "text" : "password"}
-                                                            className={`pass-input form-control ${errors.password ? 'is-invalid' : ''}`}
+                                                            className={`form-control pass-input ${errors.password ? 'is-invalid' : ''}`}
                                                             placeholder="Nhập mật khẩu"
                                                             value={formData.password}
                                                             onChange={(e) => handleChange('password', e.target.value)}
                                                             disabled={isPending}
                                                         />
                                                         <span
-                                                            className={`ti toggle-password ${
-                                                                showPassword ? "ti-eye" : "ti-eye-off"
-                                                            }`}
+                                                            className={`ti toggle-password ${showPassword ? "ti-eye" : "ti-eye-off"}`}
                                                             onClick={() => setShowPassword(!showPassword)}
                                                         />
                                                     </div>
@@ -184,18 +237,32 @@ const Signin: React.FC = () => {
                                                     )}
                                                 </div>
 
-                                                {/* Forgot Password Link */}
-                                                <div className="text-end mb-3">
-                                                    <Link to={all_routes.forgotPassword} className="link-primary">
-                                                        Quên mật khẩu?
-                                                    </Link>
+                                                {/* Remember Me & Forgot Password */}
+                                                <div className="form-wrap form-wrap-checkbox">
+                                                    <div className="d-flex align-items-center">
+                                                        <div className="form-check">
+                                                            <input
+                                                                className="form-check-input"
+                                                                type="checkbox"
+                                                                id="remember"
+                                                            />
+                                                            <label className="form-check-label" htmlFor="remember">
+                                                                Ghi nhớ đăng nhập
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-end">
+                                                        <Link className="link-danger" to={all_routes.forgotPassword}>
+                                                            Quên mật khẩu?
+                                                        </Link>
+                                                    </div>
                                                 </div>
 
                                                 {/* Submit Button */}
-                                                <div className="mb-4">
+                                                <div className="mb-3">
                                                     <button
                                                         type="submit"
-                                                        className="btn btn-primary w-100 justify-content-center"
+                                                        className="btn btn-primary w-100"
                                                         disabled={isPending}
                                                     >
                                                         {isPending ? (
@@ -209,51 +276,16 @@ const Signin: React.FC = () => {
                                                     </button>
                                                 </div>
 
-                                                {/* Social Login Divider */}
-                                                <div className="login-or mb-3">
-                                                    <span className="span-or">Hoặc đăng nhập với</span>
-                                                </div>
-
-                                                {/* Social Login Buttons */}
-                                                <div className="d-flex align-items-center justify-content-center flex-wrap">
-                                                    <div className="text-center me-2 flex-fill">
-                                                        <Link
-                                                            to="#"
-                                                            className="fs-16 btn btn-white btn-shadow d-flex align-items-center justify-content-center"
-                                                        >
-                                                            <ImageWithBasePath
-                                                                className="img-fluid me-3"
-                                                                src="assets/img/icons/google.svg"
-                                                                alt="Google"
-                                                            />
-                                                            Google
+                                                {/* Signup Link */}
+                                                <div className="text-center">
+                                                    <p className="mb-0">
+                                                        Chưa có tài khoản?{" "}
+                                                        <Link className="text-primary" to={all_routes.signup}>
+                                                            Đăng ký ngay
                                                         </Link>
-                                                    </div>
-                                                    <div className="text-center flex-fill">
-                                                        <Link
-                                                            to="#"
-                                                            className="fs-16 btn btn-white btn-shadow d-flex align-items-center justify-content-center"
-                                                        >
-                                                            <ImageWithBasePath
-                                                                className="img-fluid me-3"
-                                                                src="assets/img/icons/facebook.svg"
-                                                                alt="Facebook"
-                                                            />
-                                                            Facebook
-                                                        </Link>
-                                                    </div>
+                                                    </p>
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        {/* Sign Up Link */}
-                                        <div className="mt-5 text-center">
-                                            <p className="mb-0 text-gray-9">
-                                                Chưa có tài khoản?{' '}
-                                                <Link to={all_routes.signup} className="link-primary">
-                                                    Đăng ký ngay
-                                                </Link>
-                                            </p>
                                         </div>
                                     </div>
                                 </form>
@@ -282,13 +314,13 @@ const Signin: React.FC = () => {
                                     <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-03.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-04.png" alt="img" />
                                 </span>
                                 <span className="avatar avatar-xl avatar-rounded border border-white">
-                                    <ImageWithBasePath src="assets/img/profiles/avatar-02.png" alt="img" />
+                                    <ImageWithBasePath src="assets/img/profiles/avatar-05.png" alt="img" />
                                 </span>
                             </div>
 
@@ -309,3 +341,4 @@ const Signin: React.FC = () => {
 };
 
 export default Signin;
+

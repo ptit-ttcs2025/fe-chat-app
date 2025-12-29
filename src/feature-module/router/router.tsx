@@ -5,10 +5,10 @@ import { Helmet } from 'react-helmet-async';
 // Route Protection Components
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
+import { AdminGuard } from '@/core/guards/AdminGuard';
 
 // Layout Components
 import Feature from '../feature';
-import AuthFeature from '../authFeature';
 import AdminFeature from '../adminFeature';
 import AdminAuthFeature from '../adminAuthFeature';
 
@@ -132,20 +132,24 @@ const Mainapp: React.FC = () => {
                     ))}
                 </Route>
 
-                {/* Protected Admin Routes - Need admin authentication */}
-                {/*<Route element={*/}
-                {/*    <ProtectedRoute>*/}
-                {/*        <AdminFeature />*/}
-                {/*    </ProtectedRoute>*/}
-                {/*}>*/}
-                {/*    {adminRoutes.map((route, idx) => (*/}
-                {/*        <Route*/}
-                {/*            key={idx}*/}
-                {/*            path={route.path}*/}
-                {/*            element={route.element}*/}
-                {/*        />*/}
-                {/*    ))}*/}
-                {/*</Route>*/}
+                {/* Protected Admin Routes - Need admin authentication + admin role */}
+                <Route element={
+                    <ProtectedRoute>
+                        <AdminFeature />
+                    </ProtectedRoute>
+                }>
+                    {adminRoutes.map((route, idx) => (
+                        <Route
+                            key={idx}
+                            path={route.path}
+                            element={
+                                <AdminGuard>
+                                    {route.element}
+                                </AdminGuard>
+                            }
+                        />
+                    ))}
+                </Route>
 
                 {/* Admin Auth Routes */}
                 <Route path="/admin/" element={

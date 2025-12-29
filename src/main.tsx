@@ -9,6 +9,7 @@ import { Provider } from 'react-redux';
 import Mainapp from '@/feature-module/router/router';
 import AppInitializer from '@/core/common/AppInitializer';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import { AccountStatusProvider } from '@/contexts/AccountStatusContext';
 import { base_path } from './environment.tsx';
 import '@ant-design/v5-patch-for-react-19';
 
@@ -39,7 +40,9 @@ createRoot(document.getElementById('root')!).render(
                     <QueryClientProvider client={queryClient}>
                         <NotificationProvider>
                             <BrowserRouter basename={base_path}>
-                                <Mainapp />
+                                <AccountStatusProvider>
+                                    <Mainapp />
+                                </AccountStatusProvider>
                             </BrowserRouter>
                         </NotificationProvider>
                     </QueryClientProvider>

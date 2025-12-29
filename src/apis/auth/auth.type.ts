@@ -14,6 +14,10 @@ export interface IAuthUser {
     username: string;
     email: string;
     fullName: string;
+    role?: string; // ROLE_ADMIN, USER, etc.
+    dob?: string;
+    bio?: string;
+    createdAt?: string;
 }
 
 export interface ILoginResponse {
@@ -21,6 +25,7 @@ export interface ILoginResponse {
     username: string;
     email: string;
     fullName: string;
+    role?: string; // ROLE_ADMIN, USER, etc.
     accessToken: string;
     refreshToken: string;
 }
