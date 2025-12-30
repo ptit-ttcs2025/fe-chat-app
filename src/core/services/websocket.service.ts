@@ -10,6 +10,11 @@ import type {
     MessageRead,
     UserStatus,
 } from '@/apis/chat/chat.type';
+import type {
+    ForceLogoutMessage,
+    AccountRestoredMessage,
+    NewReportNotification,
+} from '@/apis/report/report.type';
 
 // Import refactored managers
 import { connectionManager } from './ConnectionManager';
@@ -470,6 +475,70 @@ class WebSocketService {
                 timestamp: new Date().toISOString(),
             }),
         });
+    }
+
+    // ===========================
+    // REPORT MODULE SUBSCRIPTIONS
+    // ===========================
+
+    /**
+     * Subscribe to force logout events
+     * Channel: /user/{userId}/queue/force-logout
+     */
+    subscribeToForceLogout(callback: (message: ForceLogoutMessage) => void): () => void {
+        const userId = connectionManager.getCurrentUserId();
+        if (!userId) {
+            console.warn('Cannot subscribe to force-logout: No user ID');
+            return () => {};
+        }
+
+        const topic = `/user/${userId}/queue/force-logout`;
+
+        return subscriptionManager.subscribe(
+            'force-logout',
+            topic,
+            (message: ForceLogoutMessage) => callback(message)
+        );
+    }
+
+    /**
+     * Subscribe to account restored events
+     * Channel: /user/{userId}/queue/account-restored
+     */
+    subscribeToAccountRestored(callback: (message: AccountRestoredMessage) => void): () => void {
+        const userId = connectionManager.getCurrentUserId();
+        if (!userId) {
+            console.warn('Cannot subscribe to account-restored: No user ID');
+            return () => {};
+        }
+
+        const topic = `/user/${userId}/queue/account-restored`;
+
+        return subscriptionManager.subscribe(
+            'account-restored',
+            topic,
+            (message: AccountRestoredMessage) => callback(message)
+        );
+    }
+
+    /**
+     * Subscribe to new report notifications (Admin only)
+     * Channel: /user/{adminId}/queue/admin/new-reports
+     */
+    subscribeToNewReports(callback: (notification: NewReportNotification) => void): () => void {
+        const userId = connectionManager.getCurrentUserId();
+        if (!userId) {
+            console.warn('Cannot subscribe to new-reports: No user ID');
+            return () => {};
+        }
+
+        const topic = `/user/${userId}/queue/admin/new-reports`;
+
+        return subscriptionManager.subscribe(
+            'admin-new-reports',
+            topic,
+            (notification: NewReportNotification) => callback(notification)
+        );
     }
 }
 

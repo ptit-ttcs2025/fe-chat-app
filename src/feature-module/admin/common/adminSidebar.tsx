@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { SidebarData } from '../core/data/json/sidebarData';
+import { SidebarData } from '../core/data/json/simplifiedSidebarData';
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
 import { setExpandMenu } from '../../../core/data/redux/commonSlice';

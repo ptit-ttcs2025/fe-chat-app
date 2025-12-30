@@ -16,7 +16,6 @@ interface GroupChatHeaderProps {
   members: IGroupMember[];
   onlineMembersCount: number;
   onToggleSearch: () => void;
-  onShowMembers: () => void;
   onShowEditGroup: () => void;
   isAdmin: boolean;
   showSearch: boolean;
@@ -30,6 +29,7 @@ const GroupChatHeader = ({
   members,
   onlineMembersCount,
   onToggleSearch,
+  onShowEditGroup,
   isAdmin,
   showSearch,
   searchKeyword,
@@ -80,8 +80,9 @@ const GroupChatHeader = ({
           <div className="ms-2 overflow-hidden">
             <h6>{groupName}</h6>
             <p className="last-seen text-truncate">
-              {totalMembers} thành viên,{" "}
-              <span className="text-success">{onlineMembersCount} trực tuyến</span>
+              {totalMembers} thành viên
+                {/*,{" "}*/}
+              {/*<span className="text-success">{onlineMembersCount} trực tuyến</span>*/}
             </p>
           </div>
         </div>
@@ -104,10 +105,8 @@ const GroupChatHeader = ({
                   <Link
                     className="avatar bg-primary avatar-rounded text-fixed-white"
                     to="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onShowMembers();
-                    }}
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#contact-profile"
                   >
                     {totalMembers - 4}+
                   </Link>
@@ -133,10 +132,8 @@ const GroupChatHeader = ({
                 <Link
                   to="#"
                   className="btn position-relative"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onShowMembers();
-                  }}
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#contact-profile"
                 >
                   <i className="ti ti-info-circle" />
                 </Link>

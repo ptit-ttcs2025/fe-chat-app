@@ -29,7 +29,7 @@ const ContactDetails = () => {
 
     // Cleanup modal on navigation
     useModalCleanup('contact-details');
-    
+
     // Fetch friend detail
     const { data: friendDetail, isLoading } = useGetFriendDetail(
         selectedFriendId || '',
@@ -147,12 +147,29 @@ const ContactDetails = () => {
             const err = error as { response?: { data?: { message?: string } } };
             const errorMessage = err?.response?.data?.message || 'Không thể mở hội thoại. Vui lòng thử lại.';
 
-            // ✅ Only show modal on ERROR
+            // Show error toast notification
             MySwal.fire({
+                toast: true,
+                position: 'top-end',
                 icon: 'error',
-                title: 'Lỗi',
-                text: errorMessage,
-                confirmButtonColor: '#6338F6',
+                title: 'Có lỗi xảy ra!',
+                html: `<div style="text-align: left;">
+                  <p style="margin: 0; font-size: 14px;">
+                    ${errorMessage}
+                  </p>
+                </div>`,
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                showClass: {
+                  popup: 'animate__animated animate__fadeInRight'
+                },
+                hideClass: {
+                  popup: 'animate__animated animate__fadeOutRight'
+                },
+                customClass: {
+                  popup: 'colored-toast'
+                }
             });
         } finally {
             // ✅ Reset loading state

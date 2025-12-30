@@ -29,10 +29,16 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
     selectedRowKeys,
     onChange: onSelectChange,
   };
-  useEffect(() => {
-    return setSelections(Selection);
-  }, [Selection])
   
+  useEffect(() => {
+    setSelections(Selection);
+  }, [Selection]);
+  
+  // Cập nhật filteredDataSource khi dataSource thay đổi
+  useEffect(() => {
+    setFilteredDataSource(dataSource || []);
+    setSearchText(""); // Reset search khi data thay đổi
+  }, [dataSource]);
   
   return (
     <>
@@ -70,10 +76,10 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
      {!Selections ?
       <Table
       className="table datanew dataTable no-footer"
-     
       columns={columns}
       rowHoverable={false}
       dataSource={filteredDataSource}
+      rowKey={(record) => record.id || record.key || Math.random().toString()}
       pagination={{
         locale: { items_per_page: "" },
         nextIcon: <i className="ti ti-chevron-right"/>,
@@ -89,7 +95,7 @@ const Datatable: React.FC<DatatableProps> = ({ columns, dataSource , Selection }
         columns={columns}
         rowHoverable={false}
         dataSource={filteredDataSource}
-        
+        rowKey={(record) => record.id || record.key || Math.random().toString()}
         pagination={{
           locale: { items_per_page: "" },
           nextIcon: <i className="ti ti-chevron-right"/>,

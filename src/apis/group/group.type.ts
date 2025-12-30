@@ -25,7 +25,7 @@ export interface IGroup {
 // GROUP MEMBER TYPES
 // ===========================
 
-export type MemberRole = 'ADMIN' | 'MEMBER';
+export type MemberRole = 'ROLE_ADMIN' | 'MEMBER';
 
 export interface IGroupMember {
   id: string;

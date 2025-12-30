@@ -100,18 +100,26 @@ const Notifications = () => {
       removeNotification(notification.id);
 
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'success',
         title: 'Đã kết bạn!',
-        html: `<p>Bạn và <strong>${notification.senderDisplayName}</strong> đã trở thành bạn bè!</p>`,
-        confirmButtonText: 'Tuyệt vời!',
-        confirmButtonColor: '#6338F6',
-        timer: 3000,
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Bạn và <strong>${notification.senderDisplayName}</strong> đã trở thành bạn bè! 🎉
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
         timerProgressBar: true,
         showClass: {
-          popup: 'animate__animated animate__fadeInUp animate__faster'
+          popup: 'animate__animated animate__fadeInRight'
         },
         hideClass: {
-          popup: 'animate__animated animate__fadeOutDown animate__faster'
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
         }
       });
 
@@ -123,10 +131,27 @@ const Notifications = () => {
       refreshNotifications();
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Có lỗi xảy ra',
-        text: error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn',
-        confirmButtonColor: '#6338F6',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } finally {
       setProcessingIds(prev => {
@@ -157,9 +182,23 @@ const Notifications = () => {
         position: 'top-end',
         icon: 'info',
         title: 'Đã từ chối lời mời',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Lời mời kết bạn đã được từ chối
+          </p>
+        </div>`,
         showConfirmButton: false,
-        timer: 2000,
+        timer: 3000,
         timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
 
       // Refresh data
@@ -168,10 +207,27 @@ const Notifications = () => {
       refreshNotifications();
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Có lỗi xảy ra',
-        text: error?.response?.data?.message || 'Không thể từ chối lời mời',
-        confirmButtonColor: '#6338F6',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể từ chối lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } finally {
       setProcessingIds(prev => {

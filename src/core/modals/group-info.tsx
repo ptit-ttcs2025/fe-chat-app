@@ -182,9 +182,9 @@ const GroupInfo = () => {
                 <h6 className="fw-semibold">{groupInfo.name}</h6>
                 <p className="text-muted">
                   Nhóm · {groupInfo.totalMembers} thành viên
-                  {groupInfo.onlineMembers > 0 && (
-                    <span className="text-success ms-1">· {groupInfo.onlineMembers} trực tuyến</span>
-                  )}
+                  {/*{groupInfo.onlineMembers > 0 && (*/}
+                  {/*  <span className="text-success ms-1">· {groupInfo.onlineMembers} trực tuyến</span>*/}
+                  {/*)}*/}
                 </p>
               </div>
 

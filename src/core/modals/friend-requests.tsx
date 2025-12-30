@@ -56,21 +56,51 @@ const FriendRequests = () => {
       queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
 
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'success',
-        title: 'Đã chấp nhận!',
-        html: `Bạn và <strong>${senderName}</strong> giờ đã là bạn bè`,
-        confirmButtonText: 'Tuyệt vời!',
-        confirmButtonColor: '#28a745',
-        timer: 3000,
+        title: 'Đã kết bạn!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Bạn và <strong>${senderName}</strong> đã trở thành bạn bè! 🎉
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
         timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Oops...',
-        text: error?.response?.data?.message || 'Không thể chấp nhận lời mời!',
-        confirmButtonText: 'Đóng',
-        confirmButtonColor: '#dc3545',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     }
   };
@@ -78,15 +108,31 @@ const FriendRequests = () => {
   // Handle reject request
   const handleReject = async (requestId: string, senderName: string) => {
     const result = await MySwal.fire({
-      title: 'Xác nhận từ chối',
-      html: `Bạn có chắc muốn từ chối lời mời kết bạn từ <strong>${senderName}</strong>?`,
+      toast: true,
+      position: 'top-end',
       icon: 'warning',
+      title: 'Xác nhận từ chối',
+      html: `<div style="text-align: left;">
+        <p style="margin: 0; font-size: 14px;">
+          Bạn có chắc muốn từ chối lời mời từ <strong>${senderName}</strong>?
+        </p>
+      </div>`,
+      showConfirmButton: true,
       showCancelButton: true,
       confirmButtonColor: '#dc3545',
       cancelButtonColor: '#6c757d',
       confirmButtonText: 'Từ chối',
       cancelButtonText: 'Hủy',
       reverseButtons: true,
+      showClass: {
+        popup: 'animate__animated animate__fadeInRight'
+      },
+      hideClass: {
+        popup: 'animate__animated animate__fadeOutRight'
+      },
+      customClass: {
+        popup: 'colored-toast'
+      }
     });
 
     if (!result.isConfirmed) return;
@@ -102,21 +148,51 @@ const FriendRequests = () => {
       queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
 
       MySwal.fire({
-        icon: 'success',
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
         title: 'Đã từ chối',
-        text: 'Lời mời kết bạn đã được từ chối',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#3085d6',
-        timer: 2000,
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Lời mời kết bạn đã được từ chối
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 3000,
         timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Oops...',
-        text: error?.response?.data?.message || 'Không thể từ chối lời mời!',
-        confirmButtonText: 'Đóng',
-        confirmButtonColor: '#dc3545',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể từ chối lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     }
   };

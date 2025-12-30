@@ -336,6 +336,38 @@ const GroupChat = () => {
     setShowSearch((prev) => !prev);
   }, []);
 
+  // Handler để mở modal chỉnh sửa nhóm (edit-group)
+  const handleShowEditGroup = useCallback(() => {
+    // Đợi một chút để đảm bảo modal đã được render
+    setTimeout(() => {
+      const modalElement = document.getElementById('edit-group');
+      if (modalElement) {
+        // Sử dụng Bootstrap Modal API trực tiếp
+        const Bootstrap = (window as any).bootstrap;
+        if (Bootstrap && Bootstrap.Modal) {
+          const existingModal = Bootstrap.Modal.getInstance(modalElement);
+          if (existingModal) {
+            existingModal.show();
+          } else {
+            const modal = new Bootstrap.Modal(modalElement);
+            modal.show();
+          }
+        } else {
+          // Fallback: tạo trigger element tạm thời
+          const tempTrigger = document.createElement('button');
+          tempTrigger.dataset.bsToggle = 'modal';
+          tempTrigger.dataset.bsTarget = '#edit-group';
+          tempTrigger.style.display = 'none';
+          document.body.appendChild(tempTrigger);
+          tempTrigger.click();
+          setTimeout(() => tempTrigger.remove(), 100);
+        }
+      } else {
+        console.warn('Modal #edit-group not found in DOM');
+      }
+    }, 100);
+  }, []);
+
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
@@ -641,6 +673,7 @@ const GroupChat = () => {
             members={members}
             onlineMembersCount={getOnlineMembersCount()}
             onToggleSearch={toggleSearch}
+            onShowEditGroup={handleShowEditGroup}
             isAdmin={isAdmin(user?.id || "")}
             showSearch={showSearch}
             searchKeyword={searchKeyword}

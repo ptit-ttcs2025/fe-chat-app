@@ -54,3 +54,9 @@ export const FILE_VALIDATION: IFileValidation = {
   ],
 };
 
+// Evidence validation for report module (images only, 10MB max)
+export const EVIDENCE_VALIDATION: IFileValidation = {
+  maxSize: 10 * 1024 * 1024, // 10MB
+  allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+};
+
