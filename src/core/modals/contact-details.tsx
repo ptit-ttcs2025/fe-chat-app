@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { all_routes } from '../../feature-module/router/all_routes'
 import ImageWithBasePath from '../common/imageWithBasePath';
 import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
-import { useGetFriendDetail } from '@/apis/friend/friend.api';
+import { useGetFriendDetail, useDeleteFriend } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
 import { useQueryClient } from '@tanstack/react-query';
@@ -35,6 +35,101 @@ const ContactDetails = () => {
         selectedFriendId || '',
         !!selectedFriendId
     );
+
+    // Delete friend mutation
+    const deleteFriendMutation = useDeleteFriend();
+
+    // Handle delete friend
+    const handleDeleteFriend = async () => {
+        if (!selectedFriendId || !friendDetail) return;
+
+        // Show confirmation dialog
+        const result = await MySwal.fire({
+            title: 'Xác nhận xóa bạn bè',
+            html: `Bạn có chắc chắn muốn xóa <strong>${friendDetail.fullName}</strong> khỏi danh sách bạn bè?<br><br><small class="text-muted">Hành động này không thể hoàn tác.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="ti ti-trash me-2"></i>Xóa bạn bè',
+            cancelButtonText: '<i class="ti ti-x me-2"></i>Hủy',
+            reverseButtons: true,
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        try {
+            await deleteFriendMutation.mutateAsync(selectedFriendId);
+
+            // Invalidate queries to refresh data
+            queryClient.invalidateQueries({ queryKey: ['friends'] });
+            queryClient.invalidateQueries({ queryKey: ['searchFriends'] });
+            queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+            queryClient.invalidateQueries({ queryKey: ['friendRequestCount'] });
+
+            // Close modal
+            const modal = document.getElementById('contact-details');
+            if (modal) {
+                const bootstrap = (window as unknown as { bootstrap?: { Modal: { getInstance: (el: HTMLElement) => { hide: () => void } } } }).bootstrap;
+                const bsModal = bootstrap?.Modal?.getInstance(modal);
+                bsModal?.hide();
+            }
+
+            // Show success notification
+            MySwal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Đã xóa bạn bè thành công',
+                html: `<div style="text-align: left;">
+                  <p style="margin: 0; font-size: 14px;">
+                    Đã xóa <strong>${friendDetail.fullName}</strong> khỏi danh sách bạn bè
+                  </p>
+                </div>`,
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                showClass: {
+                    popup: 'animate__animated animate__fadeInRight'
+                },
+                hideClass: {
+                    popup: 'animate__animated animate__fadeOutRight'
+                },
+                customClass: {
+                    popup: 'colored-toast'
+                }
+            });
+        } catch (error: any) {
+            const errorMessage = error?.response?.data?.message || 'Không thể xóa bạn bè. Vui lòng thử lại.';
+            
+            // Show error notification
+            MySwal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'error',
+                title: 'Có lỗi xảy ra!',
+                html: `<div style="text-align: left;">
+                  <p style="margin: 0; font-size: 14px;">
+                    ${errorMessage}
+                  </p>
+                </div>`,
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                showClass: {
+                    popup: 'animate__animated animate__fadeInRight'
+                },
+                hideClass: {
+                    popup: 'animate__animated animate__fadeOutRight'
+                },
+                customClass: {
+                    popup: 'colored-toast'
+                }
+            });
+        }
+    };
 
     // Handle start chat - NEW FLOW: Check first, then create if needed
     const handleStartChat = async () => {
@@ -226,38 +321,24 @@ const ContactDetails = () => {
               </Link>
               <ul className="dropdown-menu dropdown-menu-end p-3">
                 <li>
-                  <Link className="dropdown-item" to="#">
-                    <i className="ti ti-share-3 me-2" />
-                    Chia sẻ
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    className="dropdown-item"
-                    to="#"
-                    data-bs-toggle="modal"
-                    data-bs-target="#edit-contact"
+                  <button
+                    className="dropdown-item text-danger"
+                    onClick={handleDeleteFriend}
+                    disabled={deleteFriendMutation.isPending}
+                    style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
                   >
-                    <i className="ti ti-edit me-2" />
-                    Sửa
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    className="dropdown-item"
-                    to="#"
-                    data-bs-toggle="modal"
-                    data-bs-target="#block-user"
-                  >
-                    <i className="ti ti-ban me-2" />
-                    Chặn
-                  </Link>
-                </li>
-                <li>
-                  <Link className="dropdown-item" to="#">
-                    <i className="ti ti-trash me-2" />
-                    Xóa
-                  </Link>
+                    {deleteFriendMutation.isPending ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Đang xóa...
+                      </>
+                    ) : (
+                      <>
+                        <i className="ti ti-trash me-2" />
+                        Xóa
+                      </>
+                    )}
+                  </button>
                 </li>
               </ul>
             </div>

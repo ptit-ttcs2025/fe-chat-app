@@ -731,7 +731,8 @@
 		transition: ease all 0.5s;
 		-webkit-transition: ease all 0.5s;
 		-ms-transition: ease all 0.5s;
-		z-index: 9;
+		position: relative;
+		z-index: 100;
 	}
 	.form-control-feedback {
 		z-index: 2;
@@ -789,7 +790,8 @@
 		transition: ease all 0.5s;
 		-webkit-transition: ease all 0.5s;
 		-ms-transition: ease all 0.5s;
-		z-index: 9;
+		position: relative;
+		z-index: 100;
 	}
 	.all-chats {
 		position: relative;

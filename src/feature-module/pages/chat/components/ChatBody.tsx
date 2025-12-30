@@ -166,6 +166,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
     lastMessageCountRef.current = currentCount;
   }, [displayMessages.length, isLoadingMore, scrollToBottom]);
 
+
   return (
     <div
       className="chat-body-wrapper"
@@ -201,7 +202,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
             style={{
               position: 'sticky',
               top: 0,
-              zIndex: 50,
+              zIndex: 100,
               backgroundColor: '#fff',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
             }}
@@ -288,6 +289,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
                     selectedConversation={selectedConversation}
                     onTogglePin={onTogglePin}
                     onDeleteMessage={onDeleteMessage}
+                    searchKeyword={searchKeyword}
                   />
                 );
               })}

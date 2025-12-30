@@ -6,7 +6,7 @@ import type { IConversation } from "@/apis/chat/chat.type";
 
 interface ChatHeaderProps {
   selectedConversation: IConversation | null;
-  onToggleSearch: () => void;
+  onToggleSearch?: () => void; // Deprecated, kept for backward compatibility
 }
 
 const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) => {
@@ -63,7 +63,8 @@ const ChatHeader = ({ selectedConversation, onToggleSearch }: ChatHeaderProps) =
               <Link
                 to="#"
                 className="btn chat-search-btn"
-                onClick={onToggleSearch}
+                data-bs-toggle="offcanvas"
+                data-bs-target="#chat-search-sidebar"
               >
                 <i className="ti ti-search" />
               </Link>

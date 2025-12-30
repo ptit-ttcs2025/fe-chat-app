@@ -6,6 +6,12 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
+import { all_routes } from "@/feature-module/router/all_routes";
+import { useQueryClient } from "@tanstack/react-query";
+import { groupApi } from "@/apis/group/group.api";
 
 // Theme Components
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
@@ -23,11 +29,11 @@ import { ThumbnailService } from "@/core/services/ThumbnailService";
 
 // Components
 import ChatHeader from "./components/ChatHeader";
-import ChatSearch from "./components/ChatSearch";
 import ChatBody from "./components/ChatBody";
 import ChatFooter from "./components/ChatFooter";
 import TypingIndicator from "./components/TypingIndicator";
 import { chatStyles } from "./styles/chatStyles";
+import ChatSearchSidebar from "@/core/modals/chat-search-sidebar";
 
 // Group Components (for unified handling)
 import GroupChatHeader from "../group-chat/components/GroupChatHeader";
@@ -67,6 +73,10 @@ interface RootState {
 }
 
 const Chat = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const MySwal = withReactContent(Swal);
+
   // ==================== Redux State ====================
   const user = useSelector((state: RootState) => state.auth?.user);
   const selectedConversationId = useSelector(
@@ -74,7 +84,12 @@ const Chat = () => {
   );
 
   // ==================== Local State (UI) ====================
-  const [showSearch, setShowSearch] = useState(false);
+  // State management per conversation - lưu state riêng cho mỗi conversation
+  const conversationStatesRef = useRef<Map<string, {
+    inputMessage: string;
+    searchKeyword: string;
+  }>>(new Map());
+
   const [searchKeyword, setSearchKeyword] = useState("");
   const [inputMessage, setInputMessage] = useState("");
   const [selectedConversation, setSelectedConversation] =
@@ -107,64 +122,31 @@ const Chat = () => {
     // No type filter - handle both ONE_TO_ONE and GROUP
   });
 
-  // Fetch single conversation from API (fallback when not in list)
-  const {
-    data: conversationFromAPI,
-    isLoading: isLoadingConversation
-  } = useConversation(
-    selectedConversationId &&
-    !conversations.find((c) => c.id === selectedConversationId)
-      ? selectedConversationId
-      : null
-  );
-
-  // Sync conversation from Redux with fallback to API
+  // Sync conversation from Redux and restore conversation-specific state
   useEffect(() => {
-    console.log('🔍 [Chat] Sync conversation:', {
-      selectedConversationId,
-      conversationsLength: conversations.length,
-      conversationTypes: conversations.map(c => ({ id: c.id, type: c.type, name: c.name })),
-    });
+    if (selectedConversationId && conversations.length > 0) {
+      const conv = conversations.find((c) => c.id === selectedConversationId);
+      if (conv) {
+        setSelectedConversation(conv);
 
-    if (!selectedConversationId) {
+        // Restore conversation-specific state
+        const savedState = conversationStatesRef.current.get(conv.id);
+        if (savedState) {
+          setInputMessage(savedState.inputMessage || "");
+          setSearchKeyword(savedState.searchKeyword || "");
+        } else {
+          // Reset to default if no saved state
+          setInputMessage("");
+          setSearchKeyword("");
+        }
+      }
+    } else {
+      // No conversation selected - reset states
       setSelectedConversation(null);
-      return;
+      setInputMessage("");
+      setSearchKeyword("");
     }
-
-    // Try to find in local list first
-    const convFromList = conversations.find((c) => c.id === selectedConversationId);
-
-    if (convFromList) {
-      console.log('✅ [Chat] Found conversation in local list:', {
-        id: convFromList.id,
-        type: convFromList.type,
-        name: convFromList.name,
-        groupId: convFromList.groupId,
-      });
-      setSelectedConversation(convFromList);
-      return;
-    }
-
-    // Fallback: Use conversation from API if available
-    if (conversationFromAPI?.data) {
-      console.log('✅ [Chat] Using conversation from API fallback:', {
-        id: conversationFromAPI.data.id,
-        type: conversationFromAPI.data.type,
-        name: conversationFromAPI.data.name,
-        groupId: conversationFromAPI.data.groupId,
-      });
-      setSelectedConversation(conversationFromAPI.data);
-      return;
-    }
-
-    // If we have an ID but no conversation yet, log warning
-    if (conversations.length > 0) {
-      console.warn('⚠️ [Chat] Conversation not found:', {
-        selectedConversationId,
-        availableIds: conversations.map(c => c.id),
-      });
-    }
-  }, [selectedConversationId, conversations, conversationFromAPI]);
+  }, [selectedConversationId, conversations]);
 
   // Messages cho conversation đã chọn (Cursor-based pagination)
   const {
@@ -227,6 +209,81 @@ const Chat = () => {
   // Determine if current conversation is a group
   const isGroupConversation = selectedConversation?.type === 'GROUP';
 
+  // Handle leave group
+  const handleLeaveGroup = useCallback(async () => {
+    if (!selectedConversation) return;
+
+    const groupName = group?.name || selectedConversation?.name || "nhóm này";
+
+    // Show confirmation dialog
+    const result = await MySwal.fire({
+      title: 'Xác nhận rời nhóm',
+      html: `Bạn có chắc chắn muốn rời khỏi <strong>${groupName}</strong>?<br><br><small class="text-muted">Bạn sẽ không thể xem tin nhắn hoặc thông tin nhóm sau khi rời.</small>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: '<i class="ti ti-logout me-2"></i>Rời nhóm',
+      cancelButtonText: '<i class="ti ti-x me-2"></i>Hủy',
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    try {
+      // Get groupId - fetch conversation detail if needed
+      let groupId = selectedConversation.groupId;
+
+      if (!groupId) {
+        // Fetch conversation detail to get groupId
+        const conversationDetail = await chatApi.getConversation(selectedConversation.id);
+        groupId = conversationDetail.data?.groupId;
+
+        if (!groupId) {
+          throw new Error('Không tìm thấy thông tin nhóm');
+        }
+      }
+
+      // Call leaveGroup API
+      await groupApi.leaveGroup(groupId);
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', 'GROUP'] });
+
+      // Show success notification
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Đã rời nhóm!',
+        text: `Bạn đã rời khỏi ${groupName}`,
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+      });
+
+      // Navigate to index page
+      navigate(all_routes.index);
+    } catch (error: any) {
+      console.error('❌ Error leaving group:', error);
+
+      // Show error notification
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: 'Lỗi!',
+        text: error?.response?.data?.message || error?.message || 'Không thể rời nhóm. Vui lòng thử lại.',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+      });
+    }
+  }, [selectedConversation, group, MySwal, navigate, queryClient]);
+
   // Pinned messages state
   const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
 
@@ -250,8 +307,6 @@ const Chat = () => {
         content:
           content && content.trim().length > 0 ? content.trim() : undefined,
       });
-
-      // Note: Message object sẽ được nhận qua WebSocket, không phải từ sendFile response
     },
     [selectedConversation]
   );
@@ -431,7 +486,8 @@ const Chat = () => {
       setFilteredMessages(filteredMessagesComputed);
     }
   }, [filteredMessagesComputed]);
-  
+
+
   // Focus input when conversation changes
   useEffect(() => {
     if (selectedConversation) {
@@ -569,14 +625,42 @@ const Chat = () => {
 
   // ==================== Handlers ====================
 
-  const toggleSearch = useCallback(() => {
-    setShowSearch((prev) => !prev);
+  // Handle scroll to message from search sidebar
+  const handleSearchMessageClick = useCallback((messageId: string) => {
+    // Scroll to message in chat body
+    setTimeout(() => {
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'nearest'
+        });
+        // Temporary highlight
+        messageElement.classList.add('highlight-message-temp');
+        setTimeout(() => {
+          messageElement.classList.remove('highlight-message-temp');
+        }, 2000);
+      }
+    }, 100);
   }, []);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setInputMessage(value);
+
+      // Save state to conversation-specific storage
+      if (selectedConversation?.id) {
+        const currentState = conversationStatesRef.current.get(selectedConversation.id) || {
+          inputMessage: "",
+          searchKeyword: searchKeyword,
+        };
+        conversationStatesRef.current.set(selectedConversation.id, {
+          ...currentState,
+          inputMessage: value,
+        });
+      }
 
       // Send typing indicator
       if (selectedConversation && value.length > 0) {
@@ -623,6 +707,18 @@ const Chat = () => {
       try {
         // Clear input trước để UI phản hồi nhanh
         setInputMessage("");
+
+        // Save cleared state to conversation-specific storage
+        if (selectedConversation?.id) {
+          const currentState = conversationStatesRef.current.get(selectedConversation.id) || {
+            inputMessage: "",
+            searchKeyword: searchKeyword,
+          };
+          conversationStatesRef.current.set(selectedConversation.id, {
+            ...currentState,
+            inputMessage: "",
+          });
+        }
 
         // Focus input ngay lập tức
         inputRef.current?.focus();
@@ -947,7 +1043,6 @@ const Chat = () => {
               group={group}
               members={members}
               onlineMembersCount={getOnlineMembersCount()}
-              onToggleSearch={toggleSearch}
               onShowMembers={() => {
                 // Trigger Bootstrap modal for members
                 const modal = document.querySelector('[data-bs-target="#group-members"]');
@@ -962,22 +1057,13 @@ const Chat = () => {
                   (modal as HTMLElement).click();
                 }
               }}
+              onLeaveGroup={handleLeaveGroup}
               isAdmin={isAdmin(user?.id || '')}
-              showSearch={showSearch}
-              searchKeyword={searchKeyword}
-              onSearchChange={setSearchKeyword}
             />
           ) : (
             <>
               <ChatHeader
                 selectedConversation={selectedConversation}
-                onToggleSearch={toggleSearch}
-              />
-
-              <ChatSearch
-                showSearch={showSearch}
-                searchKeyword={searchKeyword}
-                onSearchChange={setSearchKeyword}
               />
             </>
           )}
@@ -1080,6 +1166,28 @@ const Chat = () => {
       </div>
       {/* /Chat */}
 
+      {/* Chat Search Sidebar */}
+      <ChatSearchSidebar
+        selectedConversation={selectedConversation}
+        messages={messages}
+        searchKeyword={searchKeyword}
+        onSearchChange={(value) => {
+          setSearchKeyword(value);
+          // Save state to conversation-specific storage
+          if (selectedConversation?.id) {
+            const currentState = conversationStatesRef.current.get(selectedConversation.id) || {
+              inputMessage: inputMessage,
+              searchKeyword: "",
+            };
+            conversationStatesRef.current.set(selectedConversation.id, {
+              ...currentState,
+              searchKeyword: value,
+            });
+          }
+        }}
+        onMessageClick={handleSearchMessageClick}
+        currentUserId={user?.id}
+      />
       {/* Modals - Conditional based on conversation type */}
       {isGroupConversation ? (
         <GroupInfo selectedConversation={selectedConversation} />

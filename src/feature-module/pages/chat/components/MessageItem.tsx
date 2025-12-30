@@ -1,6 +1,7 @@
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
 import Avatar from "./Avatar";
 import DateMarker from "./DateMarker";
+import { highlightText } from "@/lib/textHighlight";
 
 interface MessageItemProps {
   message: IMessage;
@@ -13,6 +14,7 @@ interface MessageItemProps {
   selectedConversation: IConversation | null;
   onTogglePin: (messageId: string, currentlyPinned: boolean) => void;
   onDeleteMessage: (messageId: string) => void;
+  searchKeyword?: string;
 }
 
 const formatTime = (timestamp: string) => {
@@ -67,6 +69,7 @@ const MessageItem = ({
   userUsername,
   onTogglePin,
   onDeleteMessage,
+  searchKeyword,
 }: MessageItemProps) => {
   const showDateMarker = shouldShowDateMarker(message, previousMessage);
 
@@ -518,7 +521,11 @@ const MessageItem = ({
                     marginBottom: "4px",
                   }}
                 >
-                  {message.content}
+                  {searchKeyword && searchKeyword.trim() ? (
+                    highlightText(message.content, searchKeyword)
+                  ) : (
+                    message.content
+                  )}
                 </div>
               )}
 

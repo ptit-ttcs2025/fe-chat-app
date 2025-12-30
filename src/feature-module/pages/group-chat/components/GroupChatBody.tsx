@@ -29,6 +29,8 @@ interface GroupChatBodyProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  // Search props
+  searchKeyword?: string;
 }
 
 const GroupChatBody = ({
@@ -49,6 +51,7 @@ const GroupChatBody = ({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  searchKeyword = "",
 }: GroupChatBodyProps) => {
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const loadMoreThrottleRef = useRef<boolean>(false);
@@ -170,6 +173,7 @@ const GroupChatBody = ({
     lastMessageCountRef.current = currentCount;
   }, [messages.length, isLoadingMore, scrollToBottom]);
 
+
   // Empty state
   if (!selectedConversation) {
     return (
@@ -266,7 +270,7 @@ const GroupChatBody = ({
             style={{
               position: "sticky",
               top: 0,
-              zIndex: 50,
+              zIndex: 100,
               backgroundColor: "#fff",
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
             }}
@@ -375,6 +379,7 @@ const GroupChatBody = ({
                 selectedConversation={selectedConversation}
                 onTogglePin={onTogglePin}
                 onDeleteMessage={onDeleteMessage}
+                searchKeyword={searchKeyword}
               />
             );
           })}
