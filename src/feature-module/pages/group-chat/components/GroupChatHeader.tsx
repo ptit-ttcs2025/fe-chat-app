@@ -15,12 +15,13 @@ interface GroupChatHeaderProps {
   group: IGroup | undefined | null;
   members: IGroupMember[];
   onlineMembersCount: number;
-  onToggleSearch: () => void;
+  onToggleSearch?: () => void; // Deprecated, kept for backward compatibility
   onShowEditGroup: () => void;
+  onLeaveGroup?: () => void; // Optional for backward compatibility with chat.tsx
   isAdmin: boolean;
-  showSearch: boolean;
-  searchKeyword: string;
-  onSearchChange: (keyword: string) => void;
+  showSearch?: boolean; // Deprecated
+  searchKeyword?: string; // Deprecated
+  onSearchChange?: (keyword: string) => void; // Deprecated
 }
 
 const GroupChatHeader = ({
@@ -30,6 +31,7 @@ const GroupChatHeader = ({
   onlineMembersCount,
   onToggleSearch,
   onShowEditGroup,
+  onLeaveGroup,
   isAdmin,
   showSearch,
   searchKeyword,
@@ -118,10 +120,8 @@ const GroupChatHeader = ({
                 <Link
                   to="#"
                   className="btn chat-search-btn"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onToggleSearch();
-                  }}
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#chat-search-sidebar"
                 >
                   <i className="ti ti-search" />
                 </Link>
@@ -182,33 +182,13 @@ const GroupChatHeader = ({
                 <li>
                   <Link
                     to="#"
-                    className="dropdown-item"
-                    data-bs-toggle="modal"
-                    data-bs-target="#mute-notification"
-                  >
-                    <i className="ti ti-volume-off me-2" />
-                    Tắt thông báo
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="#"
-                    className="dropdown-item"
-                    data-bs-toggle="modal"
-                    data-bs-target="#clear-chat"
-                  >
-                    <i className="ti ti-clear-all me-2" />
-                    Xóa tin nhắn
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="#"
                     className="dropdown-item text-danger"
-                    data-bs-toggle="modal"
-                    data-bs-target="#delete-chat"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onLeaveGroup?.();
+                    }}
                   >
-                    <i className="ti ti-trash me-2" />
+                    <i className="ti ti-logout me-2" />
                     {isAdmin ? "Xóa nhóm" : "Rời nhóm"}
                   </Link>
                 </li>
@@ -229,7 +209,7 @@ const GroupChatHeader = ({
                 className="form-control"
                 placeholder="Tìm kiếm tin nhắn"
                 value={searchKeyword}
-                onChange={(e) => onSearchChange(e.target.value)}
+                onChange={(e) => onSearchChange?.(e.target.value)}
               />
               <span className="input-group-text">
                 <i className="ti ti-search" />

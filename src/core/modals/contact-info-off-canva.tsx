@@ -114,7 +114,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
   // ✅ Combined loading state
   const isLoadingData = loadingConversationDetail || loadingPeer;
 
-  // Lấy ảnh từ conversation
+  // Lấy ảnh từ conversation - DISABLED: API không có sẵn
   const {
     media: images,
     isLoading: loadingImages,
@@ -125,10 +125,10 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     conversationId: selectedConversation?.id || null,
     type: "IMAGE",
     pageSize: 12,
-    enabled: !!selectedConversation?.id,
+    enabled: false, // Disabled vì API không có sẵn
   });
 
-  // Lấy files từ conversation
+  // Lấy files từ conversation - DISABLED: API không có sẵn
   const {
     media: files,
     isLoading: loadingFiles,
@@ -139,7 +139,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     conversationId: selectedConversation?.id || null,
     type: "FILE",
     pageSize: 10,
-    enabled: !!selectedConversation?.id,
+    enabled: false, // Disabled vì API không có sẵn
   });
 
   // Format file size

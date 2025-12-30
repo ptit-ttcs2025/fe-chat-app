@@ -5,6 +5,10 @@
 
 import { useEffect, useState, useCallback, useRef, RefObject } from "react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
+import { all_routes } from "@/feature-module/router/all_routes";
 
 // API & Hooks
 import { useChatMessages } from "@/hooks/useChatMessages";
@@ -14,6 +18,8 @@ import { useWebSocketStatus, useChatActions } from "@/hooks/useWebSocketChat";
 import websocketService from "@/core/services/websocket.service";
 import type { IMessage, IConversation } from "@/apis/chat/chat.type";
 import { uploadImage, uploadFile, chatApi } from "@/apis/chat/chat.api";
+import { useQueryClient } from "@tanstack/react-query";
+import { groupApi } from "@/apis/group/group.api";
 
 // Components
 import GroupChatHeader from "./components/GroupChatHeader";
@@ -22,6 +28,7 @@ import ChatFooter from "../chat/components/ChatFooter"; // Using ChatFooter from
 import TypingIndicator from "../chat/components/TypingIndicator";
 import { chatStyles } from "../chat/styles/chatStyles";
 import CommonGroupModal from "@/core/modals/common-group-modal"; // Group modals (NewGroup, AddGroup, etc.)
+import ChatSearchSidebar from "@/core/modals/chat-search-sidebar";
 
 // Redux State Interface
 interface RootState {
@@ -40,6 +47,10 @@ interface RootState {
 }
 
 const GroupChat = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const MySwal = withReactContent(Swal);
+
   // ==================== Redux State ====================
   const user = useSelector((state: RootState) => state.auth?.user);
   const selectedConversationId = useSelector(
@@ -47,7 +58,6 @@ const GroupChat = () => {
   );
 
   // ==================== Local State (UI) ====================
-  const [showSearch, setShowSearch] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [inputMessage, setInputMessage] = useState("");
   const [selectedConversation, setSelectedConversation] =
@@ -257,6 +267,7 @@ const GroupChat = () => {
     }
   }, [searchKeyword, messages]);
 
+
   // Focus input when conversation changes
   useEffect(() => {
     if (selectedConversation) {
@@ -332,10 +343,6 @@ const GroupChat = () => {
 
   // ==================== Handlers ====================
 
-  const toggleSearch = useCallback(() => {
-    setShowSearch((prev) => !prev);
-  }, []);
-
   // Handler để mở modal chỉnh sửa nhóm (edit-group)
   const handleShowEditGroup = useCallback(() => {
     // Đợi một chút để đảm bảo modal đã được render
@@ -367,6 +374,99 @@ const GroupChat = () => {
       }
     }, 100);
   }, []);
+
+  // Handle scroll to message from search sidebar
+  const handleSearchMessageClick = useCallback((messageId: string) => {
+    // Scroll to message in chat body
+    setTimeout(() => {
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+        // Temporary highlight
+        messageElement.classList.add('highlight-message-temp');
+        setTimeout(() => {
+          messageElement.classList.remove('highlight-message-temp');
+        }, 2000);
+      }
+    }, 100);
+  }, []);
+
+  // Handle leave group
+  const handleLeaveGroup = useCallback(async () => {
+    if (!selectedConversation) return;
+
+    const groupName = group?.name || selectedConversation?.name || "nhóm này";
+
+    // Show confirmation dialog
+    const result = await MySwal.fire({
+      title: 'Xác nhận rời nhóm',
+      html: `Bạn có chắc chắn muốn rời khỏi <strong>${groupName}</strong>?<br><br><small class="text-muted">Bạn sẽ không thể xem tin nhắn hoặc thông tin nhóm sau khi rời.</small>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: '<i class="ti ti-logout me-2"></i>Rời nhóm',
+      cancelButtonText: '<i class="ti ti-x me-2"></i>Hủy',
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    try {
+      // Get groupId - fetch conversation detail if not available
+      let groupId = selectedConversation.groupId;
+      
+      if (!groupId) {
+        // Fetch conversation detail to get groupId
+        const conversationDetail = await chatApi.getConversation(selectedConversation.id);
+        groupId = conversationDetail.data?.groupId;
+        
+        if (!groupId) {
+          throw new Error('Không tìm thấy groupId trong thông tin nhóm');
+        }
+      }
+
+      // Call API using groupApi.leaveGroup
+      await groupApi.leaveGroup(groupId);
+
+      // Invalidate conversations query to update the list
+      queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+
+      // Show success notification
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Đã rời nhóm!',
+        text: `Bạn đã rời khỏi ${groupName}`,
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+      });
+
+      // Navigate to index page
+      navigate(all_routes.index);
+    } catch (error: any) {
+      console.error('❌ Error leaving group:', error);
+      
+      // Show error notification
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: 'Lỗi!',
+        text: error?.response?.data?.message || error?.message || 'Không thể rời nhóm. Vui lòng thử lại.',
+        showConfirmButton: false,
+        timer: 3000,
+      });
+    }
+  }, [selectedConversation, group, navigate, queryClient, MySwal]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -672,12 +772,9 @@ const GroupChat = () => {
             group={group}
             members={members}
             onlineMembersCount={getOnlineMembersCount()}
-            onToggleSearch={toggleSearch}
             onShowEditGroup={handleShowEditGroup}
+            onLeaveGroup={handleLeaveGroup}
             isAdmin={isAdmin(user?.id || "")}
-            showSearch={showSearch}
-            searchKeyword={searchKeyword}
-            onSearchChange={setSearchKeyword}
           />
         </div>
 
@@ -713,6 +810,7 @@ const GroupChat = () => {
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
             onLoadMore={loadMoreMessages}
+            searchKeyword={searchKeyword}
           />
         </div>
 
@@ -752,6 +850,16 @@ const GroupChat = () => {
 
       {/* Group Modals (NewGroup, AddGroup, EditGroup, etc.) */}
       <CommonGroupModal />
+      
+      {/* Chat Search Sidebar */}
+      <ChatSearchSidebar
+        selectedConversation={selectedConversation}
+        messages={messages}
+        searchKeyword={searchKeyword}
+        onSearchChange={setSearchKeyword}
+        onMessageClick={handleSearchMessageClick}
+        currentUserId={user?.id}
+      />
     </>
   );
 };

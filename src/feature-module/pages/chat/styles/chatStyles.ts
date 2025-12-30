@@ -864,5 +864,26 @@ export const chatStyles = `
   .emoji-grid::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
   }
+  
+  /* ========== TEMPORARY HIGHLIGHT FOR SEARCH SIDEBAR CLICK ========== */
+  .highlight-message-temp {
+    background-color: rgba(255, 235, 59, 0.2) !important;
+    border-radius: 8px;
+    padding: 4px;
+    transition: background-color 0.3s ease;
+    animation: highlightTempPulse 0.5s ease-in-out;
+  }
+
+  @keyframes highlightTempPulse {
+    0% {
+      background-color: rgba(255, 235, 59, 0.4);
+    }
+    50% {
+      background-color: rgba(255, 235, 59, 0.6);
+    }
+    100% {
+      background-color: rgba(255, 235, 59, 0.2);
+    }
+  }
 `;
 

@@ -69,6 +69,16 @@ export const deleteGroup = async (groupId: string): Promise<ApiResponse<void>> =
   return response.data;
 };
 
+/**
+ * Rời khỏi nhóm
+ * POST /groups/{groupId}/leave
+ * Note: Admin phải chuyển quyền trước khi có thể rời nhóm
+ */
+export const leaveGroup = async (groupId: string): Promise<ApiResponse<void>> => {
+  const response = await http.post<ApiResponse<void>>(`${URI}/groups/${groupId}/leave`);
+  return response.data;
+};
+
 // ===========================
 // GROUP MEMBER MANAGEMENT APIs
 // ===========================
@@ -150,6 +160,7 @@ export const groupApi = {
   getGroup,
   updateGroup,
   deleteGroup,
+  leaveGroup,
 
   // Member Management
   addMembers,
