@@ -115,7 +115,6 @@ const Chat = () => {
   // Conversations list (both ONE_TO_ONE and GROUP for unified chat)
   const {
     conversations,
-    useConversation,
   } = useChatConversations({
     pageSize: 50,
     autoRefresh: true,
@@ -990,24 +989,6 @@ const Chat = () => {
     );
   }
 
-  // Loading state when fetching conversation from API
-  if (isLoadingConversation && selectedConversationId && !selectedConversation) {
-    return (
-      <div className="content main_content">
-        <div
-          className="d-flex align-items-center justify-content-center"
-          style={{ height: "100vh" }}
-        >
-          <div className="text-center">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Loading...</span>
-            </div>
-            <h5 className="mt-3">Đang tải cuộc trò chuyện...</h5>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
