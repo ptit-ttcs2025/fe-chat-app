@@ -324,7 +324,21 @@ export const getConversations = async (
 
   // Nếu response đã là { meta, results } (đã unwrap)
   if ('results' in responseData && Array.isArray(responseData.results)) {
-    return responseData as PaginatedResponse<IConversation>;
+    const result = responseData as PaginatedResponse<IConversation>;
+
+    // Debug: Verify GROUP conversations have groupId
+    const groupConvs = result.results.filter(c => c.type === 'GROUP');
+    if (groupConvs.length > 0) {
+      console.log('📡 [API] GROUP conversations:', groupConvs.map(c => ({
+        id: c.id,
+        type: c.type,
+        name: c.name,
+        groupId: c.groupId,
+        hasGroupId: !!c.groupId,
+      })));
+    }
+
+    return result;
   }
 
   // Nếu response là { data: { meta, results } }
@@ -349,6 +363,7 @@ export const getConversation = async (
   const response = await http.get<ApiResponse<IConversation>>(
     `${URI}/conversations/${conversationId}`
   );
+  console.log('📡 getConversation response:', response);
   return response.data;
 };
 

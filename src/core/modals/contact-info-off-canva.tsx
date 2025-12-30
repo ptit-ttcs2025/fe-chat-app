@@ -1,8 +1,6 @@
-import { useState, useMemo } from "react";
+import {useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import VideoModal from "../hooks/video-modal";
-import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import ImageWithBasePath from "../common/imageWithBasePath";
 import { useGetUserById } from "@/apis/user/user.api";
@@ -18,12 +16,6 @@ interface ContactInfoProps {
 }
 
 const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
-  const [showModal, setShowModal] = useState(false);
-  const [open1, setOpen1] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const handleOpenModal = () => setShowModal(true);
-  const handleCloseModal = () => setShowModal(false);
-
   // Subscribe to friend nickname updates via WebSocket
   useFriendNicknameWebSocket(true);
 
@@ -137,37 +129,12 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     enabled: !!selectedConversation?.id,
   });
 
-  // Format file size
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return "0 KB";
-    const kb = bytes / 1024;
-    if (kb >= 1024) {
-      const mb = kb / 1024;
-      return `${mb.toFixed(1)} MB`;
-    }
-    return `${kb.toFixed(1)} KB`;
-  };
-
-  // Get file icon based on mime type
-  const getFileIcon = (mimeType: string) => {
-    if (mimeType.includes("pdf")) return "ti-file-type-pdf";
-    if (mimeType.includes("word") || mimeType.includes("document"))
-      return "ti-file-type-doc";
-    if (mimeType.includes("excel") || mimeType.includes("spreadsheet"))
-      return "ti-file-type-xls";
-    if (mimeType.includes("zip") || mimeType.includes("compressed"))
-      return "ti-file-zip";
-    if (mimeType.includes("video")) return "ti-video";
-    if (mimeType.includes("audio")) return "ti-music";
-    return "ti-file";
-  };
-
-  // Prepare lightbox slides
-  const lightboxSlides = images.map((img) => ({
-    src: img.attachment.url.startsWith("http")
-      ? img.attachment.url
-      : `${import.meta.env.VITE_IMG_PATH || ""}${img.attachment.url}`,
-  }));
+  // // Prepare lightbox slides
+  // images.map((img) => ({
+  //   src: img.attachment.url.startsWith("http")
+  //     ? img.attachment.url
+  //     : `${import.meta.env.VITE_IMG_PATH || ""}${img.attachment.url}`,
+  // }));
 
   return (
     <>
@@ -322,7 +289,6 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
               {isOneToOneConversation(selectedConversation?.type) && peerUserId && peerProfile && (
                 <div className="content-wrapper">
                   <h5 className="sub-title">
-                    <i className="ti ti-tag me-2" />
                     Biệt danh
                   </h5>
                   <div className="card">
@@ -366,7 +332,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
             </div>
           </div> */}
               <div className="content-wrapper">
-                <h5 className="sub-title">Ảnh/Tệp</h5>
+                <h5 className="sub-title">Ảnh/File</h5>
                 <div className="chat-file">
                   <div className="file-item">
                     <div
@@ -427,7 +393,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                             aria-controls="media-document"
                           >
                             <i className="ti ti-file me-2" />
-                            Tài liệu {totalFiles > 0 && `(${totalFiles})`}
+                            File {totalFiles > 0 && `(${totalFiles})`}
                           </Link>
                         </h2>
                         <div
@@ -643,19 +609,19 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                     {/*    </span>*/}
                     {/*  </div>*/}
                     {/*</Link>*/}
-                    <Link to="#" className="list-group-item">
-                      <div className="profile-info">
-                        <h6>
-                          <i className="ti ti-user-off me-2 text-info" />
-                          Chặn người dùng
-                        </h6>
-                      </div>
-                      <div>
-                        <span className="link-icon">
-                          <i className="ti ti-chevron-right" />
-                        </span>
-                      </div>
-                    </Link>
+                    {/*<Link to="#" className="list-group-item">*/}
+                    {/*  <div className="profile-info">*/}
+                    {/*    <h6>*/}
+                    {/*      <i className="ti ti-user-off me-2 text-info" />*/}
+                    {/*      Chặn người dùng*/}
+                    {/*    </h6>*/}
+                    {/*  </div>*/}
+                    {/*  <div>*/}
+                    {/*    <span className="link-icon">*/}
+                    {/*      <i className="ti ti-chevron-right" />*/}
+                    {/*    </span>*/}
+                    {/*  </div>*/}
+                    {/*</Link>*/}
                     <Link to="#" className="list-group-item">
                       <div className="profile-info">
                         <h6>
@@ -669,24 +635,24 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                         </span>
                       </div>
                     </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal"
-                      data-bs-target="#delete-chat"
-                      className="list-group-item"
-                    >
-                      <div className="profile-info">
-                        <h6>
-                          <i className="ti ti-trash me-2 text-danger" />
-                          Xóa cuộc trò chuyện
-                        </h6>
-                      </div>
-                      <div>
-                        <span className="link-icon">
-                          <i className="ti ti-chevron-right" />
-                        </span>
-                      </div>
-                    </Link>
+                    {/*<Link*/}
+                    {/*  to="#"*/}
+                    {/*  data-bs-toggle="modal"*/}
+                    {/*  data-bs-target="#delete-chat"*/}
+                    {/*  className="list-group-item"*/}
+                    {/*>*/}
+                    {/*  <div className="profile-info">*/}
+                    {/*    <h6>*/}
+                    {/*      <i className="ti ti-trash me-2 text-danger" />*/}
+                    {/*      Xóa cuộc trò chuyện*/}
+                    {/*    </h6>*/}
+                    {/*  </div>*/}
+                    {/*  <div>*/}
+                    {/*    <span className="link-icon">*/}
+                    {/*      <i className="ti ti-chevron-right" />*/}
+                    {/*    </span>*/}
+                    {/*  </div>*/}
+                    {/*</Link>*/}
                   </div>
                 </div>
               </div>

@@ -22,6 +22,7 @@ import ChatFooter from "../chat/components/ChatFooter"; // Using ChatFooter from
 import TypingIndicator from "../chat/components/TypingIndicator";
 import { chatStyles } from "../chat/styles/chatStyles";
 import CommonGroupModal from "@/core/modals/common-group-modal"; // Group modals (NewGroup, AddGroup, etc.)
+import GroupInfo from "@/core/modals/group-info-off-canva"; // Group info sidebar
 
 // Redux State Interface
 interface RootState {
@@ -70,23 +71,94 @@ const GroupChat = () => {
   const isWsConnected = useWebSocketStatus();
 
   // Group conversations list (filter type=GROUP)
-  const { conversations } = useChatConversations({
+  const {
+    conversations,
+    useConversation
+  } = useChatConversations({
     pageSize: 50,
     autoRefresh: true,
     type: "GROUP", // Filter only GROUP conversations
   });
 
-  // Sync conversation from Redux
+  // Fetch single conversation from API (fallback when not in list)
+  const {
+    data: conversationFromAPI,
+    isLoading: isLoadingConversation
+  } = useConversation(
+    selectedConversationId &&
+    !conversations.find((c) => c.id === selectedConversationId)
+      ? selectedConversationId
+      : null
+  );
+
+  // Sync conversation from Redux with fallback to API
   useEffect(() => {
-    if (selectedConversationId && conversations.length > 0) {
-      const conv = conversations.find((c) => c.id === selectedConversationId);
-      if (conv) {
-        setSelectedConversation(conv);
-      }
+    console.log('🔍 [GroupChat] Sync conversation:', {
+      selectedConversationId,
+      conversationsLength: conversations.length,
+      conversationTypes: conversations.map(c => ({ id: c.id, type: c.type, name: c.name })),
+    });
+
+    if (!selectedConversationId) {
+      setSelectedConversation(null);
+      return;
     }
-  }, [selectedConversationId, conversations]);
+
+    // Try to find in local list first
+    const convFromList = conversations.find((c) => c.id === selectedConversationId);
+
+    if (convFromList) {
+      console.log('✅ [GroupChat] Found conversation in local list:', {
+        id: convFromList.id,
+        type: convFromList.type,
+        name: convFromList.name,
+        groupId: convFromList.groupId,
+      });
+      setSelectedConversation(convFromList);
+      return;
+    }
+
+    // Fallback: Use conversation from API if available
+    if (conversationFromAPI?.data) {
+      console.log('✅ [GroupChat] Using conversation from API fallback:', {
+        id: conversationFromAPI.data.id,
+        type: conversationFromAPI.data.type,
+        name: conversationFromAPI.data.name,
+        groupId: conversationFromAPI.data.groupId,
+      });
+      setSelectedConversation(conversationFromAPI.data);
+      return;
+    }
+
+    // If we have an ID but no conversation yet, log warning
+    if (conversations.length > 0) {
+      console.warn('⚠️ [GroupChat] Conversation not found:', {
+        selectedConversationId,
+        availableIds: conversations.map(c => c.id),
+      });
+    }
+  }, [selectedConversationId, conversations, conversationFromAPI]);
 
   // Group management hook
+  // Add safety checks and logging
+  const groupId = selectedConversation?.groupId || null;
+
+  // Debug log for group conversation
+  useEffect(() => {
+    if (selectedConversation) {
+      console.log('🏢 [GroupChat] GROUP conversation selected:', {
+        conversationId: selectedConversation.id,
+        groupId: selectedConversation.groupId,
+        hasGroupId: !!selectedConversation.groupId,
+        name: selectedConversation.name,
+      });
+
+      if (!selectedConversation.groupId) {
+        console.error('❌ [GroupChat] GROUP conversation missing groupId!', selectedConversation);
+      }
+    }
+  }, [selectedConversation]);
+
   const {
     group,
     members,
@@ -97,8 +169,8 @@ const GroupChat = () => {
     isAdmin,
     getOnlineMembersCount,
   } = useGroupManagement({
-    groupId: selectedConversation?.groupId || null,
-    autoFetchMembers: true,
+    groupId,
+    autoFetchMembers: !!groupId,
   });
 
   // Messages hook (reuse from chat - supports both ONE_TO_ONE and GROUP)
@@ -752,6 +824,9 @@ const GroupChat = () => {
 
       {/* Group Modals (NewGroup, AddGroup, EditGroup, etc.) */}
       <CommonGroupModal />
+
+      {/* Group Info Sidebar */}
+      <GroupInfo selectedConversation={selectedConversation} />
     </>
   );
 };

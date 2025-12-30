@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 
 // Theme Components
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
+import GroupInfo from "../../../core/modals/group-info-off-canva";
 
 // API & Hooks - Tích hợp real-time
 import { useChatMessages } from "@/hooks/useChatMessages";
@@ -99,21 +100,71 @@ const Chat = () => {
   // Conversations list (both ONE_TO_ONE and GROUP for unified chat)
   const {
     conversations,
+    useConversation,
   } = useChatConversations({
     pageSize: 50,
     autoRefresh: true,
     // No type filter - handle both ONE_TO_ONE and GROUP
   });
 
-  // Sync conversation from Redux
+  // Fetch single conversation from API (fallback when not in list)
+  const {
+    data: conversationFromAPI,
+    isLoading: isLoadingConversation
+  } = useConversation(
+    selectedConversationId &&
+    !conversations.find((c) => c.id === selectedConversationId)
+      ? selectedConversationId
+      : null
+  );
+
+  // Sync conversation from Redux with fallback to API
   useEffect(() => {
-    if (selectedConversationId && conversations.length > 0) {
-      const conv = conversations.find((c) => c.id === selectedConversationId);
-      if (conv) {
-        setSelectedConversation(conv);
-      }
+    console.log('🔍 [Chat] Sync conversation:', {
+      selectedConversationId,
+      conversationsLength: conversations.length,
+      conversationTypes: conversations.map(c => ({ id: c.id, type: c.type, name: c.name })),
+    });
+
+    if (!selectedConversationId) {
+      setSelectedConversation(null);
+      return;
     }
-  }, [selectedConversationId, conversations]);
+
+    // Try to find in local list first
+    const convFromList = conversations.find((c) => c.id === selectedConversationId);
+
+    if (convFromList) {
+      console.log('✅ [Chat] Found conversation in local list:', {
+        id: convFromList.id,
+        type: convFromList.type,
+        name: convFromList.name,
+        groupId: convFromList.groupId,
+      });
+      setSelectedConversation(convFromList);
+      return;
+    }
+
+    // Fallback: Use conversation from API if available
+    if (conversationFromAPI?.data) {
+      console.log('✅ [Chat] Using conversation from API fallback:', {
+        id: conversationFromAPI.data.id,
+        type: conversationFromAPI.data.type,
+        name: conversationFromAPI.data.name,
+        groupId: conversationFromAPI.data.groupId,
+      });
+      setSelectedConversation(conversationFromAPI.data);
+      return;
+    }
+
+    // If we have an ID but no conversation yet, log warning
+    if (conversations.length > 0) {
+      console.warn('⚠️ [Chat] Conversation not found:', {
+        selectedConversationId,
+        availableIds: conversations.map(c => c.id),
+      });
+    }
+  }, [selectedConversationId, conversations, conversationFromAPI]);
 
   // Messages cho conversation đã chọn (Cursor-based pagination)
   const {
@@ -136,6 +187,29 @@ const Chat = () => {
   });
 
   // Group management hook (for GROUP conversations)
+  // Add safety checks and logging
+  const groupId = selectedConversation?.type === 'GROUP'
+    ? (selectedConversation?.groupId || null)
+    : null;
+
+  const shouldFetchMembers = selectedConversation?.type === 'GROUP' && !!groupId;
+
+  // Debug log for group conversation
+  useEffect(() => {
+    if (selectedConversation?.type === 'GROUP') {
+      console.log('🏢 [Chat] GROUP conversation selected:', {
+        conversationId: selectedConversation.id,
+        groupId: selectedConversation.groupId,
+        hasGroupId: !!selectedConversation.groupId,
+        name: selectedConversation.name,
+      });
+
+      if (!selectedConversation.groupId) {
+        console.error('❌ [Chat] GROUP conversation missing groupId!', selectedConversation);
+      }
+    }
+  }, [selectedConversation]);
+
   const {
     group,
     members,
@@ -146,8 +220,8 @@ const Chat = () => {
     isAdmin,
     getOnlineMembersCount,
   } = useGroupManagement({
-    groupId: selectedConversation?.type === 'GROUP' ? (selectedConversation?.groupId || null) : null,
-    autoFetchMembers: selectedConversation?.type === 'GROUP',
+    groupId,
+    autoFetchMembers: shouldFetchMembers,
   });
 
   // Determine if current conversation is a group
@@ -820,6 +894,25 @@ const Chat = () => {
     );
   }
 
+  // Loading state when fetching conversation from API
+  if (isLoadingConversation && selectedConversationId && !selectedConversation) {
+    return (
+      <div className="content main_content">
+        <div
+          className="d-flex align-items-center justify-content-center"
+          style={{ height: "100vh" }}
+        >
+          <div className="text-center">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <h5 className="mt-3">Đang tải cuộc trò chuyện...</h5>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Modern Styles */}
@@ -987,8 +1080,12 @@ const Chat = () => {
       </div>
       {/* /Chat */}
 
-      {/* Modals */}
-      <ContactInfo selectedConversation={selectedConversation} />
+      {/* Modals - Conditional based on conversation type */}
+      {isGroupConversation ? (
+        <GroupInfo selectedConversation={selectedConversation} />
+      ) : (
+        <ContactInfo selectedConversation={selectedConversation} />
+      )}
     </>
   );
 };

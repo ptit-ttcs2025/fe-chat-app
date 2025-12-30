@@ -32,6 +32,15 @@ const GroupTab = () => {
   // Handle conversation click
   const handleConversationClick = (conversation: IConversation, e: React.MouseEvent) => {
     e.preventDefault();
+
+    console.log('🏢 [GroupTab] Selecting GROUP conversation:', {
+      id: conversation.id,
+      type: conversation.type,
+      name: conversation.name,
+      groupId: conversation.groupId,
+      hasGroupId: !!conversation.groupId,
+    });
+
     // Dispatch Redux action to set selected conversation
     dispatch(setSelectedConversation(conversation.id));
     // Navigate to unified chat page (not group-chat)
