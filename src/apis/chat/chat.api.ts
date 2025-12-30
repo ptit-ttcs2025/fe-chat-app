@@ -353,6 +353,25 @@ export const getConversation = async (
 };
 
 /**
+ * Kiểm tra conversation ONE_TO_ONE đã tồn tại chưa
+ * GET /api/v1/conversations/check?otherUserId={userId}
+ *
+ * @param otherUserId - ID của user cần kiểm tra
+ * @returns Conversation nếu đã tồn tại, null nếu chưa
+ */
+export const checkConversationExists = async (
+  otherUserId: string
+): Promise<ApiResponse<IConversation | null>> => {
+  const response = await http.get<ApiResponse<IConversation | null>>(
+    `${URI}/conversations/check`,
+    {
+      params: { otherUserId },
+    }
+  );
+  return response.data;
+};
+
+/**
  * Tạo conversation ONE_TO_ONE mới
  * POST /api/v1/conversations
  */
@@ -543,6 +562,7 @@ export const chatApi = {
   // Conversations
   getConversations,
   getConversation,
+  checkConversationExists,
   createConversation,
   updateConversation,
   deleteConversation,

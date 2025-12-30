@@ -56,7 +56,8 @@ const Signup = () => {
         }
 
         setErrors(newErrors);
-        return false;
+        // ✅ FIX: Return true if NO errors, false if has errors
+        return Object.keys(newErrors).length === 0;
     }, [formData]);
 
     const handleChange = useCallback( (field: keyof ISignupRequest, value: string) => {

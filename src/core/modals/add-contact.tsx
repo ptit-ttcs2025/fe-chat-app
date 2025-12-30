@@ -51,7 +51,7 @@ const AddContact = () => {
 
   // Handle add friend with confirmation
   const handleAddFriend = async (userId: string, fullName: string) => {
-    // Show confirmation dialog
+    // Show confirmation dialog (giữ nguyên modal confirm)
     const result = await MySwal.fire({
       title: 'Xác nhận gửi lời mời',
       html: `Bạn có chắc chắn muốn gửi lời mời kết bạn đến <strong>${fullName}</strong>?`,
@@ -82,27 +82,56 @@ const AddContact = () => {
       // Backend sẽ tự động gửi WebSocket notification đến người nhận
       // NotificationContext sẽ tự động xử lý khi nhận được notification
 
-      // Show success alert
+      // Show success toast notification
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'success',
         title: 'Thành công!',
-        html: `Đã gửi lời mời kết bạn đến <strong>${fullName}</strong>`,
-        confirmButtonText: 'Tuyệt vời!',
-        confirmButtonColor: '#28a745',
-        timer: 3000,
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Đã gửi lời mời kết bạn đến <strong>${fullName}</strong> 📨
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
         timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || 'Gửi lời mời kết bạn thất bại!';
       
-      // Show error alert
+      // Show error toast notification
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Oops...',
-        text: errorMessage,
-        confirmButtonText: 'Thử lại',
-        confirmButtonColor: '#dc3545',
-        footer: '<p>Vui lòng kiểm tra lại kết nối hoặc thử lại sau.</p>'
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${errorMessage}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     }
   };

@@ -5,10 +5,13 @@ import { Helmet } from 'react-helmet-async';
 // Route Protection Components
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
+import { AdminGuard } from '@/core/guards/AdminGuard';
+
+// Error Handling
+import ErrorBoundary from '@/core/components/ErrorBoundary';
 
 // Layout Components
 import Feature from '../feature';
-import AuthFeature from '../authFeature';
 import AdminFeature from '../adminFeature';
 import AdminAuthFeature from '../adminAuthFeature';
 
@@ -22,6 +25,7 @@ import AdminLogin from '../admin/authentication/login';
 
 // Routes Config
 import { userRoutes, authRoutes, adminRoutes, adminAuth } from './router.link';
+import { all_routes } from './all_routes';
 
 // Toast Notification Manager
 import NotificationToastManager from '@/core/components/NotificationToastManager';
@@ -44,22 +48,65 @@ const Mainapp: React.FC = () => {
   }, [fullTitle]);
 
   const [styleLoaded, setStyleLoaded] = useState(false);
+  const [currentStyleContext, setCurrentStyleContext] = useState<'admin' | 'user' | null>(null);
 
   useEffect(() => {
-    setStyleLoaded(false); // Reset styleLoaded when pathname changes
+    const isAdminRoute = location.pathname.includes("/admin");
+    const newContext = isAdminRoute ? 'admin' : 'user';
+    
+    // Initial load hoặc chuyển context (admin <-> user)
+    if (currentStyleContext === null || currentStyleContext !== newContext) {
+      setStyleLoaded(false);
+      setCurrentStyleContext(newContext);
 
-    if (location.pathname.includes("/admin")) {
-      import("../../assets/style/admin/main.scss")
-        .then(() => setStyleLoaded(true))
-        .catch((err) => console.error("Admin style load error: ", err));
+      const loadStyle = async () => {
+        try {
+          if (isAdminRoute) {
+            await import("../../assets/style/admin/main.scss");
+          } else {
+            await import("../../assets/style/scss/main.scss");
+          }
+          // Đợi một chút để đảm bảo style được apply và DOM được update
+          await new Promise(resolve => setTimeout(resolve, 150));
+          setStyleLoaded(true);
+        } catch (err) {
+          console.error(`${isAdminRoute ? 'Admin' : 'Main'} style load error: `, err);
+          // Vẫn set styleLoaded = true để không bị màn hình trắng vĩnh viễn
+          // Nhưng đợi một chút để component có thời gian render
+          await new Promise(resolve => setTimeout(resolve, 150));
+          setStyleLoaded(true);
+        }
+      };
+
+      loadStyle();
     } else {
-      import("../../assets/style/scss/main.scss")
-        .then(() => setStyleLoaded(true))
-        .catch((err) => console.error("Main style load error: ", err));
+      // Đã ở cùng context, không cần load lại style
+      if (!styleLoaded) {
+        setStyleLoaded(true);
+      }
     }
-  }, [location.pathname]);
+  }, [location.pathname, currentStyleContext]);
+  
   if (!styleLoaded) {
-    return null; // You could show a loading spinner here if necessary
+    // Show loading spinner while styles are loading
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        width: '100vw',
+        backgroundColor: '#fff'
+      }}>
+        <div className="spinner-border text-primary" role="status" style={{
+          width: '48px',
+          height: '48px',
+          borderWidth: '4px'
+        }}>
+          <span className="visually-hidden">Đang tải...</span>
+        </div>
+      </div>
+    );
   }
     return (
         <>
@@ -117,6 +164,28 @@ const Mainapp: React.FC = () => {
                 {/*    ))}*/}
                 {/*</Route>*/}
 
+                {/* Protected Admin Routes - Need admin authentication + admin role */}
+                {/* Đặt AdminFeature trước Feature để đảm bảo admin routes được match trước */}
+                <Route element={
+                    <ProtectedRoute>
+                        <ErrorBoundary>
+                            <AdminFeature />
+                        </ErrorBoundary>
+                    </ProtectedRoute>
+                }>
+                    {adminRoutes.map((route, idx) => (
+                        <Route
+                            key={idx}
+                            path={route.path}
+                            element={
+                                <AdminGuard>
+                                    {route.element}
+                                </AdminGuard>
+                            }
+                        />
+                    ))}
+                </Route>
+
                 {/* Protected Auth Routes - Need authentication */}
                 <Route element={
                     <ProtectedRoute>
@@ -132,26 +201,21 @@ const Mainapp: React.FC = () => {
                     ))}
                 </Route>
 
-                {/* Protected Admin Routes - Need admin authentication */}
-                {/*<Route element={*/}
-                {/*    <ProtectedRoute>*/}
-                {/*        <AdminFeature />*/}
-                {/*    </ProtectedRoute>*/}
-                {/*}>*/}
-                {/*    {adminRoutes.map((route, idx) => (*/}
-                {/*        <Route*/}
-                {/*            key={idx}*/}
-                {/*            path={route.path}*/}
-                {/*            element={route.element}*/}
-                {/*        />*/}
-                {/*    ))}*/}
-                {/*</Route>*/}
+                {/* Admin fallback route - redirect /admin to /admin/login if not authenticated, or /admin/index if authenticated */}
+                <Route
+                    path="/admin"
+                    element={
+                        <ProtectedRoute>
+                            <AdminGuard>
+                                <Navigate to={all_routes.dashboard} replace />
+                            </AdminGuard>
+                        </ProtectedRoute>
+                    }
+                />
 
-                {/* Admin Auth Routes */}
+                {/* Admin Auth Routes - /admin/ redirects to /admin/login for consistency */}
                 <Route path="/admin/" element={
-                    <PublicRoute restricted>
-                        <AdminLogin />
-                    </PublicRoute>
+                    <Navigate to={all_routes.login} replace />
                 } />
 
                 <Route element={<AdminAuthFeature />}>

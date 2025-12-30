@@ -5,13 +5,16 @@ import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
 import { useGetFriendDetail } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
 import { useModalCleanup } from '@/hooks/useModalCleanup';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createConversation } from '@/apis/chat/chat.api';
+import { useQueryClient } from '@tanstack/react-query';
+import { checkConversationExists, createConversation } from '@/apis/chat/chat.api';
 import { useDispatch } from 'react-redux';
 import { setSelectedConversation } from '@/core/data/redux/commonSlice';
 import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
+import type { IConversation } from '@/apis/chat/chat.type';
+import websocketService from '@/core/services/websocket.service';
+import { useState } from 'react';
 
 const ContactDetails = () => {
     const routes = all_routes;
@@ -22,93 +25,155 @@ const ContactDetails = () => {
     const { setActiveTab, setIsCollapsed } = useSidebarCollapse();
     const MySwal = withReactContent(Swal);
 
+    const [loading, setLoading] = useState(false);
+
     // Cleanup modal on navigation
     useModalCleanup('contact-details');
-    
+
     // Fetch friend detail
     const { data: friendDetail, isLoading } = useGetFriendDetail(
         selectedFriendId || '',
         !!selectedFriendId
     );
 
-    // Create conversation mutation
-    const createConversationMutation = useMutation({
-        mutationFn: (otherMemberId: string) => createConversation(otherMemberId),
-        onSuccess: (response) => {
-            // Close loading modal FIRST
-            MySwal.close();
-
-            // Invalidate conversations list
-            queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
-
-            // Close contact details modal
-            const modal = document.getElementById('contact-details');
-            if (modal) {
-                const bsModal = (window as any).bootstrap?.Modal?.getInstance(modal);
-                bsModal?.hide();
-            }
-
-            // Select new conversation
-            if (response.data) {
-                dispatch(setSelectedConversation(response.data.id));
-
-                // Switch to chat tab and open sidebar
-                setActiveTab('chat');
-                setIsCollapsed(false);
-
-                // Navigate to chat
-                navigate(routes.chat);
-
-                // Show success message
-                MySwal.fire({
-                    icon: 'success',
-                    title: 'Thành công',
-                    text: 'Đã tạo hội thoại mới!',
-                    timer: 1500,
-                    showConfirmButton: false,
-                });
-            }
-        },
-        onError: (error: any) => {
-            // Close loading modal
-            MySwal.close();
-
-            MySwal.fire({
-                icon: 'error',
-                title: 'Lỗi',
-                text: error?.response?.data?.message || 'Không thể tạo hội thoại. Vui lòng thử lại.',
-                confirmButtonColor: '#6338F6',
-            });
-        },
-    });
-
-    // Handle start chat
+    // Handle start chat - NEW FLOW: Check first, then create if needed
     const handleStartChat = async () => {
         if (!selectedFriendId) return;
 
-        // Show loading
-        MySwal.fire({
-            title: 'Đang xử lý...',
-            text: 'Vui lòng đợi trong giây lát',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            didOpen: () => {
-                MySwal.showLoading();
-            },
-        });
+        // ✅ Set loading state
+        setLoading(true);
 
         try {
-            // Create conversation
-            createConversationMutation.mutate(selectedFriendId);
-        } catch (error) {
-            MySwal.close();
-            MySwal.fire({
-                icon: 'error',
-                title: 'Lỗi',
-                text: 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.',
-                confirmButtonColor: '#6338F6',
+            // ✅ Step 1: Check if conversation already exists
+            const checkResponse = await checkConversationExists(selectedFriendId);
+
+            console.log('✅ Check response:', checkResponse);
+
+            let conversation: IConversation | null = null;
+
+            // ✅ FIX: checkResponse IS the data (already unwrapped by interceptor)
+            // Check if checkResponse is a conversation object (not null)
+            if (checkResponse && typeof checkResponse === 'object' && 'id' in checkResponse) {
+                // ✅ Conversation exists - use it
+                conversation = checkResponse;
+                console.log('✅ Conversation exists, reusing:', conversation.id);
+            } else {
+                // ✅ Conversation doesn't exist - create new
+                console.log('⚠️ Conversation does not exist, creating new...');
+
+                const createResponse = await createConversation(selectedFriendId);
+                if (!createResponse || !createResponse.data) {
+                    throw new Error('No conversation data returned');
+                }
+                conversation = createResponse.data;
+                console.log('✅ Created new conversation:', conversation.id);
+            }
+
+            // ✅ Step 2: Process conversation (same for both existing and new)
+            if (!conversation) {
+                throw new Error('No conversation available');
+            }
+
+            // ✅ 2.1. Optimistically add/update conversation in cache
+            queryClient.setQueriesData(
+                { queryKey: ['chat', 'conversations'] },
+                (oldData: unknown) => {
+                    if (!oldData) return oldData;
+
+                    const data = oldData as { results?: IConversation[]; meta?: { totalElements?: number } };
+
+                    // Check if conversation already exists in cache
+                    const existingIndex = data.results?.findIndex(
+                        (conv: IConversation) => conv.id === conversation!.id
+                    );
+
+                    if (existingIndex !== undefined && existingIndex >= 0) {
+                        // Update existing conversation
+                        return {
+                            ...data,
+                            results: data.results?.map((conv: IConversation, idx: number) =>
+                                idx === existingIndex ? { ...conv, ...conversation } : conv
+                            ),
+                        };
+                    }
+
+                    // Add new conversation to the beginning of the list
+                    return {
+                        ...data,
+                        results: [conversation!, ...(data.results || [])],
+                        meta: {
+                            ...data.meta,
+                            totalElements: (data.meta?.totalElements || 0) + 1,
+                        },
+                    };
+                }
+            );
+
+            // ✅ 2.2. Subscribe to WebSocket
+            if (websocketService.getConnectionStatus()) {
+                websocketService.subscribeNewConversation(conversation.id);
+            }
+
+            // ✅ 2.3. Set selected conversation in Redux FIRST
+            dispatch(setSelectedConversation(conversation.id));
+
+            // ✅ 2.4. Switch to chat tab and open sidebar
+            setActiveTab('chat');
+            setIsCollapsed(false);
+
+            // ✅ 2.5. Refetch conversations to ensure sync
+            await queryClient.refetchQueries({
+                queryKey: ['chat', 'conversations'],
+                type: 'active'
             });
+
+            // ✅ 2.6. Close contact details modal
+            const modal = document.getElementById('contact-details');
+            if (modal) {
+                const bootstrap = (window as unknown as { bootstrap?: { Modal: { getInstance: (el: HTMLElement) => { hide: () => void } } } }).bootstrap;
+                const bsModal = bootstrap?.Modal?.getInstance(modal);
+                bsModal?.hide();
+            }
+
+            // ✅ 2.7. Small delay to ensure UI updates, then navigate
+            setTimeout(() => {
+                navigate(routes.chat);
+                // No success modal - user will see the conversation directly
+            }, 100);
+
+        } catch (error) {
+            console.error('❌ Error in handleStartChat:', error);
+
+            const err = error as { response?: { data?: { message?: string } } };
+            const errorMessage = err?.response?.data?.message || 'Không thể mở hội thoại. Vui lòng thử lại.';
+
+            // Show error toast notification
+            MySwal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'error',
+                title: 'Có lỗi xảy ra!',
+                html: `<div style="text-align: left;">
+                  <p style="margin: 0; font-size: 14px;">
+                    ${errorMessage}
+                  </p>
+                </div>`,
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                showClass: {
+                  popup: 'animate__animated animate__fadeInRight'
+                },
+                hideClass: {
+                  popup: 'animate__animated animate__fadeOutRight'
+                },
+                customClass: {
+                  popup: 'colored-toast'
+                }
+            });
+        } finally {
+            // ✅ Reset loading state
+            setLoading(false);
         }
     };
 
@@ -263,7 +328,7 @@ const ContactDetails = () => {
                     type="button"
                     className="btn btn-icon btn-light me-2"
                     onClick={handleStartChat}
-                    disabled={createConversationMutation.isPending}
+                    disabled={loading}
                     title="Nhắn tin"
                     style={{
                       width: '40px',
@@ -278,7 +343,7 @@ const ContactDetails = () => {
                       transition: 'all 0.2s'
                     }}
                   >
-                    {createConversationMutation.isPending ? (
+                    {loading ? (
                       <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                     ) : (
                       <i className="ti ti-message" style={{ fontSize: '18px' }} />

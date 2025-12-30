@@ -1,8 +1,16 @@
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import VideoModal from "../hooks/video-modal";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 import ImageWithBasePath from "../common/imageWithBasePath";
 import { useGetUserById } from "@/apis/user/user.api";
+import { getConversation } from "@/apis/chat/chat.api";
 import { IConversation } from "@/apis/chat/chat.type";
 import { useMediaMessages } from "@/hooks/useMediaMessages";
+import { NicknameEditor } from "@/components/NicknameEditor";
+import { useFriendNicknameWebSocket } from "@/hooks/useFriendNicknameWebSocket";
 import MediaGallery from "@/feature-module/chat/components/MediaGallery";
 
 interface ContactInfoProps {
@@ -10,11 +18,92 @@ interface ContactInfoProps {
 }
 
 const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
-  // Lấy peerUserId từ conversation
-  const peerUserId =
-    selectedConversation?.type === "PRIVATE"
-      ? selectedConversation?.peerUserId
-      : null;
+  const [showModal, setShowModal] = useState(false);
+  const [open1, setOpen1] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const handleOpenModal = () => setShowModal(true);
+  const handleCloseModal = () => setShowModal(false);
+
+  // Subscribe to friend nickname updates via WebSocket
+  useFriendNicknameWebSocket(true);
+
+  // Helper function to check if conversation is 1-1 (ONE_TO_ONE or PRIVATE)
+  const isOneToOneConversation = (type?: string) => {
+    return type === "ONE_TO_ONE" || type === "PRIVATE";
+  };
+
+  // ✅ Fetch full conversation detail to get peerUserId from backend
+  const {
+    data: conversationDetailResponse,
+    isLoading: loadingConversationDetail,
+  } = useQuery({
+    queryKey: ['conversation-detail', selectedConversation?.id],
+    queryFn: () => getConversation(selectedConversation!.id),
+    enabled: !!selectedConversation?.id && isOneToOneConversation(selectedConversation?.type),
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    retry: 1,
+  });
+
+  // Extract conversation detail from API response
+  const conversationDetail = useMemo(() => {
+    if (!conversationDetailResponse) return null;
+
+    const data = conversationDetailResponse as any;
+
+    // Handle response format: { data: { ... } }
+    if (data.data) {
+      return data.data as IConversation;
+    }
+
+    // Handle direct response format
+    if (data.id && data.type) {
+      return data as IConversation;
+    }
+
+    return null;
+  }, [conversationDetailResponse]);
+
+  // ✅ Get current user ID from localStorage
+  const currentUserId = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('auth_user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.id || user.userId || null;
+      }
+    } catch (error) {
+      console.error('❌ Failed to get current user ID:', error);
+    }
+    return null;
+  }, []);
+
+  // ✨ OPTIMIZED: Get peerUserId with priority order
+  const peerUserId = useMemo(() => {
+    if (!selectedConversation || !isOneToOneConversation(selectedConversation.type)) {
+      return null;
+    }
+
+    // Priority 1: Use peerUserId from conversation detail API (MOST RELIABLE!)
+    if (conversationDetail?.peerUserId) {
+      return conversationDetail.peerUserId;
+    }
+
+    // Priority 2: Use peerUserId from conversation list (if backend added it)
+    if (selectedConversation.peerUserId) {
+      return selectedConversation.peerUserId;
+    }
+
+    // Fallback 3: Extract from lastMessage.senderId
+    if (selectedConversation.lastMessage?.senderId && currentUserId) {
+      const senderId = selectedConversation.lastMessage.senderId;
+      if (senderId !== currentUserId) {
+        return senderId;
+      }
+    }
+
+    // Cannot determine peer user ID
+    return null;
+  }, [selectedConversation, conversationDetail, currentUserId]);
 
   // Lấy thông tin peer user từ api
   const {
@@ -23,7 +112,10 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     error,
   } = useGetUserById(peerUserId || "", !!peerUserId);
 
-  // Lấy ảnh từ conversation (chỉ để show count trong header)
+  // ✅ Combined loading state
+  const isLoadingData = loadingConversationDetail || loadingPeer;
+
+  // Lấy ảnh từ conversation
   const {
     isLoading: loadingImages,
     totalCount: totalImages,
@@ -34,7 +126,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     enabled: !!selectedConversation?.id,
   });
 
-  // Lấy files từ conversation (chỉ để show count trong header)
+  // Lấy files từ conversation
   const {
     isLoading: loadingFiles,
     totalCount: totalFiles,
@@ -44,6 +136,38 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
     pageSize: 10,
     enabled: !!selectedConversation?.id,
   });
+
+  // Format file size
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return "0 KB";
+    const kb = bytes / 1024;
+    if (kb >= 1024) {
+      const mb = kb / 1024;
+      return `${mb.toFixed(1)} MB`;
+    }
+    return `${kb.toFixed(1)} KB`;
+  };
+
+  // Get file icon based on mime type
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.includes("pdf")) return "ti-file-type-pdf";
+    if (mimeType.includes("word") || mimeType.includes("document"))
+      return "ti-file-type-doc";
+    if (mimeType.includes("excel") || mimeType.includes("spreadsheet"))
+      return "ti-file-type-xls";
+    if (mimeType.includes("zip") || mimeType.includes("compressed"))
+      return "ti-file-zip";
+    if (mimeType.includes("video")) return "ti-video";
+    if (mimeType.includes("audio")) return "ti-music";
+    return "ti-file";
+  };
+
+  // Prepare lightbox slides
+  const lightboxSlides = images.map((img) => ({
+    src: img.attachment.url.startsWith("http")
+      ? img.attachment.url
+      : `${import.meta.env.VITE_IMG_PATH || ""}${img.attachment.url}`,
+  }));
 
   return (
     <>
@@ -73,7 +197,7 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
           <div className="chat-contact-info">
             <div className="profile-content">
               <div className="contact-profile-info">
-                {loadingPeer ? (
+                {isLoadingData ? (
                   <div className="text-center py-5">
                     <div className="spinner-border text-primary" role="status">
                       <span className="visually-hidden">Đang tải...</span>
@@ -88,34 +212,38 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                     ></i>
                     <p className="text-muted mt-2">Không thể tải thông tin</p>
                   </div>
-                ) : error ? (
+                ) : error || !peerProfile ? (
                   <div className="text-center py-5">
                     <i
                       className="ti ti-alert-circle"
                       style={{ fontSize: "60px", color: "#ff4d4f" }}
                     ></i>
-                    <p className="text-danger mt-2">Không thể tải thông tin</p>
+                    <p className="text-danger mt-2">
+                      {!peerUserId
+                        ? "Không thể xác định người dùng"
+                        : "Không thể tải thông tin"}
+                    </p>
+                    {!peerUserId && (
+                      <p className="text-muted small mt-2">
+                        Backend cần thêm field "peerUserId" vào conversation response
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <>
                     <div className="avatar avatar-xxl mb-2">
                       <ImageWithBasePath
                         src={
-                          peerProfile?.avatarUrl ||
-                          selectedConversation?.avatarUrl ||
+                          peerProfile.avatarUrl ||
                           "assets/img/profiles/avatar-06.jpg"
                         }
                         className="rounded-circle"
-                        alt={peerProfile?.fullName || selectedConversation.name}
+                        alt={peerProfile.fullName}
                       />
                     </div>
-                    <h6>
-                      {peerProfile?.fullName ||
-                        selectedConversation.name ||
-                        "—"}
-                    </h6>
+                    <h6>{peerProfile.fullName || "—"}</h6>
                     <p className="text-muted small">
-                      {peerProfile?.email || ""}
+                      {peerProfile.email || ""}
                     </p>
                   </>
                 )}
@@ -150,42 +278,72 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                 <h5 className="sub-title">Thông tin</h5>
                 <div className="card">
                   <div className="card-body">
-                    <ul className="list-group profile-item">
-                      <li className="list-group-item">
-                        <div className="info">
-                          <h6>Tên người dùng</h6>
-                          <p>
-                            {peerProfile?.fullName ||
-                              selectedConversation?.name ||
-                              "_"}
-                          </p>
-                        </div>
-                        <div className="profile-icon">
-                          <i className="ti ti-user-circle" />
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="info">
-                          <h6>Email</h6>
-                          <p>{peerProfile?.email || "_"}</p>
-                        </div>
-                        <div className="icon">
-                          <i className="ti ti-mail-heart" />
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="info">
-                          <h6>Mô tả</h6>
-                          <p>{peerProfile?.bio || "_"}</p>
-                        </div>
-                        <div className="icon">
-                          <i className="ti ti-user-check" />
-                        </div>
-                      </li>
-                    </ul>
+                    {!peerProfile ? (
+                      <div className="text-center py-3">
+                        <p className="text-muted">
+                          Không thể tải thông tin người dùng
+                        </p>
+                      </div>
+                    ) : (
+                      <ul className="list-group profile-item">
+                        <li className="list-group-item">
+                          <div className="info">
+                            <h6>Tên người dùng</h6>
+                            <p>{peerProfile.fullName || "_"}</p>
+                          </div>
+                          <div className="profile-icon">
+                            <i className="ti ti-user-circle" />
+                          </div>
+                        </li>
+                        <li className="list-group-item">
+                          <div className="info">
+                            <h6>Email</h6>
+                            <p>{peerProfile.email || "_"}</p>
+                          </div>
+                          <div className="icon">
+                            <i className="ti ti-mail-heart" />
+                          </div>
+                        </li>
+                        <li className="list-group-item">
+                          <div className="info">
+                            <h6>Mô tả</h6>
+                            <p>{peerProfile.bio || "_"}</p>
+                          </div>
+                          <div className="icon">
+                            <i className="ti ti-user-check" />
+                          </div>
+                        </li>
+                      </ul>
+                    )}
                   </div>
                 </div>
               </div>
+              {/* ✨ NEW: Nickname Editor Section - chỉ hiện với 1-1 conversation */}
+              {isOneToOneConversation(selectedConversation?.type) && peerUserId && peerProfile && (
+                <div className="content-wrapper">
+                  <h5 className="sub-title">
+                    <i className="ti ti-tag me-2" />
+                    Biệt danh
+                  </h5>
+                  <div className="card">
+                    <div className="card-body">
+                      <NicknameEditor
+                        friendId={peerUserId}
+                        currentName={selectedConversation.name || peerProfile.fullName}
+                        fullName={peerProfile.fullName}
+                        onUpdate={(newName) => {
+                          console.log('✅ Nickname updated in sidebar:', newName);
+                          // Query will auto-refetch via invalidation
+                        }}
+                      />
+                      <p className="text-muted small mt-2 mb-0">
+                        <i className="ti ti-info-circle me-1" />
+                        Biệt danh chỉ bạn nhìn thấy và sẽ hiển thị trong danh sách bạn bè và hội thoại.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* <div className="content-wrapper">
             <h5 className="sub-title">Social Profiles</h5>
             <div className="card">

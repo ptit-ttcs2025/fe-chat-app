@@ -1,5 +1,4 @@
-import  { useEffect, useState } from 'react'
-import { Outlet, useLocation } from 'react-router'
+import { Outlet } from 'react-router'
 import AdminHeader from './admin/common/adminHeader'
 import AdminSidebar from './admin/common/adminSidebar'
 import ThemeSettings from './admin/common/themeSettings'
@@ -9,8 +8,6 @@ import { useModalAutoCleanup, useModalNavigationCleanup } from '@/hooks/useModal
 
 const AdminFeature = () => {
   const dispatch = useDispatch();
-  const location = useLocation();
-  const [isLoading , setIsLoading] = useState(false)
   const miniSidebar = useSelector((state: any) => state.common.miniSidebar);
   const expandMenu = useSelector((state: any) => state.common.expandMenu);
   const mobileSidebar = useSelector((state: any) => state.common.mobileSidebar);
@@ -18,27 +15,12 @@ const AdminFeature = () => {
   // Cleanup modal khi route thay đổi và khi dùng browser back/forward
   useModalAutoCleanup();
   useModalNavigationCleanup();
-  
-  const loaders = () => {
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 2000);
-  }
-useEffect(() => {
-  location.pathname.includes('index') ? loaders():setIsLoading(false)
-}, [location.pathname])
 
   return (
     <div className={`
       ${miniSidebar ? "mini-sidebar" : ""}
       ${expandMenu ? "expand-menu" : ""}`}>
-        {isLoading ? 
-        <div id="global-loader">
-          <div className="page-loader"/>
-        </div> 
-        :<></>}
-        
+
     <div className={`main-wrapper ${mobileSidebar ? "slide-nav" : ""}`}>
       <AdminHeader/>
       <AdminSidebar/>

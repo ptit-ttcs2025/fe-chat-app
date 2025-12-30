@@ -22,8 +22,16 @@ export const all_routes = {
   status: "/status",
   myStatus: "/my-status",
   userStatus: "/user-status",
+
+  // Report Module
+  myReports: "/my-reports",
+  suspended: "/suspended",
+  banned: "/banned",
+
   //Admin Pages
   dashboard: "/admin/index",
+  adminReports: "/admin/reports",
+  adminReportDetail: "/admin/reports/:id",
 
   //ui routes
   alert: "/admin/ui-alert",

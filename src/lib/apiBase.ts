@@ -29,6 +29,7 @@ export interface ApiError {
     detail: string;
     message: string;
     errorMessage?: string;
+    code?: string;
     traceId: string;
 }
 
@@ -204,10 +205,46 @@ http.interceptors.response.use(
         if (error.response) {
             const { status, data } = error.response;
 
+            // ✅ Xử lý 403 - Account Suspended/Banned
+            if (status === 403) {
+                const errorCode = data?.code;
+
+                if (errorCode === 'ACCOUNT_SUSPENDED') {
+                    console.error('❌ Account suspended');
+                    tokenManager.clearTokens();
+                    store.dispatch(logout());
+
+                    if (!window.location.pathname.includes('/suspended')) {
+                        window.location.href = '/suspended';
+                    }
+
+                    return Promise.reject({
+                        status: 403,
+                        code: 'ACCOUNT_SUSPENDED',
+                        message: data?.message || 'Tài khoản đã bị tạm khóa',
+                    });
+                }
+
+                if (errorCode === 'ACCOUNT_BANNED') {
+                    console.error('❌ Account banned');
+                    tokenManager.clearTokens();
+                    store.dispatch(logout());
+
+                    if (!window.location.pathname.includes('/banned')) {
+                        window.location.href = '/banned';
+                    }
+
+                    return Promise.reject({
+                        status: 403,
+                        code: 'ACCOUNT_BANNED',
+                        message: data?.message || 'Tài khoản đã bị cấm vĩnh viễn',
+                    });
+                }
+
+                console.error('[Forbidden]:', data?.message || 'Access denied');
+            }
+
             switch (status) {
-                case 403:
-                    console.error('[Forbidden]:', data?.message || 'Access denied');
-                    break;
                 case 404:
                     console.error('[Not Found]:', data?.message || 'Resource not found');
                     break;

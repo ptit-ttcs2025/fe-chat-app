@@ -9,7 +9,7 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { useQueryClient } from '@tanstack/react-query';
 import type { INotification } from '@/apis/notification/notification.type';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // Import SCSS
 import './notifications.scss';
@@ -28,23 +28,46 @@ const Notifications = () => {
   const queryClient = useQueryClient();
   const MySwal = withReactContent(Swal);
   
-  // Tab state: 'all' | 'unread' | 'friend_requests'
-  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'friend_requests'>('all');
-  
+  // Track if modal is open
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // Processing states for optimistic UI
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // Filtered notifications based on tab
-  const filteredNotifications = notifications.filter(notification => {
-    switch (activeTab) {
-      case 'unread':
-        return !notification.isSeen;
-      case 'friend_requests':
-        return notification.type === 'FRIEND_REQUEST';
-      default:
-        return true;
+  // AUTO MARK AS READ: When modal opens, mark visible notifications as read
+  useEffect(() => {
+    if (isModalOpen && notifications.length > 0) {
+      // Get IDs of unread notifications that are visible
+      const unreadIds = notifications
+        .filter(n => !n.isSeen)
+        .map(n => n.id);
+
+      if (unreadIds.length > 0) {
+        // Mark them as read (only visible ones, pagination will handle rest)
+        unreadIds.forEach(id => markAsRead(id));
+      }
     }
-  });
+  }, [isModalOpen, notifications, markAsRead]);
+
+  // Listen for modal open/close events
+  useEffect(() => {
+    const modalElement = document.getElementById('notifications-modal');
+    if (!modalElement) return;
+
+    const handleModalShown = () => setIsModalOpen(true);
+    const handleModalHidden = () => setIsModalOpen(false);
+
+    modalElement.addEventListener('shown.bs.modal', handleModalShown);
+    modalElement.addEventListener('hidden.bs.modal', handleModalHidden);
+
+    return () => {
+      modalElement.removeEventListener('shown.bs.modal', handleModalShown);
+      modalElement.removeEventListener('hidden.bs.modal', handleModalHidden);
+    };
+  }, []);
+
+  // ✅ Show all notifications (no filtering)
+  const filteredNotifications = notifications;
 
   // Format time relative
   const formatTime = (isoString: string) => {
@@ -77,18 +100,26 @@ const Notifications = () => {
       removeNotification(notification.id);
 
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'success',
         title: 'Đã kết bạn!',
-        html: `<p>Bạn và <strong>${notification.senderDisplayName}</strong> đã trở thành bạn bè!</p>`,
-        confirmButtonText: 'Tuyệt vời!',
-        confirmButtonColor: '#6338F6',
-        timer: 3000,
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Bạn và <strong>${notification.senderDisplayName}</strong> đã trở thành bạn bè! 🎉
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
         timerProgressBar: true,
         showClass: {
-          popup: 'animate__animated animate__fadeInUp animate__faster'
+          popup: 'animate__animated animate__fadeInRight'
         },
         hideClass: {
-          popup: 'animate__animated animate__fadeOutDown animate__faster'
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
         }
       });
 
@@ -100,10 +131,27 @@ const Notifications = () => {
       refreshNotifications();
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Có lỗi xảy ra',
-        text: error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn',
-        confirmButtonColor: '#6338F6',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể chấp nhận lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } finally {
       setProcessingIds(prev => {
@@ -134,9 +182,23 @@ const Notifications = () => {
         position: 'top-end',
         icon: 'info',
         title: 'Đã từ chối lời mời',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            Lời mời kết bạn đã được từ chối
+          </p>
+        </div>`,
         showConfirmButton: false,
-        timer: 2000,
+        timer: 3000,
         timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
 
       // Refresh data
@@ -145,10 +207,27 @@ const Notifications = () => {
       refreshNotifications();
     } catch (error: any) {
       MySwal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'error',
-        title: 'Có lỗi xảy ra',
-        text: error?.response?.data?.message || 'Không thể từ chối lời mời',
-        confirmButtonColor: '#6338F6',
+        title: 'Có lỗi xảy ra!',
+        html: `<div style="text-align: left;">
+          <p style="margin: 0; font-size: 14px;">
+            ${error?.response?.data?.message || 'Không thể từ chối lời mời kết bạn'}
+          </p>
+        </div>`,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        showClass: {
+          popup: 'animate__animated animate__fadeInRight'
+        },
+        hideClass: {
+          popup: 'animate__animated animate__fadeOutRight'
+        },
+        customClass: {
+          popup: 'colored-toast'
+        }
       });
     } finally {
       setProcessingIds(prev => {
@@ -387,9 +466,6 @@ const Notifications = () => {
     }
   };
 
-  // Count for each tab
-  const friendRequestCount = notifications.filter(n => n.type === 'FRIEND_REQUEST').length;
-
   return (
     <>
       {/* Notifications Modal */}
@@ -426,30 +502,6 @@ const Notifications = () => {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="notifications-tabs">
-              <button
-                className={`tab-item ${activeTab === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveTab('all')}
-              >
-                Tất cả
-              </button>
-              <button
-                className={`tab-item ${activeTab === 'unread' ? 'active' : ''}`}
-                onClick={() => setActiveTab('unread')}
-              >
-                Chưa đọc
-                {unreadCount > 0 && <span className="tab-badge">{unreadCount}</span>}
-              </button>
-              <button
-                className={`tab-item ${activeTab === 'friend_requests' ? 'active' : ''}`}
-                onClick={() => setActiveTab('friend_requests')}
-              >
-                Lời mời
-                {friendRequestCount > 0 && <span className="tab-badge">{friendRequestCount}</span>}
-              </button>
-            </div>
-
             {/* Body */}
             <div className="modal-body notifications-body">
               <OverlayScrollbarsComponent
@@ -468,9 +520,7 @@ const Notifications = () => {
                     </div>
                     <h5>Không có thông báo</h5>
                     <p>
-                      {activeTab === 'unread' && 'Bạn đã đọc hết tất cả thông báo!'}
-                      {activeTab === 'friend_requests' && 'Không có lời mời kết bạn nào'}
-                      {activeTab === 'all' && 'Bạn sẽ nhận được thông báo khi có hoạt động mới'}
+                      Không có thông báo nào để hiển thị.
                     </p>
                   </div>
                 ) : (

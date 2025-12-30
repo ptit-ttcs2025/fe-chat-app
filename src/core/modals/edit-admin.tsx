@@ -6,7 +6,7 @@ import { mockGroupInfo } from '@/mockData/groupChatData'
 const EditAdmin = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAdmins, setSelectedAdmins] = useState<Set<string>>(
-    new Set(mockGroupInfo.members.filter(m => m.role === 'admin').map(m => m.id))
+    new Set(mockGroupInfo.members.filter(m => m.role === 'role_admin').map(m => m.id))
   )
 
   const handleToggleAdmin = (memberId: string) => {
@@ -91,7 +91,7 @@ const EditAdmin = () => {
                           </div>
                           <div className="ms-2">
                             <h6 className="mb-0">{member.name}</h6>
-                            {member.role === 'admin' && (
+                            {member.role === 'role_admin' && (
                               <span className="badge bg-primary-transparent small">Quản trị viên</span>
                             )}
                           </div>
