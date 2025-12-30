@@ -64,16 +64,18 @@ export const getMessages = async (
 
   // console.log('📡 getMessages raw response:', response);
 
-  const responseAny = response as any;
+  const responseData = response as unknown as
+    | PaginatedResponse<IMessage>
+    | { data: PaginatedResponse<IMessage> };
 
   // Nếu response đã là { meta, results } (đã unwrap)
-  if (responseAny && Array.isArray(responseAny.results)) {
-    return responseAny as PaginatedResponse<IMessage>;
+  if ('results' in responseData && Array.isArray(responseData.results)) {
+    return responseData as PaginatedResponse<IMessage>;
   }
 
   // Nếu response là { data: { meta, results } }
-  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
-    return responseAny.data as PaginatedResponse<IMessage>;
+  if ('data' in responseData && responseData.data && 'results' in responseData.data && Array.isArray(responseData.data.results)) {
+    return responseData.data as PaginatedResponse<IMessage>;
   }
 
   // Fallback - trả về empty
@@ -122,16 +124,18 @@ export const getMessagesCursor = async (
     },
   });
 
-  const responseAny = response as any;
+  const responseData = response as unknown as
+    | CursorPaginatedResponse<IMessage>
+    | { data: CursorPaginatedResponse<IMessage> };
 
   // Handle response format: { data: { messages, cursor } }
-  if (responseAny?.data?.messages) {
-    return responseAny.data as CursorPaginatedResponse<IMessage>;
+  if ('data' in responseData && responseData.data && 'messages' in responseData.data) {
+    return responseData.data as CursorPaginatedResponse<IMessage>;
   }
 
   // Handle response format: { messages, cursor } (already unwrapped)
-  if (responseAny?.messages) {
-    return responseAny as CursorPaginatedResponse<IMessage>;
+  if ('messages' in responseData) {
+    return responseData as CursorPaginatedResponse<IMessage>;
   }
 
   // Fallback - empty response
@@ -246,32 +250,36 @@ export const getPinnedMessages = async (
 
 /**
  * Lấy media files (ảnh/file) trong conversation
- * GET /api/v1/messages/media?conversationId={id}&type={IMAGE|FILE}&page={page}&size={size}
+ * GET /api/v1/conversations/{id}/media?type={IMAGE|FILE}&page={page}&size={size}
  */
 export const getMediaMessages = async (
   params: MediaQueryParams
 ): Promise<PaginatedResponse<MediaMessage>> => {
   const { conversationId, type, page = 0, size = 20 } = params;
 
-  const response = await http.get(`${URI}/messages/media`, {
-    params: {
-      conversationId,
-      type,
-      page,
-      size,
-    },
-  });
+  const response = await http.get(
+    `${URI}/conversations/${conversationId}/media`,
+    {
+      params: {
+        type,
+        page,
+        size,
+      },
+    }
+  );
 
-  const responseAny = response as any;
+  const responseData = response as unknown as
+    | PaginatedResponse<MediaMessage>
+    | { data: PaginatedResponse<MediaMessage> };
 
   // Nếu response đã là { meta, results }
-  if (responseAny && Array.isArray(responseAny.results)) {
-    return responseAny as PaginatedResponse<MediaMessage>;
+  if ('results' in responseData && Array.isArray(responseData.results)) {
+    return responseData as PaginatedResponse<MediaMessage>;
   }
 
   // Nếu response là { data: { meta, results } }
-  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
-    return responseAny.data as PaginatedResponse<MediaMessage>;
+  if ('data' in responseData && responseData.data && 'results' in responseData.data && Array.isArray(responseData.data.results)) {
+    return responseData.data as PaginatedResponse<MediaMessage>;
   }
 
   // Fallback
@@ -310,16 +318,32 @@ export const getConversations = async (
   // Format 2: { statusCode, data: { meta, results } } - full response
   // Format 3: { data: { meta, results } } - partial unwrap
 
-  const responseAny = response as any;
+  const responseData = response as unknown as
+    | PaginatedResponse<IConversation>
+    | { data: PaginatedResponse<IConversation> };
 
   // Nếu response đã là { meta, results } (đã unwrap)
-  if (responseAny && Array.isArray(responseAny.results)) {
-    return responseAny as PaginatedResponse<IConversation>;
+  if ('results' in responseData && Array.isArray(responseData.results)) {
+    const result = responseData as PaginatedResponse<IConversation>;
+
+    // Debug: Verify GROUP conversations have groupId
+    const groupConvs = result.results.filter(c => c.type === 'GROUP');
+    if (groupConvs.length > 0) {
+      console.log('📡 [API] GROUP conversations:', groupConvs.map(c => ({
+        id: c.id,
+        type: c.type,
+        name: c.name,
+        groupId: c.groupId,
+        hasGroupId: !!c.groupId,
+      })));
+    }
+
+    return result;
   }
 
   // Nếu response là { data: { meta, results } }
-  if (responseAny?.data && Array.isArray(responseAny.data.results)) {
-    return responseAny.data as PaginatedResponse<IConversation>;
+  if ('data' in responseData && responseData.data && 'results' in responseData.data && Array.isArray(responseData.data.results)) {
+    return responseData.data as PaginatedResponse<IConversation>;
   }
 
   // Fallback - trả về empty
@@ -339,6 +363,7 @@ export const getConversation = async (
   const response = await http.get<ApiResponse<IConversation>>(
     `${URI}/conversations/${conversationId}`
   );
+  console.log('📡 getConversation response:', response);
   return response.data;
 };
 

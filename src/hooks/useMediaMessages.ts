@@ -54,10 +54,20 @@ export const useMediaMessages = ({
           });
 
         if (response.results) {
+          // Some API responses may include messages without attachment; guard them
+          const validResults = response.results.filter(
+            (item) => item?.attachment && item.attachment.url
+          );
+          if (validResults.length !== response.results.length) {
+            console.warn(
+              `⚠️ Filtered out ${response.results.length - validResults.length} media items without attachments`
+            );
+          }
+
           if (append) {
-            setMedia((prev) => [...prev, ...response.results]);
+            setMedia((prev) => [...prev, ...validResults]);
           } else {
-            setMedia(response.results);
+            setMedia(validResults);
           }
 
           setTotalPages(response.meta.totalPages);
@@ -76,10 +86,18 @@ export const useMediaMessages = ({
 
   // Initial fetch
   useEffect(() => {
-    if (conversationId && enabled) {
+    // ✅ Guard: Chỉ fetch khi conversationId hợp lệ
+    if (conversationId && conversationId.trim() !== "" && enabled) {
       setMedia([]);
       setCurrentPage(0);
       fetchMedia(0, false);
+    } else if (!conversationId || conversationId.trim() === "") {
+      // Reset state khi không có conversationId
+      setMedia([]);
+      setCurrentPage(0);
+      setTotalPages(0);
+      setTotalCount(0);
+      setError(null);
     }
   }, [conversationId, enabled, fetchMedia]);
 

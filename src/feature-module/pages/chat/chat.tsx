@@ -15,6 +15,7 @@ import { groupApi } from "@/apis/group/group.api";
 
 // Theme Components
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
+import GroupInfo from "../../../core/modals/group-info-off-canva";
 
 // API & Hooks - Tích hợp real-time
 import { useChatMessages } from "@/hooks/useChatMessages";
@@ -126,7 +127,7 @@ const Chat = () => {
       const conv = conversations.find((c) => c.id === selectedConversationId);
       if (conv) {
         setSelectedConversation(conv);
-        
+
         // Restore conversation-specific state
         const savedState = conversationStatesRef.current.get(conv.id);
         if (savedState) {
@@ -167,6 +168,29 @@ const Chat = () => {
   });
 
   // Group management hook (for GROUP conversations)
+  // Add safety checks and logging
+  const groupId = selectedConversation?.type === 'GROUP'
+    ? (selectedConversation?.groupId || null)
+    : null;
+
+  const shouldFetchMembers = selectedConversation?.type === 'GROUP' && !!groupId;
+
+  // Debug log for group conversation
+  useEffect(() => {
+    if (selectedConversation?.type === 'GROUP') {
+      console.log('🏢 [Chat] GROUP conversation selected:', {
+        conversationId: selectedConversation.id,
+        groupId: selectedConversation.groupId,
+        hasGroupId: !!selectedConversation.groupId,
+        name: selectedConversation.name,
+      });
+
+      if (!selectedConversation.groupId) {
+        console.error('❌ [Chat] GROUP conversation missing groupId!', selectedConversation);
+      }
+    }
+  }, [selectedConversation]);
+
   const {
     group,
     members,
@@ -177,8 +201,8 @@ const Chat = () => {
     isAdmin,
     getOnlineMembersCount,
   } = useGroupManagement({
-    groupId: selectedConversation?.type === 'GROUP' ? (selectedConversation?.groupId || null) : null,
-    autoFetchMembers: selectedConversation?.type === 'GROUP',
+    groupId,
+    autoFetchMembers: shouldFetchMembers,
   });
 
   // Determine if current conversation is a group
@@ -210,12 +234,12 @@ const Chat = () => {
     try {
       // Get groupId - fetch conversation detail if needed
       let groupId = selectedConversation.groupId;
-      
+
       if (!groupId) {
         // Fetch conversation detail to get groupId
         const conversationDetail = await chatApi.getConversation(selectedConversation.id);
         groupId = conversationDetail.data?.groupId;
-        
+
         if (!groupId) {
           throw new Error('Không tìm thấy thông tin nhóm');
         }
@@ -244,7 +268,7 @@ const Chat = () => {
       navigate(all_routes.index);
     } catch (error: any) {
       console.error('❌ Error leaving group:', error);
-      
+
       // Show error notification
       MySwal.fire({
         toast: true,
@@ -462,7 +486,7 @@ const Chat = () => {
     }
   }, [filteredMessagesComputed]);
 
-  
+
   // Focus input when conversation changes
   useEffect(() => {
     if (selectedConversation) {
@@ -606,8 +630,8 @@ const Chat = () => {
     setTimeout(() => {
       const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
       if (messageElement) {
-        messageElement.scrollIntoView({ 
-          behavior: 'smooth', 
+        messageElement.scrollIntoView({
+          behavior: 'smooth',
           block: 'center',
           inline: 'nearest'
         });
@@ -682,7 +706,7 @@ const Chat = () => {
       try {
         // Clear input trước để UI phản hồi nhanh
         setInputMessage("");
-        
+
         // Save cleared state to conversation-specific storage
         if (selectedConversation?.id) {
           const currentState = conversationStatesRef.current.get(selectedConversation.id) || {
@@ -965,6 +989,7 @@ const Chat = () => {
     );
   }
 
+
   return (
     <>
       {/* Modern Styles */}
@@ -1122,9 +1147,6 @@ const Chat = () => {
       </div>
       {/* /Chat */}
 
-      {/* Modals */}
-      <ContactInfo selectedConversation={selectedConversation} />
-      
       {/* Chat Search Sidebar */}
       <ChatSearchSidebar
         selectedConversation={selectedConversation}
@@ -1147,6 +1169,12 @@ const Chat = () => {
         onMessageClick={handleSearchMessageClick}
         currentUserId={user?.id}
       />
+      {/* Modals - Conditional based on conversation type */}
+      {isGroupConversation ? (
+        <GroupInfo selectedConversation={selectedConversation} />
+      ) : (
+        <ContactInfo selectedConversation={selectedConversation} />
+      )}
     </>
   );
 };

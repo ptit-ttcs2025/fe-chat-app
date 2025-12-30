@@ -28,6 +28,7 @@ import ChatFooter from "../chat/components/ChatFooter"; // Using ChatFooter from
 import TypingIndicator from "../chat/components/TypingIndicator";
 import { chatStyles } from "../chat/styles/chatStyles";
 import CommonGroupModal from "@/core/modals/common-group-modal"; // Group modals (NewGroup, AddGroup, etc.)
+import GroupInfo from "@/core/modals/group-info-off-canva"; // Group info sidebar
 import ChatSearchSidebar from "@/core/modals/chat-search-sidebar";
 
 // Redux State Interface
@@ -80,7 +81,10 @@ const GroupChat = () => {
   const isWsConnected = useWebSocketStatus();
 
   // Group conversations list (filter type=GROUP)
-  const { conversations } = useChatConversations({
+  const {
+    conversations,
+    useConversation
+  } = useChatConversations({
     pageSize: 50,
     autoRefresh: true,
     type: "GROUP", // Filter only GROUP conversations
@@ -97,6 +101,25 @@ const GroupChat = () => {
   }, [selectedConversationId, conversations]);
 
   // Group management hook
+  // Add safety checks and logging
+  const groupId = selectedConversation?.groupId || null;
+
+  // Debug log for group conversation
+  useEffect(() => {
+    if (selectedConversation) {
+      console.log('🏢 [GroupChat] GROUP conversation selected:', {
+        conversationId: selectedConversation.id,
+        groupId: selectedConversation.groupId,
+        hasGroupId: !!selectedConversation.groupId,
+        name: selectedConversation.name,
+      });
+
+      if (!selectedConversation.groupId) {
+        console.error('❌ [GroupChat] GROUP conversation missing groupId!', selectedConversation);
+      }
+    }
+  }, [selectedConversation]);
+
   const {
     group,
     members,
@@ -107,8 +130,8 @@ const GroupChat = () => {
     isAdmin,
     getOnlineMembersCount,
   } = useGroupManagement({
-    groupId: selectedConversation?.groupId || null,
-    autoFetchMembers: true,
+    groupId,
+    autoFetchMembers: !!groupId,
   });
 
   // Messages hook (reuse from chat - supports both ONE_TO_ONE and GROUP)
@@ -381,8 +404,8 @@ const GroupChat = () => {
     setTimeout(() => {
       const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
       if (messageElement) {
-        messageElement.scrollIntoView({ 
-          behavior: 'smooth', 
+        messageElement.scrollIntoView({
+          behavior: 'smooth',
           block: 'center',
           inline: 'nearest'
         });
@@ -421,12 +444,12 @@ const GroupChat = () => {
     try {
       // Get groupId - fetch conversation detail if not available
       let groupId = selectedConversation.groupId;
-      
+
       if (!groupId) {
         // Fetch conversation detail to get groupId
         const conversationDetail = await chatApi.getConversation(selectedConversation.id);
         groupId = conversationDetail.data?.groupId;
-        
+
         if (!groupId) {
           throw new Error('Không tìm thấy groupId trong thông tin nhóm');
         }
@@ -454,7 +477,7 @@ const GroupChat = () => {
       navigate(all_routes.index);
     } catch (error: any) {
       console.error('❌ Error leaving group:', error);
-      
+
       // Show error notification
       MySwal.fire({
         toast: true,
@@ -850,7 +873,7 @@ const GroupChat = () => {
 
       {/* Group Modals (NewGroup, AddGroup, EditGroup, etc.) */}
       <CommonGroupModal />
-      
+
       {/* Chat Search Sidebar */}
       <ChatSearchSidebar
         selectedConversation={selectedConversation}
@@ -860,6 +883,9 @@ const GroupChat = () => {
         onMessageClick={handleSearchMessageClick}
         currentUserId={user?.id}
       />
+
+      {/* Group Info Sidebar */}
+      <GroupInfo selectedConversation={selectedConversation} />
     </>
   );
 };
