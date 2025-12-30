@@ -42,8 +42,11 @@ export const useLogout = () => {
             // 4. Clear React Query cache
             // Reset toàn bộ cache để không còn data cũ
             queryClient.clear();
+            // Cancel all ongoing queries to prevent them from making API calls after logout
+            queryClient.cancelQueries();
 
             // 5. Navigate về trang login
+            // Use replace: true to prevent back navigation
             navigate(all_routes.signin, { replace: true });
         } catch (error) {
             console.error('❌ Lỗi khi đăng xuất:', error);
@@ -54,6 +57,7 @@ export const useLogout = () => {
                 dispatch(resetCommonState());
                 clearAllUserStorage();
                 queryClient.clear();
+                queryClient.cancelQueries();
             } catch (cleanupError) {
                 console.error('❌ Lỗi khi cleanup:', cleanupError);
             }

@@ -16,6 +16,7 @@ import { groupApi } from "@/apis/group/group.api";
 // Theme Components
 import ContactInfo from "../../../core/modals/contact-info-off-canva";
 import GroupInfo from "../../../core/modals/group-info-off-canva";
+import ReportFormModal from "../../../core/modals/report-form-modal";
 
 // API & Hooks - Tích hợp real-time
 import { useChatMessages } from "@/hooks/useChatMessages";
@@ -97,6 +98,39 @@ const Chat = () => {
   const [filteredMessages, setFilteredMessages] = useState<IMessage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [sendLocked, setSendLocked] = useState(false);
+  const [reportMessage, setReportMessage] = useState<IMessage | null>(null);
+
+  // Auto-open report modal when reportMessage is set
+  useEffect(() => {
+    if (reportMessage) {
+      // Delay to ensure modal DOM is rendered
+      setTimeout(() => {
+        const modalElement = document.getElementById('report-message-modal');
+        if (modalElement) {
+          const bsModal = (window as any).bootstrap?.Modal?.getInstance(modalElement);
+          if (bsModal) {
+            bsModal.show();
+          } else {
+            // Create new modal instance if doesn't exist
+            const Modal = (window as any).bootstrap?.Modal;
+            if (Modal) {
+              const newModal = new Modal(modalElement, {
+                backdrop: true,
+                keyboard: true,
+              });
+              
+              // Listen for hidden event to reset state
+              modalElement.addEventListener('hidden.bs.modal', () => {
+                setReportMessage(null);
+              }, { once: true });
+              
+              newModal.show();
+            }
+          }
+        }
+      }, 100);
+    }
+  }, [reportMessage]);
 
   // ==================== Refs ====================
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1064,10 +1098,12 @@ const Chat = () => {
         }}>
           {isGroupConversation ? (
             <GroupChatBody
-              messages={filteredMessages}
+              messages={messages}
+              filteredMessages={filteredMessages}
               pinnedMessages={pinnedMessages}
               members={members}
               isLoadingMessages={isLoadingMessages}
+              searchKeyword={searchKeyword}
               selectedConversation={selectedConversation}
               currentUserId={user?.id}
               userAvatarUrl={user?.avatarUrl}
@@ -1098,6 +1134,7 @@ const Chat = () => {
               messagesEndRef={messagesEndRef}
               onTogglePin={handleTogglePin}
               onDeleteMessage={handleDeleteMessage}
+              onReportMessage={(message) => setReportMessage(message)}
               onPinnedMessageClick={handlePinnedMessageClick}
               onUnpin={(messageId) => handleTogglePin(messageId, true)}
               typingUsers={typingUsers}
@@ -1174,6 +1211,17 @@ const Chat = () => {
         <GroupInfo selectedConversation={selectedConversation} />
       ) : (
         <ContactInfo selectedConversation={selectedConversation} />
+      )}
+
+      {/* Report Message Modal */}
+      {reportMessage && (
+        <ReportFormModal
+          modalId="report-message-modal"
+          targetUserId={reportMessage.senderId}
+          targetUserName={reportMessage.senderName}
+          messageContext={reportMessage}
+          onClose={() => setReportMessage(null)}
+        />
       )}
     </>
   );

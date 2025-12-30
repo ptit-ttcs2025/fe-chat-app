@@ -24,6 +24,7 @@ interface ChatBodyProps {
   messagesEndRef: RefObject<HTMLDivElement | null>;
   onTogglePin: (messageId: string, currentlyPinned: boolean) => void;
   onDeleteMessage: (messageId: string) => void;
+  onReportMessage?: (message: IMessage) => void;
   onPinnedMessageClick: (messageId: string) => void;
   onUnpin?: (messageId: string) => void;
   typingUsers?: string[]; // Typing indicator
@@ -48,6 +49,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
   messagesEndRef,
   onTogglePin,
   onDeleteMessage,
+  onReportMessage,
   onPinnedMessageClick,
   onUnpin,
   typingUsers = [], // Typing indicator
@@ -68,10 +70,9 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Fallback: messages to display
-  const displayMessages = searchKeyword.trim()
-    ? filteredMessages
-    : (filteredMessages.length > 0 ? filteredMessages : messages);
+  // Messages to display
+  // Always show all messages, but searchKeyword will be passed to MessageItem for highlighting
+  const displayMessages = messages;
 
   // Helper: Scroll to bottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -289,6 +290,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
                     selectedConversation={selectedConversation}
                     onTogglePin={onTogglePin}
                     onDeleteMessage={onDeleteMessage}
+                    onReportMessage={onReportMessage}
                     searchKeyword={searchKeyword}
                   />
                 );
@@ -297,7 +299,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
           )}
 
           {/* Empty States */}
-          {!isLoadingMessages && searchKeyword.trim() && displayMessages.length === 0 && messages.length > 0 && (
+          {!isLoadingMessages && searchKeyword.trim() && filteredMessages.length === 0 && messages.length > 0 && (
             <EmptyState type="no-results" />
           )}
           {!isLoadingMessages && !searchKeyword.trim() && displayMessages.length === 0 && selectedConversation && (

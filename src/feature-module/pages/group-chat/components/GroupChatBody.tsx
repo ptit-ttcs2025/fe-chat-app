@@ -10,12 +10,15 @@ import type { IGroupMember } from "@/apis/group/group.type";
 import MessageItem from "@/feature-module/pages/chat/components/MessageItem";
 import PinnedMessages from "@/feature-module/pages/chat/components/PinnedMessages";
 import NewMessagesBadge from "@/feature-module/pages/chat/components/NewMessagesBadge";
+import EmptyState from "@/feature-module/pages/chat/components/EmptyState";
 
 interface GroupChatBodyProps {
   messages: IMessage[];
+  filteredMessages: IMessage[];
   pinnedMessages: IMessage[];
   members: IGroupMember[]; // Keep for future features, not used in rendering now
   isLoadingMessages: boolean;
+  searchKeyword: string;
   selectedConversation: IConversation | null;
   currentUserId?: string;
   userAvatarUrl?: string;
@@ -23,21 +26,22 @@ interface GroupChatBodyProps {
   messagesEndRef: RefObject<HTMLDivElement | null>;
   onTogglePin: (messageId: string, currentlyPinned: boolean) => void;
   onDeleteMessage: (messageId: string) => void;
+  onReportMessage?: (message: IMessage) => void;
   onPinnedMessageClick: (messageId: string) => void;
   onUnpin?: (messageId: string) => void;
   typingUsers?: string[];
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
-  // Search props
-  searchKeyword?: string;
 }
 
 const GroupChatBody = ({
   messages,
+  filteredMessages,
   pinnedMessages,
   members: _members, // Reserved for future use
   isLoadingMessages,
+  searchKeyword,
   selectedConversation,
   currentUserId,
   userAvatarUrl,
@@ -45,13 +49,13 @@ const GroupChatBody = ({
   messagesEndRef,
   onTogglePin,
   onDeleteMessage,
+  onReportMessage,
   onPinnedMessageClick,
   onUnpin,
   typingUsers = [],
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
-  searchKeyword = "",
 }: GroupChatBodyProps) => {
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const loadMoreThrottleRef = useRef<boolean>(false);
@@ -66,6 +70,10 @@ const GroupChatBody = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // Messages to display - same logic as ChatBody
+  // Always show all messages, but searchKeyword will be passed to MessageItem for highlighting
+  const displayMessages = messages;
+
 
   // Helper: Scroll to bottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -78,9 +86,9 @@ const GroupChatBody = ({
       isAtBottomRef.current = true;
       setUnreadCount(0);
       setShowScrollButton(false);
-      lastMessageCountRef.current = messages.length;
+      lastMessageCountRef.current = displayMessages.length;
     }
-  }, [messages.length]);
+  }, [displayMessages.length]);
 
   // Handle scroll events - Load more when scroll to top
   const handleScroll = useCallback(
@@ -118,7 +126,7 @@ const GroupChatBody = ({
         }, 500);
       }
     },
-    [hasMore, isLoadingMore, onLoadMore, unreadCount, messages.length]
+    [hasMore, isLoadingMore, onLoadMore, unreadCount, displayMessages.length]
   );
 
   // Reset states on conversation change
@@ -139,16 +147,16 @@ const GroupChatBody = ({
       !initialLoadDoneRef.current &&
       !isLoadingMessages &&
       selectedConversation &&
-      messages.length > 0
+      displayMessages.length > 0
     ) {
       const timer = setTimeout(() => {
         scrollToBottom("auto");
         initialLoadDoneRef.current = true;
-        lastMessageCountRef.current = messages.length;
+        lastMessageCountRef.current = displayMessages.length;
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [isLoadingMessages, selectedConversation, messages.length, scrollToBottom]);
+  }, [isLoadingMessages, selectedConversation, displayMessages.length, scrollToBottom]);
 
   // Handle new messages
   useEffect(() => {
@@ -209,7 +217,7 @@ const GroupChatBody = ({
   }
 
   // Loading state
-  if (isLoadingMessages && messages.length === 0) {
+  if (isLoadingMessages && displayMessages.length === 0) {
     return (
       <div
         className="chat-body-wrapper"
@@ -329,7 +337,7 @@ const GroupChatBody = ({
           )}
 
           {/* Has More Indicator */}
-          {hasMore && !isLoadingMore && !isLoadingMessages && messages.length > 0 && (
+          {hasMore && !isLoadingMore && !isLoadingMessages && displayMessages.length > 0 && (
             <div
               style={{
                 display: "flex",
@@ -361,9 +369,14 @@ const GroupChatBody = ({
             </div>
           )}
 
-          {/* Messages - Using MessageItem component for consistent UI */}
-          {messages.map((message, index) => {
-            const previousMessage = index > 0 ? messages[index - 1] : null;
+          {/* Loading State */}
+          {isLoadingMessages && <EmptyState type="loading" />}
+
+          {/* Messages */}
+          {!isLoadingMessages && displayMessages.length > 0 && (
+            <>
+              {displayMessages.map((message, index) => {
+            const previousMessage = index > 0 ? displayMessages[index - 1] : null;
             const isOwnMessage = message.senderId === currentUserId;
 
             return (
@@ -379,10 +392,24 @@ const GroupChatBody = ({
                 selectedConversation={selectedConversation}
                 onTogglePin={onTogglePin}
                 onDeleteMessage={onDeleteMessage}
+                onReportMessage={onReportMessage}
                 searchKeyword={searchKeyword}
               />
             );
           })}
+            </>
+          )}
+
+          {/* Empty States */}
+          {!isLoadingMessages && searchKeyword.trim() && filteredMessages.length === 0 && messages.length > 0 && (
+            <EmptyState type="no-results" />
+          )}
+          {!isLoadingMessages && !searchKeyword.trim() && displayMessages.length === 0 && selectedConversation && (
+            <EmptyState type="no-messages" />
+          )}
+          {!isLoadingMessages && !selectedConversation && (
+            <EmptyState type="no-conversation" />
+          )}
 
           {/* Typing Indicator */}
           {typingUsers.length > 0 && (

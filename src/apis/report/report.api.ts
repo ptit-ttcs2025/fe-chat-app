@@ -30,7 +30,23 @@ export const createReport = async (
     `${URI}/reports`,
     data
   );
-  return response.data;
+  
+  // ✅ Xử lý response: interceptor có thể đã unwrap hoặc chưa
+  const responseData = response.data as any;
+  
+  // Nếu response đã có cấu trúc ApiResponse (statusCode, message, data)
+  if (responseData?.statusCode !== undefined && responseData?.data !== undefined) {
+    return responseData as ApiResponse<ReportDto>;
+  }
+  
+  // Nếu response đã được unwrap và chỉ còn data (có thể là ReportDto trực tiếp)
+  // Wrap lại thành ApiResponse format
+  return {
+    statusCode: 201,
+    message: 'Tạo báo cáo vi phạm thành công',
+    timestamp: new Date().toISOString(),
+    data: responseData as ReportDto,
+  };
 };
 
 /**
@@ -47,7 +63,23 @@ export const getMyReports = async (
       params: { page, size },
     }
   );
-  return response.data;
+  
+  // ✅ Xử lý response: interceptor có thể đã unwrap hoặc chưa
+  const responseData = response.data as any;
+  
+  // Nếu response đã có cấu trúc ApiResponse (statusCode, message, data)
+  if (responseData?.statusCode !== undefined && responseData?.data !== undefined) {
+    return responseData as ApiResponse<PaginatedResponse<MyReportDto>>;
+  }
+  
+  // Nếu response đã được unwrap và chỉ còn data
+  // Wrap lại thành ApiResponse format
+  return {
+    statusCode: 200,
+    message: 'Lấy danh sách báo cáo thành công',
+    timestamp: new Date().toISOString(),
+    data: responseData as PaginatedResponse<MyReportDto>,
+  };
 };
 
 // ===========================

@@ -3,6 +3,7 @@ export type NotificationType =
     | 'FRIEND_REQUEST_ACCEPTED' 
     | 'FRIEND_REQUEST_REJECTED'
     | 'NEW_MESSAGE'
+    | 'NEW_REPORT'
     | 'SYSTEM';
 
 export interface INotification {

@@ -14,6 +14,7 @@ interface MessageItemProps {
   selectedConversation: IConversation | null;
   onTogglePin: (messageId: string, currentlyPinned: boolean) => void;
   onDeleteMessage: (messageId: string) => void;
+  onReportMessage?: (message: IMessage) => void;
   searchKeyword?: string;
 }
 
@@ -63,15 +64,22 @@ const shouldShowDateMarker = (
 const MessageItem = ({
   message,
   previousMessage,
-  isOwnMessage,
+  isOwnMessage: isOwnMessageProp,
+  currentUserId,
   userAvatarUrl,
   userFullName,
   userUsername,
   onTogglePin,
   onDeleteMessage,
+  onReportMessage,
   searchKeyword,
 }: MessageItemProps) => {
   const showDateMarker = shouldShowDateMarker(message, previousMessage);
+  
+  // Tính toán isOwnMessage với fallback nếu prop không đúng
+  const isOwnMessage = isOwnMessageProp !== undefined 
+    ? isOwnMessageProp 
+    : (currentUserId && message.senderId ? message.senderId === currentUserId : false);
 
   // ✅ Render status icon
   const renderStatusIcon = () => {
@@ -315,6 +323,36 @@ const MessageItem = ({
                       </span>
                     </button>
                   </li>
+                  {!isOwnMessage && onReportMessage && (
+                    <li>
+                      <button
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => onReportMessage(message)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "10px 12px",
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          color: "#ef4444",
+                          background: "transparent",
+                          border: "none",
+                          width: "100%",
+                          cursor: "pointer",
+                          transition: "background 0.15s ease",
+                        }}
+                      >
+                        <i
+                          className="ti ti-flag"
+                          style={{ fontSize: "16px" }}
+                        />
+                        <span>Báo cáo</span>
+                      </button>
+                    </li>
+                  )}
                   {isOwnMessage && (
                     <li>
                       <button

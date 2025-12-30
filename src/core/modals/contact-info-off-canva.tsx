@@ -1,4 +1,4 @@
-import {useMemo } from "react";
+import {useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import "yet-another-react-lightbox/styles.css";
@@ -10,6 +10,7 @@ import { useMediaMessages } from "@/hooks/useMediaMessages";
 import { NicknameEditor } from "@/components/NicknameEditor";
 import { useFriendNicknameWebSocket } from "@/hooks/useFriendNicknameWebSocket";
 import MediaGallery from "@/feature-module/chat/components/MediaGallery";
+import ReportFormModal from "./report-form-modal";
 
 interface ContactInfoProps {
   selectedConversation: IConversation | null;
@@ -18,6 +19,9 @@ interface ContactInfoProps {
 const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
   // Subscribe to friend nickname updates via WebSocket
   useFriendNicknameWebSocket(true);
+
+  // State for report modal
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Helper function to check if conversation is 1-1 (ONE_TO_ONE or PRIVATE)
   const isOneToOneConversation = (type?: string) => {
@@ -622,7 +626,31 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
                     {/*    </span>*/}
                     {/*  </div>*/}
                     {/*</Link>*/}
-                    <Link to="#" className="list-group-item">
+                    <Link
+                      to="#"
+                      className="list-group-item"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowReportModal(true);
+                        // Open modal using Bootstrap
+                        setTimeout(() => {
+                          const modalElement = document.getElementById('report-user-modal');
+                          if (modalElement) {
+                            const bsModal = (window as any).bootstrap?.Modal?.getInstance(modalElement);
+                            if (bsModal) {
+                              bsModal.show();
+                            } else {
+                              // Create new modal instance if doesn't exist
+                              const Modal = (window as any).bootstrap?.Modal;
+                              if (Modal) {
+                                const newModal = new Modal(modalElement);
+                                newModal.show();
+                              }
+                            }
+                          }
+                        }, 100);
+                      }}
+                    >
                       <div className="profile-info">
                         <h6>
                           <i className="ti ti-user-x me-2 text-purple" />
@@ -661,6 +689,16 @@ const ContactInfo = ({ selectedConversation }: ContactInfoProps) => {
         </div>
       </div>
       {/* /Contact Info */}
+
+      {/* Report User Modal */}
+      {showReportModal && peerUserId && (
+        <ReportFormModal
+          modalId="report-user-modal"
+          targetUserId={peerUserId}
+          targetUserName={peerProfile?.fullName || selectedConversation?.name}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </>
   );
 };

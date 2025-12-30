@@ -9,8 +9,11 @@ import type {
   AdminActionRequest,
   ReportListFilters,
 } from '@/apis/report/report.type';
-import { toast } from 'react-toastify';
 import authStorage from '@/lib/authStorage';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
+
+const MySwal = withReactContent(Swal);
 
 export const ADMIN_REPORT_KEYS = {
   all: ['admin', 'reports'] as const,
@@ -28,6 +31,8 @@ export const useAdminReportList = (filters: ReportListFilters) => {
     queryFn: () => adminReportApi.listAllReports(filters),
     staleTime: 30000, // 30 seconds
     enabled: !!authStorage.getAccessToken(),
+    keepPreviousData: true, // ✅ Giữ data cũ khi filter thay đổi để smooth transition
+    refetchOnWindowFocus: false, // ✅ Không refetch khi focus window
   });
 };
 
@@ -52,7 +57,16 @@ export const useProcessReport = () => {
     mutationFn: ({ id, action }: { id: string; action: AdminActionRequest }) =>
       adminReportApi.processReport(id, action),
     onSuccess: (response, variables) => {
-      toast.success(response.message || 'Xử lý báo cáo thành công');
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Xử lý báo cáo thành công!',
+        text: response.message || 'Báo cáo đã được xử lý',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+      });
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ADMIN_REPORT_KEYS.all });
       queryClient.invalidateQueries({
@@ -61,6 +75,15 @@ export const useProcessReport = () => {
     },
     onError: (error: any) => {
       console.error('Process report error:', error);
+      MySwal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: 'Lỗi!',
+        text: error?.response?.data?.message || 'Không thể xử lý báo cáo',
+        showConfirmButton: false,
+        timer: 3000,
+      });
     },
   });
 };

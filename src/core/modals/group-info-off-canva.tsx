@@ -6,6 +6,7 @@ import { IConversation } from "@/apis/chat/chat.type";
 import { useGroupManagement } from "@/hooks/useGroupManagement";
 import MediaGallery from "@/feature-module/chat/components/MediaGallery";
 import { useMediaMessages } from "@/hooks/useMediaMessages";
+import ReportFormModal from "./report-form-modal";
 
 interface GroupInfoProps {
   selectedConversation: IConversation | null;
@@ -14,6 +15,8 @@ interface GroupInfoProps {
 const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
   // Search query for members modal
   const [searchQuery, setSearchQuery] = useState("");
+  // State for report modal
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Check if conversation is GROUP
   const isGroupConversation = selectedConversation?.type === "GROUP";
@@ -463,8 +466,27 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                     <Link
                       to="#"
                       className="list-group-item"
-                      data-bs-toggle="modal"
-                      data-bs-target="#report-group"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowReportModal(true);
+                        // Open modal using Bootstrap
+                        setTimeout(() => {
+                          const modalElement = document.getElementById('report-group-modal');
+                          if (modalElement) {
+                            const bsModal = (window as any).bootstrap?.Modal?.getInstance(modalElement);
+                            if (bsModal) {
+                              bsModal.show();
+                            } else {
+                              // Create new modal instance if doesn't exist
+                              const Modal = (window as any).bootstrap?.Modal;
+                              if (Modal) {
+                                const newModal = new Modal(modalElement);
+                                newModal.show();
+                              }
+                            }
+                          }
+                        }, 100);
+                      }}
                     >
                       <div className="profile-info">
                         <h6>
@@ -683,6 +705,16 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
         </div>
       </div>
       {/* /View All Members Modal */}
+
+      {/* Report Group Modal */}
+      {showReportModal && selectedConversation?.adminId && (
+        <ReportFormModal
+          modalId="report-group-modal"
+          targetUserId={selectedConversation.adminId}
+          targetUserName={selectedConversation.name || 'Nhóm'}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </>
   );
 };

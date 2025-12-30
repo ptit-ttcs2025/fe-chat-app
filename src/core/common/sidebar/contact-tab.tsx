@@ -6,10 +6,10 @@ import ImageWithBasePath from '../imageWithBasePath'
 import { Link } from 'react-router-dom'
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
 import "overlayscrollbars/overlayscrollbars.css";
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo, useContext } from 'react';
 import { useSearchFriends, useGetRequestCount } from '@/apis/friend/friend.api';
 import { getAvatarColor, isValidUrl, getInitial } from '@/lib/avatarHelper';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { NotificationContext } from '@/contexts/NotificationContext';
 import { useSelectedFriend } from '@/contexts/SelectedFriendContext';
 import { useUserStatus } from '@/hooks/useWebSocketChat';
 import type { IFriend } from '@/apis/friend/friend.type';
@@ -130,8 +130,9 @@ const ContactTab = () => {
   // Get request count
   const { data: requestCount } = useGetRequestCount();
   
-  // Get notification count
-  const { unreadCount: notificationCount } = useNotifications();
+  // Get notification count - safely handle if NotificationProvider is not available
+  const notificationContext = useContext(NotificationContext);
+  const notificationCount = notificationContext?.unreadCount || 0;
 
   // ✅ Subscribe to WebSocket user status updates
   useUserStatus(

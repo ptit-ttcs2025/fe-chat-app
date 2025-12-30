@@ -98,6 +98,13 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
           iconBg: 'rgba(255, 255, 255, 0.2)',
           title: 'Tin nhắn mới',
         };
+      case 'NEW_REPORT':
+        return {
+          icon: 'ti-flag',
+          gradient: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)',
+          iconBg: 'rgba(255, 255, 255, 0.2)',
+          title: 'Báo cáo mới',
+        };
       default:
         return {
           icon: 'ti-bell',
@@ -181,7 +188,12 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
                 <strong>{notification.senderDisplayName || notification.senderName}</strong> đã từ chối lời mời
               </>
             )}
-            {!['FRIEND_REQUEST', 'FRIEND_REQUEST_ACCEPTED', 'FRIEND_REQUEST_REJECTED'].includes(notification.type) && 
+            {notification.type === 'NEW_REPORT' && (
+              <>
+                {notification.content}
+              </>
+            )}
+            {!['FRIEND_REQUEST', 'FRIEND_REQUEST_ACCEPTED', 'FRIEND_REQUEST_REJECTED', 'NEW_REPORT'].includes(notification.type) && 
               notification.content
             }
           </div>

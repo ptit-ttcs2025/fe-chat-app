@@ -232,31 +232,39 @@ th.ant-table-cell {
   margin-bottom: 0 !important;
 }
 .ant-pagination-options {
-  position: absolute;
-  left: 106px;
-  top: -48px;
+  position: relative;
+  left: auto;
+  top: auto;
+  margin-left: 0;
 }
 
 .ant-pagination-options-size-changer {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ant-pagination-options-size-changer::before {
-  content: "Row Per Page";
-  position: absolute;
-  left: -100px;
-  width: 116px;
-  top: 3px;
+  content: "Số dòng";
+  position: relative;
+  left: auto;
+  width: auto;
+  top: auto;
   font-family: "Archivo", sans-serif;
+  white-space: nowrap;
+  margin-right: 8px;
 }
 
 .ant-pagination-options-size-changer::after {
-  content: "Entries";
-  position: absolute;
-  left: 71px;
-  width: 59px;
-  top: 3px;
+  content: " / trang";
+  position: relative;
+  left: auto;
+  width: auto;
+  top: auto;
   font-family: "Archivo", sans-serif;
+  margin-left: 4px;
+  display: inline;
 }
 .ant-pagination
   .ant-pagination-item {

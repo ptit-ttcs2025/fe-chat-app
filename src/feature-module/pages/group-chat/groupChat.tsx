@@ -30,6 +30,7 @@ import { chatStyles } from "../chat/styles/chatStyles";
 import CommonGroupModal from "@/core/modals/common-group-modal"; // Group modals (NewGroup, AddGroup, etc.)
 import GroupInfo from "@/core/modals/group-info-off-canva"; // Group info sidebar
 import ChatSearchSidebar from "@/core/modals/chat-search-sidebar";
+import ReportFormModal from "@/core/modals/report-form-modal";
 
 // Redux State Interface
 interface RootState {
@@ -154,6 +155,41 @@ const GroupChat = () => {
 
   // Pinned messages state
   const [pinnedMessages, setPinnedMessages] = useState<IMessage[]>([]);
+  
+  // Report message state
+  const [reportMessage, setReportMessage] = useState<IMessage | null>(null);
+
+  // Auto-open report modal when reportMessage is set
+  useEffect(() => {
+    if (reportMessage) {
+      // Delay to ensure modal DOM is rendered
+      setTimeout(() => {
+        const modalElement = document.getElementById('report-message-modal-group');
+        if (modalElement) {
+          const bsModal = (window as any).bootstrap?.Modal?.getInstance(modalElement);
+          if (bsModal) {
+            bsModal.show();
+          } else {
+            // Create new modal instance if doesn't exist
+            const Modal = (window as any).bootstrap?.Modal;
+            if (Modal) {
+              const newModal = new Modal(modalElement, {
+                backdrop: true,
+                keyboard: true,
+              });
+              
+              // Listen for hidden event to reset state
+              modalElement.addEventListener('hidden.bs.modal', () => {
+                setReportMessage(null);
+              }, { once: true });
+              
+              newModal.show();
+            }
+          }
+        }
+      }, 100);
+    }
+  }, [reportMessage]);
 
   // Send message with attachment helper
   const sendMessageWithAttachment = useCallback(
@@ -816,10 +852,12 @@ const GroupChat = () => {
           }}
         >
           <GroupChatBody
-            messages={filteredMessages}
+            messages={messages}
+            filteredMessages={filteredMessages}
             pinnedMessages={pinnedMessages}
             members={members}
             isLoadingMessages={isLoadingMessages}
+            searchKeyword={searchKeyword}
             selectedConversation={selectedConversation}
             currentUserId={user?.id}
             userAvatarUrl={user?.avatarUrl}
@@ -827,13 +865,13 @@ const GroupChat = () => {
             messagesEndRef={messagesEndRef}
             onTogglePin={handleTogglePin}
             onDeleteMessage={handleDeleteMessage}
+            onReportMessage={(message) => setReportMessage(message)}
             onPinnedMessageClick={handlePinnedMessageClick}
             onUnpin={(messageId) => handleTogglePin(messageId, true)}
             typingUsers={typingUsers}
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
             onLoadMore={loadMoreMessages}
-            searchKeyword={searchKeyword}
           />
         </div>
 
@@ -886,6 +924,17 @@ const GroupChat = () => {
 
       {/* Group Info Sidebar */}
       <GroupInfo selectedConversation={selectedConversation} />
+
+      {/* Report Message Modal */}
+      {reportMessage && (
+        <ReportFormModal
+          modalId="report-message-modal-group"
+          targetUserId={reportMessage.senderId}
+          targetUserName={reportMessage.senderName}
+          messageContext={reportMessage}
+          onClose={() => setReportMessage(null)}
+        />
+      )}
     </>
   );
 };

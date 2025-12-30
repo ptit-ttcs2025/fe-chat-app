@@ -4,6 +4,7 @@ import { notificationApis } from '@/apis/notification/notification.api';
 import type { INotification } from '@/apis/notification/notification.type';
 import { useQueryClient } from '@tanstack/react-query';
 import authStorage from '@/lib/authStorage';
+import type { NewReportNotification } from '@/apis/report/report.type';
 
 interface NotificationContextType {
     notifications: INotification[];
@@ -20,7 +21,7 @@ interface NotificationContextType {
     refreshUnreadCount: () => Promise<void>;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+export const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 interface NotificationProviderProps {
     children: ReactNode;
@@ -186,6 +187,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
             queryClient.invalidateQueries({ queryKey: ['friendRequests', 'sent'] });
         } else if (notification.type === 'FRIEND_REQUEST_REJECTED') {
             queryClient.invalidateQueries({ queryKey: ['friendRequests', 'sent'] });
+        } else if (notification.type === 'NEW_REPORT') {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] });
         }
     }, [addNotification, queryClient]);
 
@@ -203,6 +206,45 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
             clearInterval(checkConnection);
         };
     }, [handleWebSocketNotification]);
+
+    // Subscribe to admin report notifications (only for admin users)
+    useEffect(() => {
+        const checkIfAdmin = (): boolean => {
+            const user = authStorage.getUser();
+            return user?.role === 'ROLE_ADMIN' || user?.role === 'ADMIN';
+        };
+
+        const isAdmin = checkIfAdmin();
+        if (!isAdmin) return;
+
+        const handleNewReport = (notification: NewReportNotification) => {
+            console.log('📩 Admin received new report notification:', notification);
+            
+            // Convert NewReportNotification to INotification format
+            const user = authStorage.getUser();
+            const inotification: INotification = {
+                id: `report-${notification.reportId}`,
+                userId: user?.id || '',
+                type: 'NEW_REPORT',
+                title: 'Báo cáo mới',
+                content: `${notification.reporterName} đã báo cáo ${notification.targetUserName}`,
+                isSeen: false,
+                createdAt: notification.createdAt,
+                relatedId: notification.reportId, // Store reportId for navigation
+                senderName: notification.reporterName,
+                senderDisplayName: notification.reporterName,
+            };
+
+            addNotification(inotification);
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] });
+        };
+
+        const unsubscribe = websocketService.subscribeToNewReports(handleNewReport);
+
+        return () => {
+            unsubscribe();
+        };
+    }, [addNotification, queryClient]);
 
     // Load initial notifications - chỉ gọi khi đã đăng nhập
     useEffect(() => {

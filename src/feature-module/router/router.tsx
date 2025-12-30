@@ -125,6 +125,12 @@ const Mainapp: React.FC = () => {
                     </PublicRoute>
                 } />
 
+                <Route path="/signin" element={
+                    <PublicRoute restricted>
+                        <Signin />
+                    </PublicRoute>
+                } />
+
                 <Route path="/signup" element={
                     <PublicRoute restricted>
                         <Signup />

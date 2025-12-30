@@ -30,11 +30,11 @@ export const SimplifiedSidebarData = [
             link: route.users,
             icon: "ti ti-point-filled me-2",
           },
-          {
-            label: "Người dùng bị chặn",
-            link: route.blockuser,
-            icon: "ti ti-point-filled me-2",
-          },
+          // {
+          //   label: "Người dùng bị chặn",
+          //   link: route.blockuser,
+          //   icon: "ti ti-point-filled me-2",
+          // },
           {
             label: "Người dùng bị báo cáo",
             link: route.reportuser,

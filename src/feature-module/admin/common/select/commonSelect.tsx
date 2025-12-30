@@ -13,7 +13,8 @@ interface CustomDropdownProps {
   defaultValue?: string | number;
   className?: string;
   placeholder?: string;
-  modal?:boolean
+  modal?: boolean;
+  onChange?: (value: string | number, option?: OptionType | OptionType[]) => void;
 }
 
 const CustomSelect: React.FC<CustomDropdownProps> = ({
@@ -21,7 +22,8 @@ const CustomSelect: React.FC<CustomDropdownProps> = ({
   defaultValue,
   className,
   placeholder,
-  modal
+  modal,
+  onChange
 }) => {
   return (
     <>
@@ -30,6 +32,7 @@ const CustomSelect: React.FC<CustomDropdownProps> = ({
       className={className}
       placeholder={placeholder}
       style={{ width: '100%' }}
+      onChange={onChange}
       getPopupContainer={() => (document.getElementsByClassName('modal')[0] as HTMLElement) || document.body} // Access first element or fallback to document.body
     >
       {options.map((option) => (
@@ -44,6 +47,7 @@ const CustomSelect: React.FC<CustomDropdownProps> = ({
     className={className}
     placeholder={placeholder}
     style={{ width: '100%' }}
+    onChange={onChange}
   >
     {options.map((option) => (
       <Option key={option.value} value={option.value}>

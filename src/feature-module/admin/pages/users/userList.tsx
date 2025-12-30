@@ -27,14 +27,14 @@ const UserList = () => {
   const updateStatusMutation = useUpdateUserStatus();
   const deleteUserMutation = useDeleteUser();
 
-  // Translate status
-  const translateStatus = (status: string) => {
-    const statusMap: Record<string, string> = {
-      'ACTIVE': 'Hoạt động',
-      'SUSPENDED': 'Đã khóa',
-      'BANNED': 'Bị cấm'
+  // Dịch vai trò
+  const translateRole = (role: string) => {
+    const roleMap: Record<string, string> = {
+      'ROLE_USER': 'Người dùng',
+      'ROLE_ADMIN': 'Quản trị viên',
+      'ROLE_MODERATOR': 'Điều hành viên'
     };
-    return statusMap[status] || status;
+    return roleMap[role] || role;
   };
 
   // Handle block user
@@ -162,14 +162,31 @@ const UserList = () => {
       sorter: (a: any, b: any) => a.fullName.localeCompare(b.fullName),
     },
     {
+      title: "Tên đăng nhập",
+      dataIndex: "username",
+      render: (username: string) => (
+        <span className="text-dark">@{username}</span>
+      ),
+      sorter: (a: any, b: any) => a.username.localeCompare(b.username),
+    },
+    {
       title: "Email",
       dataIndex: "email",
       sorter: (a: any, b: any) => a.email.localeCompare(b.email),
     },
     {
-      title: "Số điện thoại",
-      dataIndex: "phoneNumber",
-      render: (phone: string) => phone || 'Chưa có',
+      title: "Vai trò",
+      dataIndex: "role",
+      render: (role: string) => (
+        <span className={`badge badge-sm ${
+          role === 'ROLE_ADMIN' ? 'badge-danger' :
+          role === 'ROLE_MODERATOR' ? 'badge-warning' :
+          'badge-primary'
+        }`}>
+          {translateRole(role)}
+        </span>
+      ),
+      sorter: (a: any, b: any) => (a.role || '').localeCompare(b.role || ''),
     },
     {
       title: "Ngày đăng ký",
@@ -179,23 +196,14 @@ const UserList = () => {
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     },
     {
-      title: "Trạng thái",
-      dataIndex: "accountStatus",
-      render: (status: string) => (
-        <span className={`badge badge-sm ${
-          status === 'ACTIVE' ? 'badge-success' :
-          status === 'SUSPENDED' ? 'badge-warning' :
-          'badge-danger'
-        }`}>
-          {translateStatus(status)}
-        </span>
-      ),
-      sorter: (a: any, b: any) => a.accountStatus.localeCompare(b.accountStatus),
-    },
-    {
-      title: "Đăng nhập gần nhất",
-      dataIndex: "lastLogin",
+      title: "Hoạt động gần nhất",
+      dataIndex: "lastActiveAt",
       render: (date: string) => date ? formatDate(date) : <span className="text-muted">Chưa có</span>,
+      sorter: (a: any, b: any) => {
+        const dateA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+        const dateB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+        return dateA - dateB;
+      },
     },
     {
       title: "Thao tác",
@@ -212,7 +220,8 @@ const UserList = () => {
               <i className="ti ti-dots-vertical fs-14" />
             </Link>
             <ul className="dropdown-menu dropdown-menu-right p-3">
-              {record.accountStatus === 'ACTIVE' ? (
+              {/* Chỉ hiển thị khóa/mở khóa cho user thường, không hiển thị cho admin */}
+              {record.role !== 'ROLE_ADMIN' && (
                 <li>
                   <Link
                     className="dropdown-item rounded-1"
@@ -226,7 +235,8 @@ const UserList = () => {
                     Khóa
                   </Link>
                 </li>
-              ) : (
+              )}
+              {record.role !== 'ROLE_ADMIN' && (
                 <li>
                   <Link
                     className="dropdown-item rounded-1"
@@ -348,8 +358,8 @@ const UserList = () => {
 
           {/* User List */}
           <div className="card">
-            <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
-              <h6 className="mb-3">
+            <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-3">
+              <h6 className="mb-0">
                 Danh sách người dùng <span className="badge badge-primary">{usersData?.meta.totalElements || 0}</span>
               </h6>
               <div className="d-flex align-items-center flex-wrap">
@@ -416,7 +426,7 @@ const UserList = () => {
             </div>
             {/* User List Table */}
             <div className="card-body p-0">
-              <Table columns={columns} dataSource={usersData?.results || []} Selection={false} />
+              <Table columns={columns} dataSource={usersData?.results || []} Selection={false} showSearch={false} />
             </div>
 
             {/* Pagination */}

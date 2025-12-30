@@ -53,7 +53,7 @@ export const ViolationTypeLabels: Record<ViolationType, string> = {
 
 export const ReportStatusLabels: Record<ReportStatus, string> = {
   [ReportStatus.PENDING]: 'Chờ xử lý',
-  [ReportStatus.UNDER_REVIEW]: 'Đang xem xét',
+  // [ReportStatus.UNDER_REVIEW]: 'Đang xem xét',
   [ReportStatus.RESOLVED]: 'Đã xử lý',
   [ReportStatus.REJECTED]: 'Bị từ chối',
 };
@@ -160,9 +160,11 @@ export interface ReportListItem {
   reporterId: string;
   reporterName: string;
   reporterEmail: string;
+  reporterAvatar?: string;
   targetUserId: string;
   targetUserName: string;
   targetUserEmail: string;
+  targetUserAvatar?: string;
   violationType: ViolationType;
   description: string;
   status: ReportStatus;
