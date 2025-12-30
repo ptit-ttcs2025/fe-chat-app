@@ -22,8 +22,8 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
 
   // Check if user is authenticated
   if (!isAuthenticated || !user) {
-    console.log('❌ AdminGuard: User not authenticated, redirecting to signin');
-    return <Navigate to={all_routes.signin} replace />;
+    console.log('❌ AdminGuard: User not authenticated, redirecting to admin login');
+    return <Navigate to={all_routes.login} replace />;
   }
 
   // Check if user has ADMIN role

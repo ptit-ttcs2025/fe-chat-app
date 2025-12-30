@@ -13,8 +13,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const location = useLocation();
 
     if (!isAuthenticated) {
-        // Redirect to signin and save attempted location
-        return <Navigate to={all_routes.signin} state={{ from: location }} replace />;
+        // Nếu đang ở route admin, redirect về admin login
+        // Ngược lại, redirect về user signin
+        const isAdminRoute = location.pathname.includes("/admin");
+        const redirectTo = isAdminRoute ? all_routes.login : all_routes.signin;
+        
+        return <Navigate to={redirectTo} state={{ from: location }} replace />;
     }
 
     return children;

@@ -175,6 +175,30 @@ export const adminRoutes = [
     title:'Dashboard'
   },
   {
+    path: route.users,
+    element: <UserList />,
+    route: Route,
+    title:'Users List'
+  },
+  {
+    path: route.blockuser,
+    element: <Blockuser />,
+    route: Route,
+    title:'Blocked Users'
+  },
+  {
+    path: route.reportuser,
+    element: <Reportuser />,
+    route: Route,
+    title:'Reported Users'
+  },
+  {
+    path: route.inviteuser,
+    element: <Inviteuser />,
+    route: Route,
+    title:'Invited Users'
+  },
+  {
     path: route.adminReports,
     element: <ReportManagement />,
     route: Route,

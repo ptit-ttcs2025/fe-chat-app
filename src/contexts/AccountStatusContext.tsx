@@ -79,18 +79,50 @@ export const AccountStatusProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    setIsListening(true);
+    // Wait for WebSocket connection and userId
+    const checkAndSubscribe = () => {
+      const isConnected = websocketService.getConnectionStatus();
+      const userId = websocketService.getCurrentUserId();
 
-    const unsubscribeForceLogout =
-      websocketService.subscribeToForceLogout(handleForceLogout);
-    const unsubscribeAccountRestored =
-      websocketService.subscribeToAccountRestored(handleAccountRestored);
+      if (!isConnected || !userId) {
+        console.log('⏳ Waiting for WebSocket connection and userId...');
+        return;
+      }
 
-    return () => {
-      unsubscribeForceLogout();
-      unsubscribeAccountRestored();
-      setIsListening(false);
+      setIsListening(true);
+
+      const unsubscribeForceLogout =
+        websocketService.subscribeToForceLogout(handleForceLogout);
+      const unsubscribeAccountRestored =
+        websocketService.subscribeToAccountRestored(handleAccountRestored);
+
+      console.log('✅ AccountStatusContext subscribed to force-logout and account-restored');
+
+      return () => {
+        unsubscribeForceLogout();
+        unsubscribeAccountRestored();
+        setIsListening(false);
+      };
     };
+
+    // Try to subscribe immediately
+    const cleanup = checkAndSubscribe();
+
+    // If WebSocket not ready, poll until it is
+    if (!cleanup) {
+      const interval = setInterval(() => {
+        const newCleanup = checkAndSubscribe();
+        if (newCleanup) {
+          clearInterval(interval);
+        }
+      }, 500); // Check every 500ms
+
+      return () => {
+        clearInterval(interval);
+      };
+    }
+
+    return cleanup;
   }, [handleForceLogout, handleAccountRestored]);
 
   return (

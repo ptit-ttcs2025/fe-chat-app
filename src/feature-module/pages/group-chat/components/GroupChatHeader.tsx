@@ -16,7 +16,6 @@ interface GroupChatHeaderProps {
   members: IGroupMember[];
   onlineMembersCount: number;
   onToggleSearch: () => void;
-  onShowMembers: () => void;
   onShowEditGroup: () => void;
   isAdmin: boolean;
   showSearch: boolean;
@@ -30,6 +29,7 @@ const GroupChatHeader = ({
   members,
   onlineMembersCount,
   onToggleSearch,
+  onShowEditGroup,
   isAdmin,
   showSearch,
   searchKeyword,
@@ -105,10 +105,8 @@ const GroupChatHeader = ({
                   <Link
                     className="avatar bg-primary avatar-rounded text-fixed-white"
                     to="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onShowMembers();
-                    }}
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#contact-profile"
                   >
                     {totalMembers - 4}+
                   </Link>
@@ -134,10 +132,8 @@ const GroupChatHeader = ({
                 <Link
                   to="#"
                   className="btn position-relative"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onShowMembers();
-                  }}
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#contact-profile"
                 >
                   <i className="ti ti-info-circle" />
                 </Link>
