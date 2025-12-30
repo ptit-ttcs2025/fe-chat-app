@@ -228,7 +228,8 @@
         visibility: visible;
         top: 100%;
         @include mixins.transition(ease all 0.5s);
-        z-index: 9;
+        position: relative;
+        z-index: 100;
     }
 }
 .sidebar-group {

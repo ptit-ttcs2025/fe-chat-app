@@ -201,7 +201,7 @@ const ChatBody = forwardRef<ChatBodyHandle, ChatBodyProps>(({
             style={{
               position: 'sticky',
               top: 0,
-              zIndex: 50,
+              zIndex: 40,
               backgroundColor: '#fff',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
             }}

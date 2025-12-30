@@ -333,8 +333,55 @@ const Notifications = () => {
     
     switch (notification.type) {
       case 'FRIEND_REQUEST':
+        const handleFriendRequestClick = () => {
+          // Đánh dấu đã đọc
+          handleMarkAsRead(notification);
+          
+          const notificationsModal = document.getElementById('notifications-modal');
+          const friendRequestsModal = document.getElementById('friend-requests');
+          
+          if (!notificationsModal || !friendRequestsModal) return;
+          
+          const bootstrap = (window as any).bootstrap;
+          if (!bootstrap || !bootstrap.Modal) return;
+          
+          // Get or create modal instances
+          const notificationsBsModal = bootstrap.Modal.getInstance(notificationsModal);
+          let friendRequestsBsModal = bootstrap.Modal.getInstance(friendRequestsModal);
+          
+          if (!friendRequestsBsModal) {
+            friendRequestsBsModal = new bootstrap.Modal(friendRequestsModal);
+          }
+          
+          // Use Bootstrap event for proper sequencing
+          const handleModalHidden = () => {
+            // Show friend requests modal after notifications modal is completely hidden
+            friendRequestsBsModal.show();
+            
+            // Remove event listener after use
+            notificationsModal.removeEventListener('hidden.bs.modal', handleModalHidden);
+          };
+          
+          notificationsModal.addEventListener('hidden.bs.modal', handleModalHidden);
+          
+          // Hide notifications modal
+          if (notificationsBsModal) {
+            notificationsBsModal.hide();
+          }
+        };
+        
         return (
-          <div className={`notification-card ${!notification.isSeen ? 'unread' : ''}`}>
+          <div 
+            className={`notification-card clickable ${!notification.isSeen ? 'unread' : ''}`}
+            onClick={handleFriendRequestClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleFriendRequestClick();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
             {renderAvatar(notification)}
             
             <div className="notification-content">
@@ -349,35 +396,6 @@ const Notifications = () => {
               {notification.message && (
                 <p className="notification-message">"{notification.message}"</p>
               )}
-              
-              <div className="notification-actions">
-                <button
-                  className="btn-accept"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAccept(notification);
-                  }}
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? (
-                    <span className="spinner-border spinner-border-sm me-1"></span>
-                  ) : (
-                    <i className="ti ti-check me-1"></i>
-                  )}
-                  Xác nhận
-                </button>
-                <button
-                  className="btn-reject"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReject(notification);
-                  }}
-                  disabled={isProcessing}
-                >
-                  <i className="ti ti-x me-1"></i>
-                  Xóa
-                </button>
-              </div>
             </div>
             
             {notification.isSeen ? null : <span className="unread-dot"></span>}

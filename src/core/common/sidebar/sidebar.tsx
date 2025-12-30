@@ -216,23 +216,23 @@ const Sidebar = () => {
           {/* Profile & Logout Section - Compact Icon Style */}
           <div className="profile-menu d-flex flex-column align-items-center gap-3 pb-4 w-100 mt-auto">
             {/* Profile Avatar */}
-            <Tooltip title="Hồ sơ" placement="right" color={"#6338F6"}>
-              <div className="profile-img">
-                <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={() => handleIconClick('profile', '')}>
-                  <ImageWithBasePath
-                    src="assets/img/profiles/avatar-05.jpg"
-                    alt="image"
-                    className="rounded-circle"
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      objectFit: "cover",
-                      border: "2px solid transparent",
-                    }}
-                  />
-                </Link>
-              </div>
-            </Tooltip>
+            {/*<Tooltip title="Hồ sơ" placement="right" color={"#6338F6"}>*/}
+            {/*  <div className="profile-img">*/}
+            {/*    <Link to={routes.profileSettings} className="profile-img-link d-block" onClick={() => handleIconClick('profile', '')}>*/}
+            {/*      <ImageWithBasePath*/}
+            {/*        src="assets/img/profiles/avatar-05.jpg"*/}
+            {/*        alt="image"*/}
+            {/*        className="rounded-circle"*/}
+            {/*        style={{*/}
+            {/*          width: "40px",*/}
+            {/*          height: "40px",*/}
+            {/*          objectFit: "cover",*/}
+            {/*          border: "2px solid transparent",*/}
+            {/*        }}*/}
+            {/*      />*/}
+            {/*    </Link>*/}
+            {/*  </div>*/}
+            {/*</Tooltip>*/}
 
             {/* Logout Button */}
             <Tooltip title="Đăng xuất" placement="right" color={"#ff4d4f"}>

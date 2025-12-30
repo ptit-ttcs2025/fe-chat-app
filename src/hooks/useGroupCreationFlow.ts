@@ -8,7 +8,7 @@ import { groupApi } from '@/apis/group/group.api';
 import { userApis } from '@/apis/user/user.api';
 import { useGroupCreation as useGroupContext } from '@/contexts/GroupCreationContext';
 import websocketService from '@/core/services/websocket.service';
-import type { CreateGroupRequest } from '@/apis/group/group.type';
+import type { CreateGroupRequest, IGroup } from '@/apis/group/group.type';
 
 interface ValidationErrors {
   name?: string;
@@ -129,11 +129,29 @@ export const useGroupCreationFlow = () => {
 
       console.log('📦 API Response:', response);
 
-      // ⭐ FIX: response is ApiResponse<IGroup>, so response.data is IGroup
-      const groupDataResponse = response.data;
+      // ⭐ Handle response format: response is ApiResponse<IGroup>
+      // Response structure: { statusCode, message, data: IGroup, ... }
+      let groupDataResponse: IGroup | undefined;
+      
+      if (response && typeof response === 'object') {
+        // Check if response has .data property (ApiResponse format)
+        if ('data' in response && response.data) {
+          groupDataResponse = response.data as IGroup;
+        } 
+        // Check if response has .id property directly (already unwrapped to IGroup)
+        else if ('id' in response && typeof (response as any).id === 'string') {
+          groupDataResponse = response as unknown as IGroup;
+        }
+        // Fallback: try to access nested data structure
+        else if ((response as any).data?.data) {
+          groupDataResponse = (response as any).data.data as IGroup;
+        }
+      }
 
-      if (!groupDataResponse) {
-        throw new Error('No group data in response');
+      if (!groupDataResponse || !groupDataResponse.id) {
+        console.error('❌ Invalid response format:', response);
+        console.error('❌ Response keys:', response ? Object.keys(response) : 'null');
+        throw new Error('No group data in response. Please check console for response details.');
       }
 
       console.log('✅ Group created successfully:', groupDataResponse);

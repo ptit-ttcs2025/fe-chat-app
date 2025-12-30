@@ -30,7 +30,7 @@ const StartChat = () => {
         to="#"
         className="btn btn-primary"
         data-bs-toggle="modal"
-        data-bs-target="#new-chat"
+        data-bs-target="#add-contact"
       >
         <i className="ti ti-location me-2" />
         Mời Liên Hệ

@@ -121,6 +121,8 @@ export const chatStyles = `
     border-bottom: 1px solid #e9ecef !important;
     visibility: visible !important;
     flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 100 !important;
   }
   
   /* ========== MAIN CHAT LAYOUT - PROFESSIONAL FLEXBOX STRUCTURE ========== */

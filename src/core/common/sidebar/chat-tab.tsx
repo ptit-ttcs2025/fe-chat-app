@@ -471,7 +471,7 @@ const ChatTab = () => {
                   <Link
                     to="#"
                     data-bs-toggle="modal"
-                    data-bs-target="#new-chat"
+                    data-bs-target="#add-contact"
                     className="add-icon btn btn-primary p-0 d-flex align-items-center justify-content-center fs-16"
                     style={{ width: '36px', height: '36px' }}
                   >
