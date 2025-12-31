@@ -30,7 +30,7 @@ export type MemberRole = 'ROLE_ADMIN' | 'MEMBER';
 export interface IGroupMember {
   id: string;
   userId: string;
-  displayName: string;
+  name: string;
   avatarUrl?: string;
   role: MemberRole;
   joinedAt: string;
