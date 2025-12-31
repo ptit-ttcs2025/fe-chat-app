@@ -8,7 +8,7 @@
 // FILE UPLOAD TYPES
 // ===========================
 
-export type FileFolder = 'AVATARS' | 'FILES' | 'IMAGES' | 'OTHERS';
+export type FileFolder = 'AVATARS' | 'FILES' | 'IMAGES' | 'OTHERS' | 'GROUP_AVATARS';
 
 export interface IUploadedFile {
   id: string;

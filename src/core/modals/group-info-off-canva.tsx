@@ -4,9 +4,11 @@ import "yet-another-react-lightbox/styles.css";
 import ImageFallback from "@/components/ImageFallback";
 import { IConversation } from "@/apis/chat/chat.type";
 import { useGroupManagement } from "@/hooks/useGroupManagement";
+import { UpdateGroupRequest } from "@/apis/group/group.type";
 import MediaGallery from "@/feature-module/chat/components/MediaGallery";
 import { useMediaMessages } from "@/hooks/useMediaMessages";
 import ReportFormModal from "./report-form-modal";
+import EditGroupModal from "./edit-group-modal";
 
 interface GroupInfoProps {
   selectedConversation: IConversation | null;
@@ -17,10 +19,13 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   // State for report modal
   const [showReportModal, setShowReportModal] = useState(false);
+  // State for edit group modal
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Check if conversation is GROUP
   const isGroupConversation = selectedConversation?.type === "GROUP";
   const groupId = selectedConversation?.groupId || null;
+  const adminId = selectedConversation?.adminId || "";
 
   // Get current user ID
   const currentUserId = useMemo(() => {
@@ -38,20 +43,24 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
 
   // Fetch group data using useGroupManagement hook
   const {
-    group,
     members,
     isLoadingMembers,
-    isAdmin: isAdminFn,
     getOnlineMembersCount,
+    updateGroup,
   } = useGroupManagement({
     groupId: groupId,
     autoFetchMembers: isGroupConversation && !!groupId,
+    // Note: autoFetchGroup removed - EditGroupModal fetches data independently via API
   });
 
   // Check if current user is admin
   const isAdmin = useMemo(() => {
-    return currentUserId ? isAdminFn(currentUserId) : false;
-  }, [currentUserId, isAdminFn]);
+    return currentUserId !== null && currentUserId === adminId;
+  }, [adminId, currentUserId]);
+
+  const checkIsAdmin = (userId: string | null) => {
+    return userId !== null && userId === adminId;
+  }
 
   // Get online members count
   const onlineMembersCount = getOnlineMembersCount();
@@ -61,7 +70,7 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
     if (!searchQuery.trim()) return members;
     const query = searchQuery.toLowerCase();
     return members.filter((member) =>
-      member.displayName?.toLowerCase().includes(query)
+      member.name?.toLowerCase().includes(query)
     );
   }, [members, searchQuery]);
 
@@ -80,24 +89,17 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
     enabled: !!selectedConversation?.id && isGroupConversation,
   });
 
-  // Format created date
-  const formatCreatedDate = (dateString?: string) => {
-    if (!dateString) return "Không rõ";
+  // Handle update group
+  const handleUpdateGroup = async (data: UpdateGroupRequest) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("vi-VN", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return "Không rõ";
+      await updateGroup(data);
+      setShowEditModal(false);
+      // Success notification handled in EditGroupModal
+    } catch (error) {
+      console.error("❌ Error updating group:", error);
+      throw error; // Re-throw to let modal handle the error
     }
   };
-
-  // Get admin name
-  const adminMember = members.find((m) => m.role === "ROLE_ADMIN");
-  const adminName = adminMember?.displayName || "Không rõ";
 
   // Loading state
   const isLoading = isLoadingMembers;
@@ -196,11 +198,6 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                     </h6>
                     <p className="text-muted">
                       Nhóm · {members.length} thành viên
-                      {onlineMembersCount > 0 && (
-                        <span className="text-success ms-1">
-                          · {onlineMembersCount} trực tuyến
-                        </span>
-                      )}
                     </p>
                   </>
                 )}
@@ -216,11 +213,6 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start">
                         <p className="mb-0">{selectedConversation.description}</p>
-                        {isAdmin && (
-                          <Link to="#" className="link-icon ms-2">
-                            <i className="ti ti-edit-circle fs-18 text-primary" />
-                          </Link>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -273,12 +265,14 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                                       className="list-group-item d-flex align-items-center"
                                     >
                                       <div className="avatar avatar-md me-2 position-relative">
-                                        <ImageFallback
-                                          src={member.avatarUrl}
-                                          alt={member.displayName}
-                                          type="avatar"
-                                          name={member.displayName}
+                                        <img
+                                          src={member.avatarUrl || '/assets/img/profiles/avatar-01.jpg'}
+                                          alt={member.name}
                                           className="rounded-circle"
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = '/assets/img/profiles/avatar-01.jpg';
+                                          }}
                                         />
                                         {member.isOnline && (
                                           <span className="avatar-status online" />
@@ -286,7 +280,7 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                                       </div>
                                       <div className="flex-grow-1 overflow-hidden">
                                         <h6 className="mb-0 text-truncate">
-                                          {member.displayName}
+                                          {member.name}
                                           {member.userId === currentUserId && (
                                             <span className="badge bg-primary-transparent text-primary ms-2 small">
                                               Bạn
@@ -294,7 +288,7 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                                           )}
                                         </h6>
                                         <p className="text-muted small mb-0">
-                                          {member.role === "ROLE_ADMIN" ? (
+                                          {checkIsAdmin(member.userId) ? (
                                             <span className="badge bg-warning-transparent text-warning">
                                               <i className="ti ti-crown me-1" />
                                               Quản trị viên
@@ -428,8 +422,20 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                         <Link
                           to="#"
                           className="list-group-item"
-                          data-bs-toggle="modal"
-                          data-bs-target="#edit-group"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            console.log('🎯 [GroupInfo] Opening EditGroupModal with:', {
+                              groupId,
+                              selectedConversation: {
+                                id: selectedConversation?.id,
+                                type: selectedConversation?.type,
+                                groupId: selectedConversation?.groupId,
+                                name: selectedConversation?.name,
+                              },
+                              isGroupConversation,
+                            });
+                            setShowEditModal(true);
+                          }}
                         >
                           <div className="profile-info">
                             <h6>
@@ -608,9 +614,9 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                         <div className="avatar avatar-md me-3 position-relative">
                           <ImageFallback
                             src={member.avatarUrl}
-                            alt={member.displayName}
+                            alt={member.name}
                             type="avatar"
-                            name={member.displayName}
+                            name={member.name}
                             className="rounded-circle"
                           />
                           {member.isOnline && (
@@ -619,7 +625,7 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
                         </div>
                         <div className="flex-grow-1 overflow-hidden">
                           <h6 className="mb-0 text-truncate">
-                            {member.displayName}
+                            {member.name}
                             {member.userId === currentUserId && (
                               <span className="badge bg-primary-transparent text-primary ms-2 small">
                                 Bạn
@@ -715,6 +721,14 @@ const GroupInfo = ({ selectedConversation }: GroupInfoProps) => {
           onClose={() => setShowReportModal(false)}
         />
       )}
+
+      {/* Edit Group Modal */}
+      <EditGroupModal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        groupId={groupId}
+        onUpdate={handleUpdateGroup}
+      />
     </>
   );
 };
